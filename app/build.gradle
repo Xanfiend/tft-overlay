@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.xanfiend.tftoverlay'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.xanfiend.tftoverlay"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            // debug build = no signing config needed, installs fine
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.mlkit:text-recognition:16.0.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
