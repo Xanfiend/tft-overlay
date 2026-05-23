@@ -81,15 +81,21 @@ public class OverlayService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int id){
         startFg();
+        // Add the floating button FIRST so it always shows, even if capture setup fails
+        if(button==null){
+            try { addButton(); toast("Overlay ready"); }
+            catch(Exception e){ toast("Overlay err: "+e.getMessage()); }
+        }
         if(intent!=null && intent.hasExtra("code")){
-            int code = intent.getIntExtra("code",0);
-            Intent data = (Intent) intent.getParcelableExtra("data");
-            MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-            projection = mpm.getMediaProjection(code, data);
-            reader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 2);
-            vd = projection.createVirtualDisplay("cap", sw,sh,dpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null, null);
-            addButton();
+            try {
+                int code = intent.getIntExtra("code",0);
+                Intent data = (Intent) intent.getParcelableExtra("data");
+                MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                projection = mpm.getMediaProjection(code, data);
+                reader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 2);
+                vd = projection.createVirtualDisplay("cap", sw,sh,dpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null, null);
+            } catch(Exception e){ toast("Capture err: "+e.getMessage()); }
         }
         return START_STICKY;
     }
