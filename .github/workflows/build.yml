@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,8 +34,21 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk tft-scryer.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tft-overlay-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: tft-scryer-apk
+          path: tft-scryer.apk
+
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: TFT Scryer (latest build)
+          files: tft-scryer.apk
+          body: |
+            Latest auto-built APK of TFT Scryer.
+            Download tft-scryer.apk below, install on Android (allow unknown sources), grant overlay permission, and scout.
