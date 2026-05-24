@@ -35,6 +35,14 @@ You don't need to track everything. Mark the champions you're contesting or chas
 - Tap the button for the contest board: each champ gets a verdict (roll, risky, or pivot) plus copies left and your odds.
 - Drag the button anywhere. Reset All clears everything between games.
 
+## Is it safe?
+
+Yes. The full source code is in this repo, so you can read exactly what it does or build it yourself.
+
+[VirusTotal scan of the APK](https://www.virustotal.com/gui/file/effaa42fd316d6aa3a2948ee1b0370b176b2a6196d6da846e717dde3ae5f55f0/summary)
+
+The app only asks for the "draw over other apps" permission so the overlay can show on top of TFT. It has no internet permission, collects nothing, and reads nothing from the game. If a scanner shows a flag or two, that's a generic warning common to all unsigned APKs, not a real detection. Scan it yourself if you want to be sure.
+
 ---
 
 <div align="center">
