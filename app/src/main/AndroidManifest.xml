@@ -5,7 +5,9 @@
 
     <application
         android:allowBackup="true"
-        android:label="TFT Overlay"
+        android:label="TFT Scryer"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity android:name=".MainActivity" android:exported="true">
