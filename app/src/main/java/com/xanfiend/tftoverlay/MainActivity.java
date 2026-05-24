@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(0xFF0B0709);
 
         TextView t=new TextView(this);
-        t.setText("\u2720 TFT OVERLAY");
+        t.setText("\u2720 TFT SCRYER");
         t.setTextColor(0xFFC1121F); t.setTextSize(26);
         root.addView(t);
         TextView sub=new TextView(this);
