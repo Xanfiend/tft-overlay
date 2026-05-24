@@ -14,9 +14,9 @@ Scout opponent boards, track the shared champion pool, and know your real odds o
 
 ## Features
 
-- **Fast scout grid** — tap a champ to mark it seen, long-press to subtract. Big targets, haptic feedback, made to keep up with the planning timer.
-- **Live reroll odds** — per champion, by level (4–10), adjusted for how many copies the lobby has already taken.
-- **Pool view** — seen and remaining counts for every unit, flagged when a champ is contested or dead.
+- **Fast scout grid.** Tap a champ to mark it seen, long-press to subtract. Big targets, haptic feedback, made to keep up with the planning timer.
+- **Live reroll odds** per champion, by level (4 to 10), adjusted for how many copies the lobby has already taken.
+- **Contest board** with seen and remaining counts for every unit, flagged when a champ is contested or dead.
 - **Current set** roster and pool sizes built in.
 - Runs offline. Only needs the "draw over other apps" permission.
 
@@ -25,18 +25,15 @@ Scout opponent boards, track the shared champion pool, and know your real odds o
 1. **[Download the APK](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)**
 2. Open it on Android, allow installing from unknown sources.
 3. Open TFT Scryer → grant overlay permission → start the overlay.
-4. Launch TFT — the floating button appears.
+4. Launch TFT. The floating button appears.
 
 ## Usage
 
-- Tap the floating button to open the scout grid.
-- Tap champions as you see them on opponent boards (long-press a chip to subtract).
-- Toggle to **Pool** (top-right, or long-press the button) for odds and remaining counts.
-- Drag the button anywhere. **Reset All** clears the pool between games.
+You don't need to track everything. Mark the champions you're contesting or chasing, and Scryer tells you whether to keep rolling or pivot off.
 
-## Updating each set
-
-When a new set drops, edit the champion list and pool sizes in `app/src/main/java/com/xanfiend/tftoverlay/Pool.java`, then push — a fresh APK builds automatically. More features planned.
+- Long-press the floating button to open the grid, then tap the champs you're fighting for (long-press a chip to subtract).
+- Tap the button for the contest board: each champ gets a verdict (roll, risky, or pivot) plus copies left and your odds.
+- Drag the button anywhere. Reset All clears everything between games.
 
 ---
 
