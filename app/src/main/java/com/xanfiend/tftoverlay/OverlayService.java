@@ -82,8 +82,12 @@ public class OverlayService extends Service {
                     lp.x=ix+dx; lp.y=iy+dy; wm.updateViewLayout(button,lp); return true;
                 } else if(a==MotionEvent.ACTION_UP){
                     if(!moved){
-                        if(System.currentTimeMillis()-down>450){ mode=1; showPanel(); }
-                        else { mode=0; showPanel(); }
+                        boolean longpress = System.currentTimeMillis()-down>450;
+                        // long-press = jump to grid to mark champs.
+                        // short tap = contest board if we're tracking, else grid.
+                        if(longpress) mode=0;
+                        else mode = pool.isEmpty() ? 0 : 1;
+                        showPanel();
                     }
                     return true;
                 }
@@ -107,11 +111,11 @@ public class OverlayService extends Service {
         // header: title + mode toggle + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==1?"POOL TRACKER":"SCOUT \u2014 TAP TO COUNT");
+        title.setText(mode==1?"CONTEST BOARD":"MARK CONTESTED CHAMPS");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView toggle=new TextView(this);
-        toggle.setText(mode==1?"\u25A6 grid":"\u2261 pool");
+        toggle.setText(mode==1?"\u25A6 grid":"\u2261 board");
         toggle.setTextColor(GOLD); toggle.setTextSize(13); toggle.setPadding(16,8,16,8);
         toggle.setBackground(box(CARD,6,EDGE,1));
         toggle.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode = mode==1?0:1; showPanel(); } });
@@ -164,7 +168,7 @@ public class OverlayService extends Service {
         int idx=0;
 
         TextView tipv=new TextView(this);
-        tipv.setText("Tap = +1 seen \u00b7 long-press = \u22121 \u00b7 switch to POOL for odds");
+        tipv.setText("Tap = +1 copy seen (long-press = \u22121) \u00b7 tap the \u25C9 to add an opponent");
         tipv.setTextColor(DIM); tipv.setTextSize(10); tipv.setPadding(0,0,0,8);
         root.addView(tipv);
 
@@ -176,18 +180,40 @@ public class OverlayService extends Service {
             LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
-                final String name=arr[j]; final int fc=cost; final int myIdx=idx;
+                final String name=arr[j]; final int fc=cost;
+
+                // each cell = horizontal: [ chip (copies) ][ opp badge ]
+                LinearLayout cell=new LinearLayout(this);
+                cell.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams cellLp=new LinearLayout.LayoutParams(0,-2,1f);
+                cellLp.setMargins(3,3,3,3); cell.setLayoutParams(cellLp);
+
                 final TextView chip=new TextView(this);
                 chipViews[idx]=chip; chipNames[idx]=name; idx++;
+                final TextView oppBadge=new TextView(this);
                 paintChip(chip, name, fc);
+                paintOpp(oppBadge, name);
+
                 chip.setOnClickListener(new View.OnClickListener(){
                     public void onClick(View v){ pool.add(name,1); buzz(); paintChip(chip,name,fc); }
                 });
                 chip.setOnLongClickListener(new View.OnLongClickListener(){
                     public boolean onLongClick(View v){ pool.add(name,-1); buzz(); paintChip(chip,name,fc); return true; }
                 });
-                LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(0,-2,1f); cl.setMargins(3,3,3,3); chip.setLayoutParams(cl);
-                row.addView(chip);
+                LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(0,-1,1f);
+                chip.setLayoutParams(chipLp);
+
+                oppBadge.setOnClickListener(new View.OnClickListener(){
+                    public void onClick(View v){ pool.addOpp(name,1); buzz(); paintOpp(oppBadge,name); }
+                });
+                oppBadge.setOnLongClickListener(new View.OnLongClickListener(){
+                    public boolean onLongClick(View v){ pool.addOpp(name,-1); buzz(); paintOpp(oppBadge,name); return true; }
+                });
+                LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(72,-1);
+                oppLp.setMargins(4,0,0,0); oppBadge.setLayoutParams(oppLp);
+
+                cell.addView(chip); cell.addView(oppBadge);
+                row.addView(cell);
             }
         }
         // big done button
@@ -216,34 +242,86 @@ public class OverlayService extends Service {
         chip.setTextSize(13);
     }
 
+    // opponent badge: shows a circle glyph, or the count when >0
+    private void paintOpp(TextView badge, String name){
+        int n=pool.oppCount(name);
+        badge.setGravity(Gravity.CENTER);
+        badge.setTextSize(13);
+        if(n>0){
+            badge.setText(n+"p");
+            // color ramps with pressure: 1-2 gold, 3+ blood
+            int c = n>=3 ? BLOOD : GOLD;
+            badge.setBackground(box(c,6,n>=3?BLOODL:GOLD,2));
+            badge.setTextColor(n>=3?BONE:0xFF000000);
+            badge.setTypeface(null, android.graphics.Typeface.BOLD);
+        } else {
+            badge.setText("\u25C9");
+            badge.setBackground(box(CARD,6,EDGE,1));
+            badge.setTextColor(ASH);
+            badge.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+    }
+
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
-            TextView e=new TextView(this); e.setText("\nNothing tracked yet.\nSwitch to the grid and tap champs you see.");
+            TextView e=new TextView(this);
+            e.setText("\nNo champs tracked.\n\nIn the grid, tap the champions you're contesting or chasing. Scryer shows how hard each is contested and whether it's still worth rolling for.");
             e.setTextColor(ASH); e.setTextSize(13); e.setLineSpacing(6,1f); root.addView(e); return;
         }
         List<String> names=pool.seenSorted();
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
+            int players=pool.oppCount(name);
+            int poolSize=Pool.SIZE[co];
             double ch=rerollChance(name)*100.0;
+            double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
+
+            // contest state: verdict factors in BOTH copies gone and opponents contesting
+            String verdict; int accent; String state;
+            if(rem<=0){ verdict="DEAD"; accent=BLOODL; state="all copies gone"; }
+            else if(takenFrac>=0.5 || ch<8 || players>=3){ verdict="PIVOT"; accent=BLOODL; state= players>=3 ? players+" players on it" : "heavily contested"; }
+            else if(takenFrac>=0.3 || ch<20 || players==2){ verdict="RISKY"; accent=GOLD; state= players==2 ? "2 players on it" : "contested"; }
+            else { verdict="ROLL"; accent=GREEN; state= players==1 ? "1 other player" : "open"; }
+
             LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL);
-            card.setBackground(box(CARD,6,EDGE,1)); card.setPadding(12,10,10,10);
-            LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,6); card.setLayoutParams(cl);
+            // contested cards get a colored border so they pop at a glance
+            int border = (verdict.equals("ROLL")) ? EDGE : accent;
+            int bw = (verdict.equals("ROLL")) ? 1 : 2;
+            card.setBackground(box(CARD,6,border,bw)); card.setPadding(12,12,10,12);
+            LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,7); card.setLayoutParams(cl);
+
             TextView dot=new TextView(this); dot.setText(""+co); dot.setTextColor(0xFF000000); dot.setTextSize(11); dot.setGravity(Gravity.CENTER);
-            dot.setBackground(box(COSTC[co],4,0,0)); dot.setWidth(46); dot.setHeight(46); card.addView(dot);
+            dot.setBackground(box(COSTC[co],4,0,0)); dot.setWidth(44); dot.setHeight(44); card.addView(dot);
+
             LinearLayout mid=new LinearLayout(this); mid.setOrientation(LinearLayout.VERTICAL); mid.setPadding(12,0,0,0);
             mid.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
             TextView nm=new TextView(this); nm.setText(name); nm.setTextColor(BONE); nm.setTextSize(15); nm.setTypeface(null, android.graphics.Typeface.BOLD);
-            TextView sub=new TextView(this); sub.setText(s+" seen \u00b7 "+rem+" left"); sub.setTextColor(ASH); sub.setTextSize(11);
+            String line = rem+"/"+poolSize+" left";
+            if(players>0) line += " \u00b7 "+players+"p";
+            line += " \u00b7 "+state;
+            TextView sub=new TextView(this); sub.setText(line); sub.setTextColor(ASH); sub.setTextSize(11);
             mid.addView(nm); mid.addView(sub); card.addView(mid);
-            TextView pct=new TextView(this); pct.setText(rem<=0?"GONE":String.format("%.0f%%",ch));
-            pct.setTextColor(rem<=0?BLOODL:(ch>40?GREEN:(ch>15?GOLD:ASH))); pct.setTextSize(17);
-            pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setPadding(8,0,10,0); card.addView(pct);
+
+            // verdict block: big call + odds underneath
+            LinearLayout vbox=new LinearLayout(this); vbox.setOrientation(LinearLayout.VERTICAL); vbox.setGravity(Gravity.CENTER);
+            vbox.setPadding(8,0,8,0);
+            TextView vt=new TextView(this); vt.setText(verdict); vt.setTextColor(accent); vt.setTextSize(15);
+            vt.setTypeface(null, android.graphics.Typeface.BOLD); vt.setGravity(Gravity.CENTER);
+            TextView pct=new TextView(this); pct.setText(rem<=0?"0%":String.format("%.0f%%",ch));
+            pct.setTextColor(ASH); pct.setTextSize(11); pct.setGravity(Gravity.CENTER);
+            vbox.addView(vt); vbox.addView(pct); card.addView(vbox);
+
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
-            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(52); minus.setHeight(46);
+            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(50); minus.setHeight(44);
             minus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.add(name,-1); buzz(); showPanel(); } });
             card.addView(minus);
             root.addView(card);
         }
+        // legend
+        TextView legend=new TextView(this);
+        legend.setText("verdict uses copies left + players on it");
+        legend.setTextColor(DIM); legend.setTextSize(10); legend.setPadding(2,8,2,0); root.addView(legend);
+
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
         wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL); wipe.setTextSize(13);
         wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); showPanel(); } });
