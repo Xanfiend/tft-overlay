@@ -322,18 +322,19 @@ public class OverlayService extends Service {
             double ch=rerollChance(name)*100.0;
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
 
-            // contest state: verdict factors in BOTH copies gone and opponents contesting
-            String verdict; int accent; String state; boolean isRoll=false;
-            if(rem<=0){ verdict="\u2620 DEAD"; accent=BLOODL; state="all copies gone"; }
-            else if(takenFrac>=0.5 || ch<8 || players>=3){ verdict="\u2738 PIVOT"; accent=BLOODL; state= players>=3 ? players+" players on it" : "heavily contested"; }
-            else if(takenFrac>=0.3 || ch<20 || players==2){ verdict="\u26A0 RISKY"; accent=GOLD; state= players==2 ? "2 players on it" : "contested"; }
-            else { verdict="\u2726 ROLL"; accent=GREEN; state= players==1 ? "1 other player" : "open"; isRoll=true; }
+            // No verdict/command. Scryer is an advisor: it shows the facts
+            // (copies left, players on it, your odds) and the player decides.
+            // Color is used only as a subtle tint of how drained the pool is --
+            // never as an instruction. Based on real contest, not low-level odds.
+            int accent; boolean clean=false;
+            if(rem<=0){ accent=BLOODL; }
+            else if(takenFrac>=0.55 || players>=3){ accent=BLOODL; }
+            else if(takenFrac>=0.35 || players==2){ accent=GOLD; }
+            else { accent=EDGE; clean=true; }
 
             LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL);
-            // contested cards get a colored border so they pop at a glance
-            int border = isRoll ? EDGE : accent;
-            int bw = isRoll ? 1 : 2;
-            card.setBackground(box(CARD,6,border,bw)); card.setPadding(12,12,10,12);
+            int bw = clean ? 1 : 2;
+            card.setBackground(box(CARD,6,accent,bw)); card.setPadding(12,12,10,12);
             LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,7); card.setLayoutParams(cl);
 
             TextView dot=new TextView(this); dot.setText(""+co); dot.setTextColor(0xFF000000); dot.setTextSize(11); dot.setGravity(Gravity.CENTER);
@@ -342,20 +343,19 @@ public class OverlayService extends Service {
             LinearLayout mid=new LinearLayout(this); mid.setOrientation(LinearLayout.VERTICAL); mid.setPadding(12,0,0,0);
             mid.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
             TextView nm=new TextView(this); nm.setText(name); nm.setTextColor(BONE); nm.setTextSize(15); nm.setTypeface(null, android.graphics.Typeface.BOLD);
-            String line = rem+"/"+poolSize+" left";
-            if(players>0) line += " \u00b7 "+players+"p";
-            line += " \u00b7 "+state;
+            // facts only: copies left, and players contesting if any
+            String line = rem+" / "+poolSize+" left";
+            if(players>0) line += "  \u00b7  "+players+(players==1?" player":" players");
             TextView sub=new TextView(this); sub.setText(line); sub.setTextColor(ASH); sub.setTextSize(11);
             mid.addView(nm); mid.addView(sub); card.addView(mid);
 
-            // verdict block: big call + odds underneath
+            // right side: your reroll odds (the headline number) + a small label
             LinearLayout vbox=new LinearLayout(this); vbox.setOrientation(LinearLayout.VERTICAL); vbox.setGravity(Gravity.CENTER);
             vbox.setPadding(8,0,8,0);
-            TextView vt=new TextView(this); vt.setText(verdict); vt.setTextColor(accent); vt.setTextSize(15);
-            vt.setTypeface(null, android.graphics.Typeface.BOLD); vt.setGravity(Gravity.CENTER);
             TextView pct=new TextView(this); pct.setText(rem<=0?"0%":String.format("%.0f%%",ch));
-            pct.setTextColor(ASH); pct.setTextSize(11); pct.setGravity(Gravity.CENTER);
-            vbox.addView(vt); vbox.addView(pct); card.addView(vbox);
+            pct.setTextColor(rem<=0?DIM:BONE); pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
+            TextView pl=new TextView(this); pl.setText("hit / roll"); pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
+            vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
             minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(50); minus.setHeight(44);
@@ -365,7 +365,7 @@ public class OverlayService extends Service {
         }
         // legend
         TextView legend=new TextView(this);
-        legend.setText("verdict uses copies left + players on it");
+        legend.setText("% = your odds to hit on a roll at this level \u00b7 you call it");
         legend.setTextColor(DIM); legend.setTextSize(10); legend.setPadding(2,8,2,0); root.addView(legend);
 
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
