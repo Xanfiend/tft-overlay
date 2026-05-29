@@ -182,34 +182,48 @@ public class OverlayService extends Service {
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
                 final String name=arr[j]; final int fc=cost;
 
-                // each cell = horizontal: [ chip (copies) ][ opp badge ]
+                // cell = [ chip: name(+1) | count(-1) ][ opp badge(+1/-1) ]
                 LinearLayout cell=new LinearLayout(this);
                 cell.setOrientation(LinearLayout.HORIZONTAL);
                 LinearLayout.LayoutParams cellLp=new LinearLayout.LayoutParams(0,-2,1f);
                 cellLp.setMargins(3,3,3,3); cell.setLayoutParams(cellLp);
 
-                final TextView chip=new TextView(this);
-                chipViews[idx]=chip; chipNames[idx]=name; idx++;
-                final TextView oppBadge=new TextView(this);
-                paintChip(chip, name, fc);
-                paintOpp(oppBadge, name);
-
-                chip.setOnClickListener(new View.OnClickListener(){
-                    public void onClick(View v){ pool.add(name,1); buzz(); paintChip(chip,name,fc); }
-                });
-                chip.setOnLongClickListener(new View.OnLongClickListener(){
-                    public boolean onLongClick(View v){ pool.add(name,-1); buzz(); paintChip(chip,name,fc); return true; }
-                });
-                LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(0,-1,1f);
+                // the chip is a horizontal container so name and count can be tapped separately
+                final LinearLayout chip=new LinearLayout(this);
+                chip.setOrientation(LinearLayout.HORIZONTAL);
+                chip.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(0,-2,1f);
                 chip.setLayoutParams(chipLp);
 
+                final TextView nameTv=new TextView(this);
+                final TextView countTv=new TextView(this);
+                chipViews[idx]=nameTv; chipNames[idx]=name; idx++;
+
+                // name area = +1 (big target)
+                nameTv.setOnClickListener(new View.OnClickListener(){
+                    public void onClick(View v){ pool.add(name,1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+                });
+                // count area = -1 (single tap, no hold). only shown when count>0
+                countTv.setOnClickListener(new View.OnClickListener(){
+                    public void onClick(View v){ pool.add(name,-1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+                });
+
+                chip.addView(nameTv);
+                chip.addView(countTv);
+                paintChipPair(chip, nameTv, countTv, name, fc);
+
+                final TextView oppBadge=new TextView(this);
+                paintOpp(oppBadge, name);
                 oppBadge.setOnClickListener(new View.OnClickListener(){
                     public void onClick(View v){ pool.addOpp(name,1); buzz(); paintOpp(oppBadge,name); }
                 });
+                // opponent: tap badge =+1; when >0 a tap on it still cycles, but to remove,
+                // keep long-press here ONLY as backup since the badge is tiny. Primary remove
+                // is via the contest board. (kept simple to avoid clutter)
                 oppBadge.setOnLongClickListener(new View.OnLongClickListener(){
                     public boolean onLongClick(View v){ pool.addOpp(name,-1); buzz(); paintOpp(oppBadge,name); return true; }
                 });
-                LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(72,-1);
+                LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(64,-1);
                 oppLp.setMargins(4,0,0,0); oppBadge.setLayoutParams(oppLp);
 
                 cell.addView(chip); cell.addView(oppBadge);
@@ -224,22 +238,44 @@ public class OverlayService extends Service {
         root.addView(done);
     }
 
-    private void paintChip(TextView chip, String name, int cost){
+    // paints the chip as: [ name area (+1) ][ count area (-1) ]
+    // count area only appears when seen>0, and is a single-tap decrement (no hold)
+    private void paintChipPair(LinearLayout chip, TextView nameTv, TextView countTv, String name, int cost){
         int seen=pool.seenCount(name);
         if(seen>0){
-            chip.setText(name+"  "+seen);
+            // active: cost-colored, name on left, tappable count box on right
             chip.setBackground(box(COSTC[cost],6,0xFFFFFFFF,2));
-            chip.setTextColor(0xFF000000);
-            chip.setTypeface(null, android.graphics.Typeface.BOLD);
+            nameTv.setText(name);
+            nameTv.setTextColor(0xFF000000);
+            nameTv.setTypeface(null, android.graphics.Typeface.BOLD);
+            nameTv.setTextSize(13);
+            nameTv.setGravity(Gravity.CENTER);
+            nameTv.setPadding(8,16,4,16);
+            LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(0,-2,1f); nameTv.setLayoutParams(nlp);
+
+            // count shows the number with a tiny minus hint; tapping it = -1
+            countTv.setText(seen+" \u2212");
+            countTv.setTextColor(0xFF000000);
+            countTv.setTypeface(null, android.graphics.Typeface.BOLD);
+            countTv.setTextSize(13);
+            countTv.setGravity(Gravity.CENTER);
+            countTv.setPadding(6,16,8,16);
+            countTv.setBackground(box(0x33000000,0,0,0)); // subtle darken to show it's a separate tap zone
+            countTv.setVisibility(View.VISIBLE);
+            LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-2,-2); countTv.setLayoutParams(clp);
         } else {
-            chip.setText(name);
+            // inactive: just the name, full width, tap to +1
             chip.setBackground(box(CARD,6,EDGE,1));
-            chip.setTextColor(BONE);
-            chip.setTypeface(null, android.graphics.Typeface.NORMAL);
+            nameTv.setText(name);
+            nameTv.setTextColor(BONE);
+            nameTv.setTypeface(null, android.graphics.Typeface.NORMAL);
+            nameTv.setTextSize(13);
+            nameTv.setGravity(Gravity.CENTER);
+            nameTv.setPadding(8,16,8,16);
+            LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(0,-2,1f); nameTv.setLayoutParams(nlp);
+            countTv.setText("");
+            countTv.setVisibility(View.GONE);
         }
-        chip.setPadding(8,16,8,16); // tall = big tap target
-        chip.setGravity(Gravity.CENTER);
-        chip.setTextSize(13);
     }
 
     // opponent badge: shows a circle glyph, or the count when >0
