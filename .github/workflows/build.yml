@@ -31,11 +31,20 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.5
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/tftscryer.keystore
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/tftscryer.keystore" >> $GITHUB_ENV
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk tft-scryer.apk
+        run: cp app/build/outputs/apk/release/app-release.apk tft-scryer.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

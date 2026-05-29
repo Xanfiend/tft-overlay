@@ -14,9 +14,29 @@ android {
         versionName "1.0"
     }
 
+    // Consistent signing: reads keystore + passwords from environment
+    // variables set by the GitHub Actions workflow (from repo secrets).
+    // This makes every build sign identically, so updates install
+    // over-the-top with no "package conflicts" error.
+    signingConfigs {
+        release {
+            def ksFile = System.getenv("KEYSTORE_FILE")
+            if (ksFile != null) {
+                storeFile file(ksFile)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
         debug {
-            // debug build = no signing config needed, installs fine
+            // debug stays as-is for local/unsigned fallback
         }
     }
     compileOptions {
