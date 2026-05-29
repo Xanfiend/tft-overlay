@@ -6,25 +6,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-// TFT Set 17 "Space Gods"
+/*
+ * Pool tracking logic. This file does NOT need editing for set updates.
+ * All champion/pool data lives in SetData.java.
+ */
 public class Pool {
-    public static final int[] SIZE = {0,30,25,18,10,9};
-    public static final String[][] CHAMPS = {
-        {},
-        {"Aatrox","Briar","Caitlyn","Chogath","Ezreal","Leona","Lissandra",
-         "Nasus","Poppy","RekSai","Talon","Teemo","TwistedFate","Veigar"},
-        {"Akali","Belveth","Gnar","Gragas","Gwen","Jax","Jinx",
-         "Meepsie","Milio","Mordekaiser","Pantheon","Pyke","Zoe"},
-        {"Aurora","Diana","Fizz","Illaoi","Kaisa","Lulu","Maokai",
-         "MissFortune","Ornn","Rhaast","Samira","Urgot","Viktor"},
-        {"AurelionSol","Corki","Karma","Kindred","Leblanc","MasterYi","Nami",
-         "Nunu","Rammus","Riven","TahmKench","MightyMech","Xayah"},
-        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Morgana","Shen","Sona","Vex","Zed"}
-    };
+
+    // These point at SetData so the rest of the app can keep using
+    // Pool.SIZE and Pool.CHAMPS unchanged.
+    public static final int[] SIZE = SetData.SIZE;
+    public static final String[][] CHAMPS = SetData.CHAMPS;
+    public static final String SET_NAME = SetData.SET_NAME;
 
     public static int costOf(String name){
         for(int c=1;c<=5;c++) for(int i=0;i<CHAMPS[c].length;i++)
@@ -72,21 +67,5 @@ public class Pool {
         for(Map.Entry<String,Integer> e : seen.entrySet())
             sb.append(e.getKey()).append("|").append(e.getValue()).append(";");
         p.edit().putString("d", sb.toString()).apply();
-    }
-
-    // OCR helper: match recognized text against roster
-    public static Map<String,Integer> matchText(String ocr){
-        Map<String,Integer> found = new HashMap<>();
-        if(ocr==null) return found;
-        String low = ocr.toLowerCase().replaceAll("[^a-z\n ]","");
-        for(int c=1;c<=5;c++){
-            for(String name : CHAMPS[c]){
-                String nl = name.toLowerCase();
-                int idx=0, count=0;
-                while((idx=low.indexOf(nl, idx))!=-1){ count++; idx+=nl.length(); }
-                if(count>0) found.put(name, count);
-            }
-        }
-        return found;
     }
 }
