@@ -63,9 +63,11 @@ public class OverlayService extends Service {
     private void addButton(){
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL); c.setGravity(Gravity.CENTER);
-        c.setBackground(box(0xF20B0709,40,BLOOD,3)); c.setPadding(30,22,30,22);
-        TextView g=new TextView(this); g.setText("\u2720"); g.setTextColor(BLOODL); g.setTextSize(20); g.setGravity(Gravity.CENTER);
-        TextView lb=new TextView(this); lb.setText("TFT"); lb.setTextColor(BONE); lb.setTextSize(9); lb.setGravity(Gravity.CENTER);
+        c.setBackground(box(0xF20B0709,40,BLOOD,3)); c.setPadding(28,18,28,18);
+        // all-seeing sigil over the wordmark
+        TextView g=new TextView(this); g.setText("\u29BF"); g.setTextColor(BLOODL); g.setTextSize(22); g.setGravity(Gravity.CENTER);
+        TextView lb=new TextView(this); lb.setText("SCRY"); lb.setTextColor(GOLD); lb.setTextSize(8);
+        lb.setGravity(Gravity.CENTER); lb.setLetterSpacing(0.25f); lb.setPadding(0,2,0,0);
         c.addView(g); c.addView(lb); button=c;
 
         final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-2,-2,wtype(),
@@ -111,8 +113,9 @@ public class OverlayService extends Service {
         // header: title + mode toggle + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==1?"CONTEST BOARD":"MARK CONTESTED CHAMPS");
+        title.setText(mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView toggle=new TextView(this);
         toggle.setText(mode==1?"\u25A6 grid":"\u2261 board");
@@ -123,6 +126,12 @@ public class OverlayService extends Service {
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); } });
         head.addView(title); head.addView(toggle); head.addView(close);
         root.addView(head);
+
+        // occult divider under the header
+        TextView div=new TextView(this);
+        div.setText("\u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766");
+        div.setTextColor(EDGE); div.setTextSize(9); div.setGravity(Gravity.CENTER); div.setPadding(0,8,0,2);
+        root.addView(div);
 
         // level row (4-10)
         LinearLayout lvl=new LinearLayout(this); lvl.setPadding(0,12,0,12);
@@ -173,8 +182,9 @@ public class OverlayService extends Service {
         root.addView(tipv);
 
         for(int cost=1;cost<=5;cost++){
-            TextView lbl=new TextView(this); lbl.setText(cost+"-COST");
+            TextView lbl=new TextView(this); lbl.setText("\u25C7 "+cost+"-COST");
             lbl.setTextColor(COSTC[cost]); lbl.setTextSize(11); lbl.setTypeface(null, android.graphics.Typeface.BOLD);
+            lbl.setLetterSpacing(0.1f);
             lbl.setPadding(2,10,0,5); root.addView(lbl);
 
             LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
@@ -301,7 +311,7 @@ public class OverlayService extends Service {
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
             TextView e=new TextView(this);
-            e.setText("\nNo champs tracked.\n\nIn the grid, tap the champions you're contesting or chasing. Scryer shows how hard each is contested and whether it's still worth rolling for.");
+            e.setText("\n\u29BF  The board is silent.\n\nIn the grid, mark the champions you're contesting or chasing. Scryer reveals how hard each is contested and whether the roll still favors you.");
             e.setTextColor(ASH); e.setTextSize(13); e.setLineSpacing(6,1f); root.addView(e); return;
         }
         List<String> names=pool.seenSorted();
@@ -313,16 +323,16 @@ public class OverlayService extends Service {
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
 
             // contest state: verdict factors in BOTH copies gone and opponents contesting
-            String verdict; int accent; String state;
-            if(rem<=0){ verdict="DEAD"; accent=BLOODL; state="all copies gone"; }
-            else if(takenFrac>=0.5 || ch<8 || players>=3){ verdict="PIVOT"; accent=BLOODL; state= players>=3 ? players+" players on it" : "heavily contested"; }
-            else if(takenFrac>=0.3 || ch<20 || players==2){ verdict="RISKY"; accent=GOLD; state= players==2 ? "2 players on it" : "contested"; }
-            else { verdict="ROLL"; accent=GREEN; state= players==1 ? "1 other player" : "open"; }
+            String verdict; int accent; String state; boolean isRoll=false;
+            if(rem<=0){ verdict="\u2620 DEAD"; accent=BLOODL; state="all copies gone"; }
+            else if(takenFrac>=0.5 || ch<8 || players>=3){ verdict="\u2738 PIVOT"; accent=BLOODL; state= players>=3 ? players+" players on it" : "heavily contested"; }
+            else if(takenFrac>=0.3 || ch<20 || players==2){ verdict="\u26A0 RISKY"; accent=GOLD; state= players==2 ? "2 players on it" : "contested"; }
+            else { verdict="\u2726 ROLL"; accent=GREEN; state= players==1 ? "1 other player" : "open"; isRoll=true; }
 
             LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL);
             // contested cards get a colored border so they pop at a glance
-            int border = (verdict.equals("ROLL")) ? EDGE : accent;
-            int bw = (verdict.equals("ROLL")) ? 1 : 2;
+            int border = isRoll ? EDGE : accent;
+            int bw = isRoll ? 1 : 2;
             card.setBackground(box(CARD,6,border,bw)); card.setPadding(12,12,10,12);
             LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,7); card.setLayoutParams(cl);
 
