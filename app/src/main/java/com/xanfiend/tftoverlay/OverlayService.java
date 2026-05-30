@@ -23,7 +23,7 @@ public class OverlayService extends Service {
     private View button;
     private View panel;
     private Pool pool;
-    private int level = 8;
+    private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
 
@@ -44,6 +44,7 @@ public class OverlayService extends Service {
     @Override public void onCreate(){
         super.onCreate();
         pool = new Pool(this);
+        level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
@@ -190,7 +191,7 @@ public class OverlayService extends Service {
             boolean on=lv==level;
             b.setBackground(box(on?BLOOD:CARD,5,on?BLOODL:EDGE,on?2:1));
             b.setTextColor(on?BONE:ASH); if(on) b.setTypeface(null, android.graphics.Typeface.BOLD);
-            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ level=lv; showPanel(); } });
+            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ level=lv; pool.setLevel(lv); showPanel(); } });
             LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(0,-2,1f); bl.setMargins(2,0,2,0); b.setLayoutParams(bl);
             lvl.addView(b);
         }
@@ -309,7 +310,7 @@ public class OverlayService extends Service {
         oppBadge.setOnLongClickListener(new View.OnLongClickListener(){
             public boolean onLongClick(View v){ pool.addOpp(name,-1); buzz(); paintOpp(oppBadge,name); return true; }
         });
-        LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(64,-1);
+        LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(70,-1);
         oppLp.setMargins(4,0,0,0); oppBadge.setLayoutParams(oppLp);
 
         cell.addView(chip); cell.addView(oppBadge);
@@ -326,18 +327,18 @@ public class OverlayService extends Service {
             nameTv.setText(name);
             nameTv.setTextColor(0xFF000000);
             nameTv.setTypeface(null, android.graphics.Typeface.BOLD);
-            nameTv.setTextSize(13);
+            nameTv.setTextSize(15);
             nameTv.setGravity(Gravity.CENTER);
-            nameTv.setPadding(8,16,4,16);
+            nameTv.setPadding(10,22,4,22);
             LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(0,-2,1f); nameTv.setLayoutParams(nlp);
 
             // count shows the number with a tiny minus hint; tapping it = -1
             countTv.setText(seen+" \u2212");
             countTv.setTextColor(0xFF000000);
             countTv.setTypeface(null, android.graphics.Typeface.BOLD);
-            countTv.setTextSize(13);
+            countTv.setTextSize(15);
             countTv.setGravity(Gravity.CENTER);
-            countTv.setPadding(6,16,8,16);
+            countTv.setPadding(8,22,10,22);
             countTv.setBackground(box(0x33000000,0,0,0)); // subtle darken to show it's a separate tap zone
             countTv.setVisibility(View.VISIBLE);
             LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-2,-2); countTv.setLayoutParams(clp);
@@ -347,9 +348,9 @@ public class OverlayService extends Service {
             nameTv.setText(name);
             nameTv.setTextColor(BONE);
             nameTv.setTypeface(null, android.graphics.Typeface.NORMAL);
-            nameTv.setTextSize(13);
+            nameTv.setTextSize(15);
             nameTv.setGravity(Gravity.CENTER);
-            nameTv.setPadding(8,16,8,16);
+            nameTv.setPadding(10,22,8,22);
             LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(0,-2,1f); nameTv.setLayoutParams(nlp);
             countTv.setText("");
             countTv.setVisibility(View.GONE);
@@ -376,6 +377,21 @@ public class OverlayService extends Service {
         }
     }
 
+    // 3-star feasibility note. A 3-star needs 9 copies total.
+    // rem = copies still in the pool, s = copies you've marked seen/out.
+    // This is a rough guide on sparse input, framed honestly.
+    private String threeStarNote(int cost, int rem, int s){
+        // only really meaningful to show for units people chase to 3
+        if(rem<=0) return "3-star: impossible, pool empty";
+        if(rem < 9) {
+            // fewer than 9 copies left in the whole pool -> nobody can 3-star from here
+            return "3-star: not enough copies left (" + rem + ")";
+        }
+        // plenty left; only nudge for expensive units where it's a real question
+        if(cost>=4) return "3-star: possible, needs 9 (" + rem + " left)";
+        return null; // 1-3 cost with healthy pool: no need to clutter
+    }
+
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
             TextView e=new TextView(this);
@@ -383,46 +399,67 @@ public class OverlayService extends Service {
             e.setTextColor(ASH); e.setTextSize(13); e.setLineSpacing(6,1f); root.addView(e); return;
         }
         List<String> names=pool.seenSorted();
+        String pin=pool.getPinned();
+        if(!pin.isEmpty() && names.contains(pin)){ names.remove(pin); names.add(0, pin); }
+
+        // tiny hint: long-press a card to pin your carry
+        TextView pinTip=new TextView(this);
+        pinTip.setText("long-press a unit to \u2605 pin it as your carry");
+        pinTip.setTextColor(DIM); pinTip.setTextSize(9); pinTip.setPadding(2,0,2,8); root.addView(pinTip);
+
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
             int players=pool.oppCount(name);
             int poolSize=Pool.SIZE[co];
             double ch=rerollChance(name)*100.0;
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
+            final boolean pinned = pool.isPinned(name);
 
-            // No verdict/command. Scryer is an advisor: it shows the facts
-            // (copies left, players on it, your odds) and the player decides.
-            // Color is used only as a subtle tint of how drained the pool is --
-            // never as an instruction. Based on real contest, not low-level odds.
             int accent; boolean clean=false;
             if(rem<=0){ accent=BLOODL; }
             else if(takenFrac>=0.55 || players>=3){ accent=BLOODL; }
             else if(takenFrac>=0.35 || players==2){ accent=GOLD; }
             else { accent=EDGE; clean=true; }
+            if(pinned) accent=GOLD; // pinned carry always stands out
 
             LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL);
-            int bw = clean ? 1 : 2;
+            int bw = (clean && !pinned) ? 1 : 2;
             card.setBackground(box(CARD,6,accent,bw)); card.setPadding(12,12,10,12);
             LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,7); card.setLayoutParams(cl);
+            // long-press a card to pin/unpin it as your carry
+            card.setOnLongClickListener(new View.OnLongClickListener(){
+                public boolean onLongClick(View v){ pool.setPinned(pinned?"":name); buzz(); showPanel(); return true; }
+            });
 
             TextView dot=new TextView(this); dot.setText(""+co); dot.setTextColor(0xFF000000); dot.setTextSize(11); dot.setGravity(Gravity.CENTER);
             dot.setBackground(box(COSTC[co],4,0,0)); dot.setWidth(44); dot.setHeight(44); card.addView(dot);
 
             LinearLayout mid=new LinearLayout(this); mid.setOrientation(LinearLayout.VERTICAL); mid.setPadding(12,0,0,0);
             mid.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-            TextView nm=new TextView(this); nm.setText(name); nm.setTextColor(BONE); nm.setTextSize(15); nm.setTypeface(null, android.graphics.Typeface.BOLD);
-            // facts only: copies left, and players contesting if any
+            TextView nm=new TextView(this); nm.setText((pinned?"\u2605 ":"")+name); nm.setTextColor(pinned?GOLD:BONE); nm.setTextSize(15); nm.setTypeface(null, android.graphics.Typeface.BOLD);
+            // facts line: copies left + players contesting
             String line = rem+" / "+poolSize+" left";
             if(players>0) line += "  \u00b7  "+players+(players==1?" player":" players");
             TextView sub=new TextView(this); sub.setText(line); sub.setTextColor(ASH); sub.setTextSize(11);
-            mid.addView(nm); mid.addView(sub); card.addView(mid);
+            mid.addView(nm); mid.addView(sub);
 
-            // right side: your reroll odds (the headline number) + a small label
+            // 3-star feasibility: a 3-star needs 9 copies. show only if relevant.
+            String feas = threeStarNote(co, rem, s);
+            if(feas!=null){
+                TextView f=new TextView(this); f.setText(feas);
+                f.setTextColor(rem < (9 - 0) ? GOLD : ASH); f.setTextSize(10); mid.addView(f);
+            }
+            card.addView(mid);
+
+            // right side: odds now + odds by a chunk of gold
             LinearLayout vbox=new LinearLayout(this); vbox.setOrientation(LinearLayout.VERTICAL); vbox.setGravity(Gravity.CENTER);
             vbox.setPadding(8,0,8,0);
             TextView pct=new TextView(this); pct.setText(rem<=0?"0%":String.format("%.0f%%",ch));
             pct.setTextColor(rem<=0?DIM:BONE); pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
-            TextView pl=new TextView(this); pl.setText("hit / roll"); pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
+            // "by ~30g" estimate: chance to see at least one across ~6 shops (30g ~ 6 rolls)
+            double byGold = rem<=0 ? 0 : (1.0 - Math.pow(1.0 - rerollChance(name), 6))*100.0;
+            TextView pl=new TextView(this); pl.setText(rem<=0?"gone":String.format("~%.0f%% / 30g", byGold));
+            pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
