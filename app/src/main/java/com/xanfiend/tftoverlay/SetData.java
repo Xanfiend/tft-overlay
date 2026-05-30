@@ -50,7 +50,7 @@ public final class SetData {
          "Nunu","Rammus","Riven","TahmKench","MightyMech","Xayah"},
 
         // 5-cost
-        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Morgana","Shen","Sona","Vex","Zed"}
+        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Morgana","Shen","Sona","Vex"}
     };
 
     private SetData() {} // no instances
