@@ -80,13 +80,21 @@ public class OverlayService extends Service {
                 if(a==MotionEvent.ACTION_DOWN){ ix=lp.x;iy=lp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false; return true; }
                 else if(a==MotionEvent.ACTION_MOVE){
                     int dx=(int)(e.getRawX()-tx),dy=(int)(e.getRawY()-ty);
-                    if(Math.abs(dx)>14||Math.abs(dy)>14) moved=true;
-                    lp.x=ix+dx; lp.y=iy+dy; wm.updateViewLayout(button,lp); return true;
+                    if(Math.abs(dx)>14||Math.abs(dy)>14){ moved=true; showCloseTarget(true); }
+                    lp.x=ix+dx; lp.y=iy+dy; wm.updateViewLayout(button,lp);
+                    // highlight the X when the finger is over it
+                    if(moved) highlightClose(e.getRawX(), e.getRawY());
+                    return true;
                 } else if(a==MotionEvent.ACTION_UP){
+                    if(moved && overClose(e.getRawX(), e.getRawY())){
+                        // dropped on the X -> shut the whole overlay down
+                        showCloseTarget(false);
+                        stopSelf();
+                        return true;
+                    }
+                    showCloseTarget(false);
                     if(!moved){
                         boolean longpress = System.currentTimeMillis()-down>450;
-                        // long-press = jump to grid to mark champs.
-                        // short tap = contest board if we're tracking, else grid.
                         if(longpress) mode=0;
                         else mode = pool.isEmpty() ? 0 : 1;
                         showPanel();
@@ -97,6 +105,44 @@ public class OverlayService extends Service {
             }
         });
         wm.addView(button, lp);
+    }
+
+    // ---- drag-to-close X target ----
+    private View closeView;
+    private int[] closeCenter = new int[]{-1,-1};
+    private void showCloseTarget(boolean show){
+        if(show){
+            if(closeView!=null) return;
+            TextView x=new TextView(this); x.setText("\u2715"); x.setTextColor(BONE); x.setTextSize(26);
+            x.setGravity(Gravity.CENTER);
+            x.setBackground(box(0xE6B11A22,60,BLOODL,3));
+            x.setPadding(34,30,34,30);
+            closeView=x;
+            WindowManager.LayoutParams clp=new WindowManager.LayoutParams(-2,-2,wtype(),
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, PixelFormat.TRANSLUCENT);
+            clp.gravity=Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL; clp.y=120;
+            try{ wm.addView(closeView, clp); }catch(Exception ex){}
+            // compute its screen center after layout
+            closeView.post(new Runnable(){ public void run(){
+                if(closeView==null) return;
+                int[] loc=new int[2]; closeView.getLocationOnScreen(loc);
+                closeCenter[0]=loc[0]+closeView.getWidth()/2;
+                closeCenter[1]=loc[1]+closeView.getHeight()/2;
+            }});
+        } else {
+            if(closeView!=null){ try{wm.removeView(closeView);}catch(Exception ex){} closeView=null; closeCenter[0]=-1; closeCenter[1]=-1; }
+        }
+    }
+    private boolean overClose(float rx, float ry){
+        if(closeCenter[0]<0) return false;
+        double d=Math.hypot(rx-closeCenter[0], ry-closeCenter[1]);
+        return d < 140; // generous drop radius
+    }
+    private void highlightClose(float rx, float ry){
+        if(closeView==null) return;
+        boolean over=overClose(rx,ry);
+        closeView.setBackground(box(over?0xFFE0303A:0xE6B11A22, 60, BONE, over?4:3));
+        closeView.setScaleX(over?1.25f:1f); closeView.setScaleY(over?1.25f:1f);
     }
 
     private void closePanel(){ if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; } }
@@ -177,9 +223,32 @@ public class OverlayService extends Service {
         int idx=0;
 
         TextView tipv=new TextView(this);
-        tipv.setText("Tap = +1 copy seen (long-press = \u22121) \u00b7 tap the \u25C9 to add an opponent");
+        tipv.setText("Tap a name = +1 copy \u00b7 tap the count = \u22121 \u00b7 tap \u25C9 = +1 player");
         tipv.setTextColor(DIM); tipv.setTextSize(10); tipv.setPadding(0,0,0,8);
         root.addView(tipv);
+
+        // RECENT: the champs you've tapped this game, for instant re-tapping
+        java.util.List<String> rec = pool.recentList();
+        if(!rec.isEmpty()){
+            TextView rlbl=new TextView(this); rlbl.setText("\u25C7 RECENT");
+            rlbl.setTextColor(GOLD); rlbl.setTextSize(11); rlbl.setTypeface(null, android.graphics.Typeface.BOLD);
+            rlbl.setLetterSpacing(0.1f); rlbl.setPadding(2,4,0,5); root.addView(rlbl);
+
+            LinearLayout rrow=null;
+            for(int j=0;j<rec.size();j++){
+                if(j%3==0){ rrow=new LinearLayout(this); root.addView(rrow); }
+                final String name=rec.get(j); final int fc=Pool.costOf(name);
+                LinearLayout cell=buildChipCell(name, fc);
+                rrow.addView(cell);
+            }
+            // fill the last row so cells keep even width
+            if(rrow!=null){ int fillN=(3-(rec.size()%3))%3; for(int k=0;k<fillN;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); rrow.addView(sp);} }
+
+            TextView rdiv=new TextView(this);
+            rdiv.setText("\u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766");
+            rdiv.setTextColor(EDGE); rdiv.setTextSize(9); rdiv.setGravity(Gravity.CENTER); rdiv.setPadding(0,8,0,2);
+            root.addView(rdiv);
+        }
 
         for(int cost=1;cost<=5;cost++){
             TextView lbl=new TextView(this); lbl.setText("\u25C7 "+cost+"-COST");
@@ -191,52 +260,8 @@ public class OverlayService extends Service {
             for(int j=0;j<arr.length;j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
                 final String name=arr[j]; final int fc=cost;
-
-                // cell = [ chip: name(+1) | count(-1) ][ opp badge(+1/-1) ]
-                LinearLayout cell=new LinearLayout(this);
-                cell.setOrientation(LinearLayout.HORIZONTAL);
-                LinearLayout.LayoutParams cellLp=new LinearLayout.LayoutParams(0,-2,1f);
-                cellLp.setMargins(3,3,3,3); cell.setLayoutParams(cellLp);
-
-                // the chip is a horizontal container so name and count can be tapped separately
-                final LinearLayout chip=new LinearLayout(this);
-                chip.setOrientation(LinearLayout.HORIZONTAL);
-                chip.setGravity(Gravity.CENTER_VERTICAL);
-                LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(0,-2,1f);
-                chip.setLayoutParams(chipLp);
-
-                final TextView nameTv=new TextView(this);
-                final TextView countTv=new TextView(this);
-                chipViews[idx]=nameTv; chipNames[idx]=name; idx++;
-
-                // name area = +1 (big target)
-                nameTv.setOnClickListener(new View.OnClickListener(){
-                    public void onClick(View v){ pool.add(name,1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
-                });
-                // count area = -1 (single tap, no hold). only shown when count>0
-                countTv.setOnClickListener(new View.OnClickListener(){
-                    public void onClick(View v){ pool.add(name,-1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
-                });
-
-                chip.addView(nameTv);
-                chip.addView(countTv);
-                paintChipPair(chip, nameTv, countTv, name, fc);
-
-                final TextView oppBadge=new TextView(this);
-                paintOpp(oppBadge, name);
-                oppBadge.setOnClickListener(new View.OnClickListener(){
-                    public void onClick(View v){ pool.addOpp(name,1); buzz(); paintOpp(oppBadge,name); }
-                });
-                // opponent: tap badge =+1; when >0 a tap on it still cycles, but to remove,
-                // keep long-press here ONLY as backup since the badge is tiny. Primary remove
-                // is via the contest board. (kept simple to avoid clutter)
-                oppBadge.setOnLongClickListener(new View.OnLongClickListener(){
-                    public boolean onLongClick(View v){ pool.addOpp(name,-1); buzz(); paintOpp(oppBadge,name); return true; }
-                });
-                LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(64,-1);
-                oppLp.setMargins(4,0,0,0); oppBadge.setLayoutParams(oppLp);
-
-                cell.addView(chip); cell.addView(oppBadge);
+                if(idx<chipNames.length){ chipNames[idx]=name; idx++; }
+                LinearLayout cell=buildChipCell(name, fc);
                 row.addView(cell);
             }
         }
@@ -246,6 +271,49 @@ public class OverlayService extends Service {
         done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); } });
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.setMargins(0,14,0,0); done.setLayoutParams(dl);
         root.addView(done);
+    }
+
+    // Builds one champ cell: [ chip: name(+1) | count(-1) ][ opp badge ]
+    // Used by both the RECENT row and the cost grid.
+    private LinearLayout buildChipCell(final String name, final int fc){
+        LinearLayout cell=new LinearLayout(this);
+        cell.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cellLp=new LinearLayout.LayoutParams(0,-2,1f);
+        cellLp.setMargins(3,3,3,3); cell.setLayoutParams(cellLp);
+
+        final LinearLayout chip=new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(0,-2,1f);
+        chip.setLayoutParams(chipLp);
+
+        final TextView nameTv=new TextView(this);
+        final TextView countTv=new TextView(this);
+
+        nameTv.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){ pool.add(name,1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+        });
+        countTv.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){ pool.add(name,-1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+        });
+
+        chip.addView(nameTv);
+        chip.addView(countTv);
+        paintChipPair(chip, nameTv, countTv, name, fc);
+
+        final TextView oppBadge=new TextView(this);
+        paintOpp(oppBadge, name);
+        oppBadge.setOnClickListener(new View.OnClickListener(){
+            public void onClick(View v){ pool.addOpp(name,1); buzz(); paintOpp(oppBadge,name); }
+        });
+        oppBadge.setOnLongClickListener(new View.OnLongClickListener(){
+            public boolean onLongClick(View v){ pool.addOpp(name,-1); buzz(); paintOpp(oppBadge,name); return true; }
+        });
+        LinearLayout.LayoutParams oppLp=new LinearLayout.LayoutParams(64,-1);
+        oppLp.setMargins(4,0,0,0); oppBadge.setLayoutParams(oppLp);
+
+        cell.addView(chip); cell.addView(oppBadge);
+        return cell;
     }
 
     // paints the chip as: [ name area (+1) ][ count area (-1) ]
@@ -381,6 +449,7 @@ public class OverlayService extends Service {
     @Override public void onDestroy(){
         super.onDestroy();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
+        try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();
     }
     @Override public IBinder onBind(Intent i){ return null; }
