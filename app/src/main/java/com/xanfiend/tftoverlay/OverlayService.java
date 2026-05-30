@@ -463,9 +463,18 @@ public class OverlayService extends Service {
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
-            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(50); minus.setHeight(44);
+            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(48); minus.setHeight(44);
             minus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.add(name,-1); buzz(); showPanel(); } });
             card.addView(minus);
+
+            // skull = a player holding this died, so a copy returns to the pool.
+            // (returning a copy = one fewer "seen out" = same as minus, but labeled
+            //  for the death case so the intent is clear)
+            TextView skull=new TextView(this); skull.setText("\u2620"); skull.setTextColor(GOLD); skull.setTextSize(17); skull.setGravity(Gravity.CENTER);
+            skull.setBackground(box(0xFF14100A,5,GOLD,1)); skull.setWidth(48); skull.setHeight(44);
+            LinearLayout.LayoutParams skl=new LinearLayout.LayoutParams(-2,-2); skl.setMargins(6,0,0,0); skull.setLayoutParams(skl);
+            skull.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.add(name,-1); buzz(); showPanel(); } });
+            card.addView(skull);
             root.addView(card);
         }
         // legend
@@ -475,7 +484,7 @@ public class OverlayService extends Service {
 
         // death-return reminder: eliminated players' units go back to the pool
         TextView deathTip=new TextView(this);
-        deathTip.setText("\u2620 when a player dies, their units return to the pool. tap a count down to free those copies");
+        deathTip.setText("\u2620 tap the skull on a unit when a player holding it dies. a copy returns to the pool");
         deathTip.setTextColor(GOLD); deathTip.setTextSize(10); deathTip.setPadding(2,6,2,0); root.addView(deathTip);
 
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
