@@ -2,6 +2,7 @@ package com.xanfiend.tftoverlay;
 
 import android.app.Service;
 import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
@@ -26,6 +27,9 @@ public class OverlayService extends Service {
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
+    // bump this each release so the footer shows the current version
+    private static final String APP_VERSION = "v1.1";
+    private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
     private static final int[][] ODDS = {
         {0,0,0,0,0},{100,0,0,0,0},{100,0,0,0,0},{75,25,0,0,0},
@@ -463,18 +467,9 @@ public class OverlayService extends Service {
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
-            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(48); minus.setHeight(44);
+            minus.setBackground(box(0xFF1A0C0E,5,BLOOD,1)); minus.setWidth(50); minus.setHeight(44);
             minus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.add(name,-1); buzz(); showPanel(); } });
             card.addView(minus);
-
-            // skull = a player holding this died, so a copy returns to the pool.
-            // (returning a copy = one fewer "seen out" = same as minus, but labeled
-            //  for the death case so the intent is clear)
-            TextView skull=new TextView(this); skull.setText("\u2620"); skull.setTextColor(GOLD); skull.setTextSize(17); skull.setGravity(Gravity.CENTER);
-            skull.setBackground(box(0xFF14100A,5,GOLD,1)); skull.setWidth(48); skull.setHeight(44);
-            LinearLayout.LayoutParams skl=new LinearLayout.LayoutParams(-2,-2); skl.setMargins(6,0,0,0); skull.setLayoutParams(skl);
-            skull.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.add(name,-1); buzz(); showPanel(); } });
-            card.addView(skull);
             root.addView(card);
         }
         // legend
@@ -484,7 +479,7 @@ public class OverlayService extends Service {
 
         // death-return reminder: eliminated players' units go back to the pool
         TextView deathTip=new TextView(this);
-        deathTip.setText("\u2620 tap the skull on a unit when a player holding it dies. a copy returns to the pool");
+        deathTip.setText("\u2620 when a player dies, their units return to the pool. tap a count down to free those copies");
         deathTip.setTextColor(GOLD); deathTip.setTextSize(10); deathTip.setPadding(2,6,2,0); root.addView(deathTip);
 
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
@@ -495,6 +490,28 @@ public class OverlayService extends Service {
         TextView credit=new TextView(this); credit.setText("@ravriks"); credit.setTextColor(DIM); credit.setTextSize(10); credit.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams crl=new LinearLayout.LayoutParams(-1,-2); crl.setMargins(0,14,0,0); credit.setLayoutParams(crl);
         root.addView(credit);
+
+        // version + get-latest link. opens GitHub in the browser (no INTERNET
+        // permission needed: the browser does the network, not this app).
+        TextView ver=new TextView(this);
+        ver.setText(APP_VERSION + "  \u00b7  tap for the latest on GitHub");
+        ver.setTextColor(GOLD); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
+        ver.setPadding(0,8,0,0);
+        LinearLayout.LayoutParams vrl=new LinearLayout.LayoutParams(-1,-2); vrl.setMargins(0,4,0,0); ver.setLayoutParams(vrl);
+        ver.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ openLatest(); } });
+        root.addView(ver);
+    }
+
+    // opens the GitHub releases page in the user's browser. Uses an Intent,
+    // which does NOT require the INTERNET permission -- the browser handles
+    // the network, so the app stays fully offline.
+    private void openLatest(){
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            closePanel();
+        } catch(Exception e){}
     }
 
     @Override public void onDestroy(){
