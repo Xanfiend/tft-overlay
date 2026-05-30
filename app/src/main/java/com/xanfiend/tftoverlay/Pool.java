@@ -77,6 +77,15 @@ public class Pool {
     public void reset(){ seen.clear(); opp.clear(); recent.clear(); save(); }
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
 
+    // ---- remembered level (persists between opens) ----
+    public int getLevel(){ return p.getInt("level", 8); }
+    public void setLevel(int lv){ p.edit().putInt("level", lv).apply(); }
+
+    // ---- pinned carry (shown at top of grid + board) ----
+    public String getPinned(){ return p.getString("pinned", ""); }
+    public void setPinned(String name){ p.edit().putString("pinned", name==null?"":name).apply(); }
+    public boolean isPinned(String name){ return getPinned().equals(name); }
+
     // union of any champ that has either a copy or an opponent tracked,
     // sorted by opponents first (contest pressure), then copies
     public List<String> seenSorted(){
