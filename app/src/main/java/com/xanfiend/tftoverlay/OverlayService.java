@@ -436,6 +436,11 @@ public class OverlayService extends Service {
         legend.setText("% = your odds to hit on a roll at this level \u00b7 you call it");
         legend.setTextColor(DIM); legend.setTextSize(10); legend.setPadding(2,8,2,0); root.addView(legend);
 
+        // death-return reminder: eliminated players' units go back to the pool
+        TextView deathTip=new TextView(this);
+        deathTip.setText("\u2620 when a player dies, their units return to the pool. tap a count down to free those copies");
+        deathTip.setTextColor(GOLD); deathTip.setTextSize(10); deathTip.setPadding(2,6,2,0); root.addView(deathTip);
+
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
         wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL); wipe.setTextSize(13);
         wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); showPanel(); } });
