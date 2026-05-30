@@ -34,17 +34,28 @@ public class Pool {
     private final SharedPreferences p;
     private final Map<String,Integer> seen = new HashMap<>();   // copies gone
     private final Map<String,Integer> opp  = new HashMap<>();   // opponents contesting
+    private final ArrayList<String> recent = new ArrayList<>(); // most-recently tapped first
+    private static final int RECENT_MAX = 6;
 
     public Pool(Context ctx){
         p = ctx.getSharedPreferences("tft_pool", Context.MODE_PRIVATE);
         load();
     }
 
+    private void touchRecent(String champ){
+        recent.remove(champ);
+        recent.add(0, champ);
+        while(recent.size()>RECENT_MAX) recent.remove(recent.size()-1);
+    }
+    // champs you've interacted with this game, newest first
+    public List<String> recentList(){ return new ArrayList<>(recent); }
+
     // ---- copies seen ----
     public void add(String champ, int n){
         int v = seen.containsKey(champ) ? seen.get(champ) : 0;
         int nv = Math.max(0, v+n);
         if(nv==0) seen.remove(champ); else seen.put(champ, nv);
+        if(n>0) touchRecent(champ);
         save();
     }
     public int seenCount(String c){ return seen.containsKey(c) ? seen.get(c) : 0; }
@@ -58,11 +69,12 @@ public class Pool {
         int v = opp.containsKey(champ) ? opp.get(champ) : 0;
         int nv = Math.max(0, Math.min(7, v+n)); // cap at 7 opponents
         if(nv==0) opp.remove(champ); else opp.put(champ, nv);
+        if(n>0) touchRecent(champ);
         save();
     }
     public int oppCount(String c){ return opp.containsKey(c) ? opp.get(c) : 0; }
 
-    public void reset(){ seen.clear(); opp.clear(); save(); }
+    public void reset(){ seen.clear(); opp.clear(); recent.clear(); save(); }
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
 
     // union of any champ that has either a copy or an opponent tracked,
@@ -83,7 +95,7 @@ public class Pool {
     }
 
     private void load(){
-        seen.clear(); opp.clear();
+        seen.clear(); opp.clear(); recent.clear();
         // format: name|copies|opponents ; ...   (back-compat: name|copies)
         for(String part : p.getString("d","").split(";")){
             if(part.isEmpty()) continue;
@@ -101,6 +113,13 @@ public class Pool {
                 } catch(Exception e){}
             }
         }
+        // recent list stored separately as a simple comma list
+        String r = p.getString("recent","");
+        if(!r.isEmpty()){
+            for(String name : r.split(",")){
+                if(!name.isEmpty() && recent.size()<RECENT_MAX) recent.add(name);
+            }
+        }
     }
     private void save(){
         StringBuilder sb = new StringBuilder();
@@ -109,6 +128,8 @@ public class Pool {
         for(String k : keys){
             sb.append(k).append("|").append(seenCount(k)).append("|").append(oppCount(k)).append(";");
         }
-        p.edit().putString("d", sb.toString()).apply();
+        StringBuilder rb = new StringBuilder();
+        for(int i=0;i<recent.size();i++){ if(i>0) rb.append(","); rb.append(recent.get(i)); }
+        p.edit().putString("d", sb.toString()).putString("recent", rb.toString()).apply();
     }
 }
