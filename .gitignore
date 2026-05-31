@@ -1,0 +1,16 @@
+# Compiled Java class files
+*.class
+
+# Gradle build artifacts
+.gradle/
+build/
+app/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+
+# Keystore (never commit secrets)
+*.jks
+*.keystore
