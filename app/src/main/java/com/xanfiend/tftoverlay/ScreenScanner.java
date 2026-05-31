@@ -134,12 +134,13 @@ public class ScreenScanner {
 
     private ScanResult parse(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
-        // TFT Mobile landscape layout:
-        //   gold  = bottom-right corner  (cy > 75% of height, cx > 50% of width)
-        //   level = top-left corner      (cy < 25% of height, cx < 50% of width)
-        int bottomStart = bmpH * 3 / 4;
-        int topEnd      = bmpH / 4;
+        // TFT Mobile layout — level is always top-left, gold is always bottom-right.
+        // Portrait (h>w): HUD elements are in a smaller slice at the screen edges.
+        boolean portrait = bmpH > bmpW;
+        int bottomStart = portrait ? bmpH * 7 / 8 : bmpH * 3 / 4;
+        int topEnd      = portrait ? bmpH / 8     : bmpH / 4;
         int leftHalf    = bmpW / 2;
+        log("zones: portrait=" + portrait + " topEnd=" + topEnd + " bottomStart=" + bottomStart);
         int goldBoxH = 0;
 
         // Log every block so the debug panel shows exactly what OCR found
