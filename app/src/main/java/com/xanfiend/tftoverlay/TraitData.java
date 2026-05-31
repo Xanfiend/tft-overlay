@@ -10,26 +10,27 @@ package com.xanfiend.tftoverlay;
  */
 public final class TraitData {
 
-    // Set 17 "Space Gods" — verify all breakpoints per patch notes
+    // Set 17 "Space Gods" — verified vs Riot patch notes 17.4
     public static final String[][] TRAITS = {
-        // Origin traits
-        {"Dark Star",    "3 / 6 / 9",     "Gain AP/AD on ally death"},
+        // Origins
+        {"Dark Star",    "2 / 4 / 6 / 9", "Black holes execute <10% HP; units gain AP/AD"},
         {"Stargazer",    "3 / 6 / 9",     "Econ & item bonus from constellations"},
-        {"Anima Squad",  "3 / 5 / 7 / 9", "Hearts & shields on kills"},
-        {"Mecha",        "3 / 5 / 7",     "Merges into giant mech unit"},
-        {"NOVA",         "2 / 4",         "Bonus damage from high HP"},
-        // Class traits
-        {"Brawler",      "2 / 4 / 6 / 8", "Max HP bonus"},
-        {"Vanguard",     "2 / 4 / 6",     "Armor for all"},
-        {"Shepherd",     "2 / 4 / 6",     "AP per adjacent unit"},
+        {"Anima",        "3 / 6 / 9",     "Loss-streak Tech; prototypes Anima Weapons at 100"},
+        {"Space Groove", "3 / 5 / 7",     "Stacking AS & HP regen; stronger the longer fights last"},
+        {"Primordian",   "1 / 3",         "Spawn Swarmlings on damage; drops 1/2-cost champ each round"},
+        {"Arbiter",      "2 / 3",         "Choose cause + effect for a divine law; stronger at 3"},
+        {"Mecha",        "2 / 4",         "Two units merge into giant mech with upgraded abilities"},
+        {"NOVA",         "2 / 4",         "Bonus damage scaling from high HP"},
+        // Classes
+        {"Brawler",      "2 / 4 / 6 / 8", "Max HP bonus for whole team; Brawlers gain more"},
+        {"Vanguard",     "2 / 4 / 6",     "Shield at combat start and at 50% HP; Durability while shielded"},
+        {"Shepherd",     "2 / 4 / 6",     "Summons Bond of the Stars; power scales with Shepherd star level"},
         {"Slayer",       "2 / 4 / 6 / 8", "+Dmg & lifesteal at low HP"},
-        {"Marksman",     "2 / 4 / 6",     "Attacks fire extra bolts"},
-        {"Sorcerer",     "2 / 4 / 6",     "AP bonus for all"},
-        {"Bastion",      "2 / 4 / 6 / 8", "Armor & MR stacking"},
-        {"Duelist",      "2 / 4 / 6 / 8", "Attack speed on attack"},
-        {"Invoker",      "2 / 4",         "Mana on ally cast"},
-        {"Reaper",       "2 / 4",         "Execute threshold"},
-        // Add / verify remaining Set 17 traits
+        {"Bastion",      "2 / 4 / 6 / 8", "Team Armor & MR; doubles in first 10 s of combat"},
+        {"Psionic",      "2 / 4",         "Generate Psi-mods for any ally; at 4 Psionic units get bonus effects"},
+        {"Sniper",       "2 / 3 / 4 / 5", "Damage amp vs targets farther away"},
+        {"Challenger",   "2 / 4 / 6",     "Bonus AS; dash to new target on kill, +50% AS for 2.5 s"},
+        {"Eradicator",   "2 / 4",         "Enemies have reduced Armor & MR"},
     };
 
     private TraitData() {}
