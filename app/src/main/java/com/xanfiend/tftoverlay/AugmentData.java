@@ -52,6 +52,8 @@ public final class AugmentData {
         new AugmentEntry("On a Roll",              "A", "Reroll comps"),
         new AugmentEntry("Spellweaver",            "A", "Vex Fast 9, Shepherd Viktor"),
         new AugmentEntry("Giant Slayer",           "B", "Dark Stars, Corki Riven"),
+        new AugmentEntry("Arbiter Emblem",          "A", "Arbiter comps"),
+        new AugmentEntry("Rogue Emblem",           "B", ""),
         new AugmentEntry("Saving Grace",           "B", ""),
         new AugmentEntry("Gold Collector",         "B", ""),
         new AugmentEntry("Makeshift Armor 2",      "B", ""),
@@ -81,12 +83,13 @@ public final class AugmentData {
     // TYPES to favour. Principle-based so it stays useful even as
     // specific augments shift. Each entry: comp name, then priority.
     public static final String[][] COMP_PRIORITIES = {
-        // {comp, augment priority order}
+        // {comp, augment priority order} — updated for 17.4
         {"Vex Fast 9 (S)", "Econ > Combat > Item. Need econ to hit 9, 1 combat aug to win out."},
         {"Vanguard Fast 9 (S)", "Econ > Combat. Tempo + econ augs; frontline holds while you scale."},
         {"Stargazer Xayah (A)", "Double Trouble first, then Combat/Item. Check constellation."},
-        {"Corki Riven (A)", "Combat > Item > Econ. Strong stage 4, good loss-streak contest."},
         {"Dark Stars / Jhin (A)", "Combat + Dark Star scaling. Heavily contested when lobby knows it."},
+        {"Bel'Veth Reroll (A)", "17.4: Bel'Veth 17.3 nerf reverted. Reroll econ + Patience. Slow-roll L6/L7."},
+        {"Corki Riven (B)", "17.4: Corki nerfed hard. Still playable but worse payoff. Combat > Item."},
         {"Brawler / NOVA Yi (B)", "Reroll econ (Patience, On a Roll) > Combat. Slow-roll L7/L8."},
         {"Reroll comps (Lulu, MF, Samira)", "Reroll econ + free-roll augs > Combat. Stay under-levelled."},
         {"Anima / Mecha reroll", "Loss-streak econ (Anima cashout) > Combat. Needs uncontested Viktor."},
