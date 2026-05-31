@@ -55,10 +55,32 @@ Yes. The full source is in this repo, so you can read exactly what it does or bu
 
 It asks for the "draw over other apps" permission so the overlay can show on top of TFT. The optional auto-scan feature requests screen-capture permission to read gold, level, and augments via on-device OCR; all processing stays on your phone and nothing leaves the device. No internet permission, collects nothing, sends nothing. If a scanner shows a flag or two, that is a generic warning common to self-built APKs, not a real detection.
 
+## ✦ Changelog
+
+### v1.2 - 2026-05-31
+- Screen scan fixed: `getMediaProjection()` now called in Activity context (Android 14 API 34 token requirement); full-resolution capture for better OCR accuracy; 400ms settle delay before capture; Settings panel reopens automatically after scan
+- Transparency is now a slider (20-100%) replacing four preset buttons
+- No-flash panel updates: all tabs refresh in-place without window flicker
+- Versioned APK filename in releases (`tft-scryer-v1.2.apk`) alongside stable `tft-scryer.apk`
+
+### v1.1 - 2026-05-31
+- Settings tab: transparency control, haptic toggle, opening-tab preference, button position reset, experimental screen scan
+- Economy tab: interest bracket ladder, win/loss streak tracker, expected next-round income, hold-to-repeat gold buttons
+- Items tab: tap two components to see the combined item; full trait breakpoint reference
+- Augments tab: S/A/B/C tier badges and comp tags for each augment
+- Dark-themed launch screen; overlay footer credits @xanfiend
+
+### v1.0 - 2026-05-30
+- Grid tab: champion pool tracking with contest badges, recent champions surfaced at top
+- Board tab: copies remaining, per-roll hit odds at current level, bench-thinning mode, pin carry
+- Drag the sigil to reposition; drag onto X to close
+- Level memory, version footer with tap-to-check-release
+
 ## ✦ Roadmap
 
 - Set data kept current each patch
-- Auto-scan (OCR) in Settings detects gold, level, and augments from the screen. Experimental; accuracy varies by device resolution and TFT skin.
+- Auto-scan accuracy improvements: zone tuning per TFT UI layout, better augment matching
+- Champion board detection (hard problem on mobile, no promises)
 
 Open an issue or ping me with ideas.
 

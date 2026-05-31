@@ -22,7 +22,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.pm.ServiceInfo;
 import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.widget.Toast;
 import java.util.List;
 
@@ -72,6 +71,10 @@ public class OverlayService extends Service {
     private boolean scanActive = false;
     private String lastScanStatus = "";
     private TextView scanStatusTv;
+    // static handoff: ScanPermActivity calls getMediaProjection() (Activity context required on
+    // API 34+) and deposits the object here; onStartCommand picks it up and nulls the field.
+    private static MediaProjection _pendingProjection;
+    static void acceptProjection(MediaProjection mp) { _pendingProjection = mp; }
 
     @Override public void onCreate(){
         super.onCreate();
@@ -82,12 +85,9 @@ public class OverlayService extends Service {
         addButton();
     }
     @Override public int onStartCommand(Intent i, int f, int id){
-        if(i!=null && i.hasExtra("mp_code")){
-            int code=i.getIntExtra("mp_code",-1);
-            Intent data=Build.VERSION.SDK_INT>=33
-                ? i.getParcelableExtra("mp_data",Intent.class)
-                : (Intent)i.getParcelableExtra("mp_data");
-            if(code>0 && data!=null) storeScanToken(code,data);
+        if(i!=null && i.getBooleanExtra("mp_ready",false) && _pendingProjection!=null){
+            storeScanToken(_pendingProjection);
+            _pendingProjection=null;
         }
         return START_STICKY;
     }
@@ -1111,20 +1111,17 @@ public class OverlayService extends Service {
 
     // ---- screen scanning ----
 
-    private void storeScanToken(int code, Intent data){
+    private void storeScanToken(MediaProjection mp){
         if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} }
-        try{
-            MediaProjectionManager mpm=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
-            scanProjection=mpm.getMediaProjection(code,data);
-            lastScanStatus="ready";
-            if(scanStatusTv!=null){ scanStatusTv.setText("ready · tap Scan"); scanStatusTv.setTextColor(GREEN); }
-            scanProjection.registerCallback(new MediaProjection.Callback(){
-                public void onStop(){
-                    scanProjection=null; lastScanStatus="";
-                    if(scanStatusTv!=null){ scanStatusTv.setText("not enabled"); scanStatusTv.setTextColor(DIM); }
-                }
-            }, new android.os.Handler(android.os.Looper.getMainLooper()));
-        }catch(Exception e){ scanProjection=null; lastScanStatus="permission error"; }
+        scanProjection=mp;
+        lastScanStatus="ready";
+        if(scanStatusTv!=null){ scanStatusTv.setText("ready · tap Scan"); scanStatusTv.setTextColor(GREEN); }
+        scanProjection.registerCallback(new MediaProjection.Callback(){
+            public void onStop(){
+                scanProjection=null; lastScanStatus="";
+                if(scanStatusTv!=null){ scanStatusTv.setText("not enabled"); scanStatusTv.setTextColor(DIM); }
+            }
+        }, new android.os.Handler(android.os.Looper.getMainLooper()));
     }
 
     private void doScan(){
@@ -1132,25 +1129,30 @@ public class OverlayService extends Service {
         scanActive=true;
         lastScanStatus="scanning…";
         closePanel();
-        startScanForeground();
-        try{
-            ScreenScanner scanner=new ScreenScanner(this,scanProjection);
-            scanner.scan(new ScreenScanner.ScanCallback(){
-                public void onResult(ScreenScanner.ScanResult r){
-                    stopScanForeground(); scanActive=false;
-                    applyScanResult(r);
-                }
-                public void onError(String msg){
-                    stopScanForeground(); scanActive=false;
-                    lastScanStatus="✗ "+msg;
-                    Toast.makeText(OverlayService.this,"✗ "+msg,Toast.LENGTH_SHORT).show();
-                }
-            });
-        }catch(Exception e){
-            stopScanForeground(); scanActive=false;
-            lastScanStatus="✗ scan failed";
-            Toast.makeText(this,"✗ scan failed",Toast.LENGTH_SHORT).show();
-        }
+        // 400 ms delay lets the panel fully disappear before the VirtualDisplay captures a frame
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+            startScanForeground();
+            try{
+                ScreenScanner scanner=new ScreenScanner(this,scanProjection);
+                scanner.scan(new ScreenScanner.ScanCallback(){
+                    public void onResult(ScreenScanner.ScanResult r){
+                        stopScanForeground(); scanActive=false;
+                        applyScanResult(r);
+                    }
+                    public void onError(String msg){
+                        stopScanForeground(); scanActive=false;
+                        lastScanStatus="✗ "+msg;
+                        Toast.makeText(OverlayService.this,"✗ "+msg,Toast.LENGTH_SHORT).show();
+                        mode=5; showPanel();
+                    }
+                });
+            }catch(Exception e){
+                stopScanForeground(); scanActive=false;
+                lastScanStatus="✗ scan failed";
+                Toast.makeText(OverlayService.this,"✗ scan failed",Toast.LENGTH_SHORT).show();
+                mode=5; showPanel();
+            }
+        },400);
     }
 
     private void applyScanResult(ScreenScanner.ScanResult r){
@@ -1158,6 +1160,7 @@ public class OverlayService extends Service {
         if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
+        mode=5; showPanel();
     }
 
     private void startScanForeground(){
