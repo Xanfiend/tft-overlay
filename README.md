@@ -45,6 +45,32 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
+## ✦ FAQ
+
+**Does it work on iPhone?**
+No. Android only.
+
+**Does it work on PC?**
+No. It is a mobile overlay for TFT Mobile on Android.
+
+**The overlay does not appear over TFT.**
+Open TFT Scryer, tap Start Overlay, then switch to TFT. If it still does not show, go to Android Settings and make sure TFT Scryer has the "Display over other apps" permission.
+
+**The app crashes when I tap Scan Now.**
+This is a known issue on some devices (especially Xiaomi / MIUI). Update to the latest version from the releases page. If it still crashes, open Settings in the overlay after the next scan attempt and check the Debug Log card for the exact error.
+
+**Scan Now runs but detects nothing / wrong values.**
+The scan reads text from your screen using OCR. Make sure the TFT game screen is visible and not covered when you tap Scan. Bright HUD elements and high contrast help. Detection is best on a clean shop or augment screen.
+
+**A virus scanner flagged the APK.**
+This is a common false positive for self-built APKs that are not signed by a known publisher. The full source code is in this repo. You can read it, build it yourself, or check the VirusTotal link below.
+
+**The champion pool data is out of date.**
+Pool data updates with each new version. Check the releases page for the latest APK. If a new patch just dropped and the app has not updated yet, open an issue.
+
+**I want to report a bug or suggest something.**
+Open an issue on this repo or message [@xanfiend](https://instagram.com/xanfiend).
+
 ## ✦ Is it safe?
 
 Yes. The full source code is in this repo, so you can read exactly what it does or build it yourself.
