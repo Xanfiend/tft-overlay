@@ -24,9 +24,13 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 ## ✦ Install
 
 1. **[Download the APK](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)**
-2. Open it on Android and allow installing from unknown sources.
-3. Open TFT Scryer, grant the overlay permission, and start the overlay.
-4. Launch TFT. The floating sigil appears on screen.
+2. Open the downloaded file. If your browser asks, tap **Open** or **Install anyway**.
+3. Android will ask to allow installing from unknown sources — tap **Settings**, enable it for your browser, then go back and tap **Install**.
+4. **Play Protect warning**: Google may show a warning saying the app is not recognised. This is normal for any APK not distributed through the Play Store. Tap **Install anyway** (or **More details → Install anyway** on some devices). The app is safe — the full source code is in this repo.
+5. Open TFT Scryer, grant the overlay permission, and tap **Start Overlay**.
+6. Launch TFT. The floating sigil appears on screen.
+
+> **Samsung devices**: if Install anyway is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser.
 
 ## ✦ Tabs
 
@@ -73,8 +77,11 @@ This is a known issue on some devices (especially Xiaomi / MIUI). Update to the 
 **Scan Now runs but detects nothing / wrong values.**
 The scan reads text from your screen using OCR. Make sure the TFT game screen is visible and not covered when you tap Scan. Bright HUD elements and high contrast help. Detection is best on a clean shop or augment screen.
 
+**Play Protect says the app is not recognised / blocks the install.**
+Tap **Install anyway** or **More details → Install anyway**. Play Protect warns about any APK not distributed through the Play Store, regardless of whether it is safe. This app has no internet permission and collects nothing. The full source code is in this repo. If the button is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser, then try again.
+
 **A virus scanner flagged the APK.**
-This is a common false positive for self-built APKs that are not signed by a known publisher. The full source code is in this repo. You can read it, build it yourself, or check the VirusTotal link below.
+Same reason as above — common false positive for APKs not signed by a Play Store publisher. Full source is here, check it yourself or see the VirusTotal link below.
 
 **The champion pool data is out of date.**
 Pool data updates with each new version. Check the releases page for the latest APK. If a new patch just dropped and the app has not updated yet, open an issue.
