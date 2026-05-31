@@ -17,11 +17,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.content.pm.ServiceInfo;
-import android.media.projection.MediaProjection;
 import android.widget.Toast;
 import java.util.List;
 
@@ -66,33 +61,35 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams btnLp;
     // panel layout params promoted for flash-free in-place refresh
     private WindowManager.LayoutParams panelLp;
-    // screen scanning
-    private MediaProjection scanProjection;
-    private boolean scanActive = false;
+    // screen scanning — result delivered from ScanPermActivity via static callbacks
     private String lastScanStatus = "";
     private TextView scanStatusTv;
-    // static handoff: ScanPermActivity calls getMediaProjection() (Activity context required on
-    // API 34+) and deposits the object here; onStartCommand picks it up and nulls the field.
-    private static MediaProjection _pendingProjection;
-    static void acceptProjection(MediaProjection mp) { _pendingProjection = mp; }
+    private static OverlayService _instance;
+    static void deliverScanResult(ScreenScanner.ScanResult r){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.applyScanResult(r));
+    }
+    static void deliverScanError(String msg){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
+            s.lastScanStatus="✗ "+msg;
+            android.widget.Toast.makeText(s,"✗ "+msg,android.widget.Toast.LENGTH_SHORT).show();
+            s.mode=5; s.showPanel();
+        });
+    }
 
     @Override public void onCreate(){
         super.onCreate();
+        _instance=this;
         pool = new Pool(this);
         level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
     }
-    @Override public int onStartCommand(Intent i, int f, int id){
-        if(i!=null && i.getBooleanExtra("mp_scan_now",false) && _pendingProjection!=null){
-            if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} }
-            scanProjection=_pendingProjection; _pendingProjection=null;
-            startScanForeground(); // start FGS before createVirtualDisplay (Android 14 requirement)
-            doScan();
-        }
-        return START_STICKY;
-    }
+    @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
 
     private int wtype(){
         return Build.VERSION.SDK_INT>=26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -966,19 +963,21 @@ public class OverlayService extends Service {
         scanHdr.setLetterSpacing(0.1f); scanHdr.setPadding(2,4,0,6); root.addView(scanHdr);
 
         scanStatusTv=new TextView(this);
-        scanStatusTv.setText(scanActive?"⌛ scanning…":(lastScanStatus.isEmpty()?"tap Scan to auto-fill gold, level & augments":lastScanStatus));
-        scanStatusTv.setTextColor(scanActive?ASH:(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH)));
+        scanStatusTv.setText(lastScanStatus.isEmpty()?"tap Scan to auto-fill gold, level & augments":lastScanStatus);
+        scanStatusTv.setTextColor(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH));
         scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
 
-        TextView scanBtn=new TextView(this); scanBtn.setText(scanActive?"⌛ scanning…":"📷 Scan now");
+        TextView scanBtn=new TextView(this); scanBtn.setText("📷 Scan now");
         scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
-        scanBtn.setPadding(0,12,0,12);
-        scanBtn.setBackground(box(scanActive?CARD:BLOOD,6,scanActive?EDGE:BLOODL,scanActive?1:2));
+        scanBtn.setPadding(0,12,0,12); scanBtn.setBackground(box(BLOOD,6,BLOODL,2));
         LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(-1,-2); sbl.setMargins(0,0,0,4); scanBtn.setLayoutParams(sbl);
-        if(!scanActive){ scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
-            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
-        }}); }
+        scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            closePanel(); // hide overlay so TFT is visible for capture
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
+                si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+            },150);
+        }});
         root.addView(scanBtn);
 
         TextView scanHint=new TextView(this);
@@ -1092,7 +1091,7 @@ public class OverlayService extends Service {
         clHdr.setLetterSpacing(0.1f); clHdr.setPadding(2,0,0,8); root.addView(clHdr);
 
         String[][] cl={
-            {"v1.2  ·  2026-05-31","Screen scan reworked for Android 14 (permission + scan in one tap, FGS starts immediately on grant, full-res capture). Transparency slider 20–100%. No-flash panel updates."},
+            {"v1.2  ·  2026-05-31","Screen scan: runs inside the permission Activity (no FGS required, works on Xiaomi/MIUI). One tap — grant permission, scan happens immediately. Transparency slider 20–100%. No-flash panel updates."},
             {"v1.1  ·  2026-05-31","Settings tab (transparency, haptic, start-tab, position reset, screen scan). Economy tracker (interest bracket, streak, expected income, hold-to-repeat gold). Item builder. Augment tiers S/A/B/C. Dark launch screen."},
             {"v1.0  ·  2026-05-30","Grid + board tabs. Contest badge. Drag-to-close. Level memory. Version footer."},
         };
@@ -1107,75 +1106,12 @@ public class OverlayService extends Service {
 
     // ---- screen scanning ----
 
-    private void doScan(){
-        if(scanProjection==null||scanActive) return;
-        scanActive=true;
-        lastScanStatus="scanning…";
-        closePanel();
-        // 500 ms so the panel and permission dialog are fully gone before the first frame
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-            try{
-                ScreenScanner scanner=new ScreenScanner(this,scanProjection);
-                scanner.scan(new ScreenScanner.ScanCallback(){
-                    public void onResult(ScreenScanner.ScanResult r){
-                        stopScanForeground(); scanActive=false;
-                        if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} scanProjection=null; }
-                        applyScanResult(r);
-                    }
-                    public void onError(String msg){
-                        stopScanForeground(); scanActive=false;
-                        if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} scanProjection=null; }
-                        lastScanStatus="✗ "+msg;
-                        Toast.makeText(OverlayService.this,"✗ "+msg,Toast.LENGTH_SHORT).show();
-                        mode=5; showPanel();
-                    }
-                });
-            }catch(Exception e){
-                stopScanForeground(); scanActive=false;
-                if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e2){} scanProjection=null; }
-                lastScanStatus="✗ scan failed";
-                Toast.makeText(OverlayService.this,"✗ scan failed",Toast.LENGTH_SHORT).show();
-                mode=5; showPanel();
-            }
-        },500);
-    }
-
     private void applyScanResult(ScreenScanner.ScanResult r){
         if(r.gold>=0) pool.setGold(r.gold);
         if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         mode=5; showPanel();
-    }
-
-    private void startScanForeground(){
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            NotificationChannel ch=new NotificationChannel("scan","Screen scan",NotificationManager.IMPORTANCE_LOW);
-            ch.setShowBadge(false); ch.setSound(null,null);
-            ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);
-        }
-        Notification n;
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            n=new Notification.Builder(this,"scan")
-                .setContentTitle("TFT Scryer — Scanning")
-                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
-        } else {
-            n=new Notification.Builder(this)
-                .setContentTitle("TFT Scryer — Scanning")
-                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
-        }
-        if(Build.VERSION.SDK_INT>=29){
-            startForeground(9001,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
-        } else {
-            startForeground(9001,n);
-        }
-    }
-
-    private void stopScanForeground(){
-        try{
-            if(Build.VERSION.SDK_INT>=33) stopForeground(STOP_FOREGROUND_REMOVE);
-            else stopForeground(true);
-        }catch(Exception e){}
     }
 
     // opens the GitHub releases page in the user's browser. Uses an Intent,
@@ -1192,10 +1128,10 @@ public class OverlayService extends Service {
 
     @Override public void onDestroy(){
         super.onDestroy();
+        _instance=null;
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();
-        if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} scanProjection=null; }
     }
     @Override public IBinder onBind(Intent i){ return null; }
 }
