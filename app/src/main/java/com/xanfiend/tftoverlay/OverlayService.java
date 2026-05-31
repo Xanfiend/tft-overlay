@@ -47,6 +47,18 @@ public class OverlayService extends Service {
     private TextView[] chipViews;
     private String[] chipNames;
 
+    // economy tab: held so refreshEcon() can update without rebuilding the panel
+    private TextView econGoldTv, econInterestTv, econBracketTv;
+    private TextView[] econLadderTvs;
+    private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
+
+    // hold-to-repeat gold buttons
+    private final android.os.Handler goldHandler = new android.os.Handler();
+    private Runnable goldRepeat;
+
+    // floating button layout params promoted to field so buildSettings() can update alpha/position
+    private WindowManager.LayoutParams btnLp;
+
     @Override public void onCreate(){
         super.onCreate();
         pool = new Pool(this);
@@ -65,7 +77,7 @@ public class OverlayService extends Service {
         GradientDrawable g=new GradientDrawable(); g.setColor(c); g.setCornerRadius(r);
         if(sw>0) g.setStroke(sw,sc); return g;
     }
-    private void buzz(){ try{ if(vib!=null) vib.vibrate(18); }catch(Exception e){} }
+    private void buzz(){ try{ if(pool.getHaptic() && vib!=null) vib.vibrate(18); }catch(Exception e){} }
 
     private void addButton(){
         LinearLayout c = new LinearLayout(this);
@@ -77,24 +89,23 @@ public class OverlayService extends Service {
         lb.setGravity(Gravity.CENTER); lb.setLetterSpacing(0.25f); lb.setPadding(0,2,0,0);
         c.addView(g); c.addView(lb); button=c;
 
-        final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-2,-2,wtype(),
+        btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-        lp.gravity=Gravity.TOP|Gravity.START; lp.x=20; lp.y=300;
+        btnLp.gravity=Gravity.TOP|Gravity.START; btnLp.x=20; btnLp.y=300;
+        btnLp.alpha=pool.getAlpha();
         button.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; long down; boolean moved;
             public boolean onTouch(View v, MotionEvent e){
                 int a=e.getAction();
-                if(a==MotionEvent.ACTION_DOWN){ ix=lp.x;iy=lp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false; return true; }
+                if(a==MotionEvent.ACTION_DOWN){ ix=btnLp.x;iy=btnLp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false; return true; }
                 else if(a==MotionEvent.ACTION_MOVE){
                     int dx=(int)(e.getRawX()-tx),dy=(int)(e.getRawY()-ty);
                     if(Math.abs(dx)>14||Math.abs(dy)>14){ moved=true; showCloseTarget(true); }
-                    lp.x=ix+dx; lp.y=iy+dy; wm.updateViewLayout(button,lp);
-                    // highlight the X when the finger is over it
+                    btnLp.x=ix+dx; btnLp.y=iy+dy; wm.updateViewLayout(button,btnLp);
                     if(moved) highlightClose(e.getRawX(), e.getRawY());
                     return true;
                 } else if(a==MotionEvent.ACTION_UP){
                     if(moved && overClose(e.getRawX(), e.getRawY())){
-                        // dropped on the X -> shut the whole overlay down
                         showCloseTarget(false);
                         stopSelf();
                         return true;
@@ -103,6 +114,7 @@ public class OverlayService extends Service {
                     if(!moved){
                         boolean longpress = System.currentTimeMillis()-down>450;
                         if(longpress) mode=0;
+                        else if(pool.getStartTab()==1) mode=0;
                         else mode = pool.isEmpty() ? 0 : 1;
                         itemA=-1; itemB=-1;
                         showPanel();
@@ -112,7 +124,7 @@ public class OverlayService extends Service {
                 return false;
             }
         });
-        wm.addView(button, lp);
+        wm.addView(button, btnLp);
     }
 
     // ---- drag-to-close X target ----
@@ -153,7 +165,13 @@ public class OverlayService extends Service {
         closeView.setScaleX(over?1.25f:1f); closeView.setScaleY(over?1.25f:1f);
     }
 
-    private void closePanel(){ if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; } }
+    private void closePanel(){
+        if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; }
+        if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
+        econGoldTv=null; econInterestTv=null; econBracketTv=null;
+        econLadderTvs=null; econStreakTv=null; econBonusTv=null;
+        econIncomeTv=null; econBreakTv=null;
+    }
 
     private void showPanel(){
         closePanel();
@@ -167,7 +185,7 @@ public class OverlayService extends Service {
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
+        title.setText(mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
@@ -176,13 +194,13 @@ public class OverlayService extends Service {
         head.addView(title); head.addView(close);
         root.addView(head);
 
-        // five-way tab row: grid / board / augments / economy / items
+        // six-way tab row: grid / board / augments / economy / items / settings
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        String[] tabNames={"\u25A6 grid","\u2261 board","\u2756 augs","\u00A7 econ","\u229E items"};
-        for(int t=0;t<5;t++){
+        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699"};
+        for(int t=0;t<6;t++){
             final int tm=t; boolean on=mode==t;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
-            tab.setTextColor(on?BONE:ASH); tab.setTextSize(13); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            tab.setTextColor(on?BONE:ASH); tab.setTextSize(11); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,12,0,12);
             LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(3,0,3,0); tab.setLayoutParams(tl);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
@@ -215,7 +233,8 @@ public class OverlayService extends Service {
         root.addView(lvl);
         }
 
-        if(mode==4) buildItems(root);
+        if(mode==5) buildSettings(root);
+        else if(mode==4) buildItems(root);
         else if(mode==3) buildEconomy(root);
         else if(mode==2) buildAugments(root);
         else if(mode==1) buildSummary(root);
@@ -225,7 +244,7 @@ public class OverlayService extends Service {
             (int)(getResources().getDisplayMetrics().widthPixels*0.96),
             (int)(getResources().getDisplayMetrics().heightPixels*0.86),
             wtype(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-        lp.gravity=Gravity.CENTER; panel=scroll; wm.addView(panel,lp);
+        lp.gravity=Gravity.CENTER; lp.alpha=pool.getAlpha(); panel=scroll; wm.addView(panel,lp);
     }
 
     private double rerollChance(String name){
@@ -629,7 +648,7 @@ public class OverlayService extends Service {
         wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); showPanel(); } });
         LinearLayout.LayoutParams wl=new LinearLayout.LayoutParams(-1,-2); wl.setMargins(0,12,0,0); wipe.setLayoutParams(wl);
         root.addView(wipe);
-        TextView credit=new TextView(this); credit.setText("@ravriks"); credit.setTextColor(DIM); credit.setTextSize(10); credit.setGravity(Gravity.CENTER);
+        TextView credit=new TextView(this); credit.setText("@xanfiend"); credit.setTextColor(DIM); credit.setTextSize(10); credit.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams crl=new LinearLayout.LayoutParams(-1,-2); crl.setMargins(0,14,0,0); credit.setLayoutParams(crl);
         root.addView(credit);
 
@@ -657,14 +676,44 @@ public class OverlayService extends Service {
 
         LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
-        gMinus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setGold(pool.getGold()-1); showPanel(); } });
-        TextView gVal=new TextView(this); gVal.setText(gold+"g");
-        gVal.setTextColor(GOLD); gVal.setTextSize(28); gVal.setTypeface(null, android.graphics.Typeface.BOLD);
-        gVal.setGravity(Gravity.CENTER); gVal.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        econGoldTv=new TextView(this); econGoldTv.setText(gold+"g");
+        econGoldTv.setTextColor(GOLD); econGoldTv.setTextSize(28); econGoldTv.setTypeface(null, android.graphics.Typeface.BOLD);
+        econGoldTv.setGravity(Gravity.CENTER); econGoldTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView gPlus=makeAdjBtn("+", 0xFF1A0C0E, BLOODL);
-        gPlus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setGold(pool.getGold()+1); showPanel(); } });
-        goldRow.addView(gMinus); goldRow.addView(gVal); goldRow.addView(gPlus);
+
+        // hold-to-repeat: fires immediately on DOWN, then repeats at 80ms after 350ms hold
+        gPlus.setOnTouchListener(new View.OnTouchListener(){ public boolean onTouch(View v, MotionEvent e){
+            int a=e.getAction();
+            if(a==MotionEvent.ACTION_DOWN){
+                pool.setGold(pool.getGold()+1); buzz(); refreshEcon();
+                goldRepeat=new Runnable(){ public void run(){
+                    pool.setGold(pool.getGold()+1); buzz(); refreshEcon();
+                    goldHandler.postDelayed(this,80);
+                }};
+                goldHandler.postDelayed(goldRepeat,350); return true;
+            } else if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
+                goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; return true;
+            }
+            return false;
+        }});
+        gMinus.setOnTouchListener(new View.OnTouchListener(){ public boolean onTouch(View v, MotionEvent e){
+            int a=e.getAction();
+            if(a==MotionEvent.ACTION_DOWN){
+                pool.setGold(pool.getGold()-1); buzz(); refreshEcon();
+                goldRepeat=new Runnable(){ public void run(){
+                    pool.setGold(pool.getGold()-1); buzz(); refreshEcon();
+                    goldHandler.postDelayed(this,80);
+                }};
+                goldHandler.postDelayed(goldRepeat,350); return true;
+            } else if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
+                goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; return true;
+            }
+            return false;
+        }});
+        goldRow.addView(gMinus); goldRow.addView(econGoldTv); goldRow.addView(gPlus);
         root.addView(goldRow);
+        TextView goldHint=new TextView(this); goldHint.setText("tap ±1  ·  hold to repeat");
+        goldHint.setTextColor(DIM); goldHint.setTextSize(9); goldHint.setPadding(2,2,2,0); root.addView(goldHint);
 
         // interest info
         LinearLayout iRow=new LinearLayout(this); iRow.setOrientation(LinearLayout.VERTICAL);
@@ -672,24 +721,24 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams irl=new LinearLayout.LayoutParams(-1,-2); irl.setMargins(0,10,0,0); iRow.setLayoutParams(irl);
         TextView iLbl=new TextView(this); iLbl.setText("INTEREST");
         iLbl.setTextColor(ASH); iLbl.setTextSize(10); iLbl.setLetterSpacing(0.08f); iRow.addView(iLbl);
-        TextView iVal=new TextView(this); iVal.setText("+"+intr+"g per round");
-        iVal.setTextColor(BONE); iVal.setTextSize(17); iVal.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(iVal);
-        String bracketMsg = gold>=50 ? "max interest (50g+)" : "+"+toNext+"g to next bracket";
-        TextView iSub=new TextView(this); iSub.setText(bracketMsg);
-        iSub.setTextColor(gold>=50?GOLD:ASH); iSub.setTextSize(11); iRow.addView(iSub);
+        econInterestTv=new TextView(this); econInterestTv.setText("+"+intr+"g per round");
+        econInterestTv.setTextColor(BONE); econInterestTv.setTextSize(17); econInterestTv.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(econInterestTv);
+        econBracketTv=new TextView(this); econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
+        econBracketTv.setTextColor(gold>=50?GOLD:ASH); econBracketTv.setTextSize(11); iRow.addView(econBracketTv);
         // interest ladder dots: 10 / 20 / 30 / 40 / 50
         LinearLayout ladder=new LinearLayout(this); ladder.setPadding(0,8,0,0);
         int[] brackets={10,20,30,40,50};
-        for(int b : brackets){
-            boolean reached=gold>=b; boolean current=(gold/10)*10==b||(b==50&&gold>=50);
+        econLadderTvs=new TextView[5];
+        for(int i=0;i<5;i++){
+            int b=brackets[i]; boolean reached=gold>=b; boolean cur=(gold/10)*10==b||(b==50&&gold>=50);
             TextView dot=new TextView(this); dot.setGravity(Gravity.CENTER);
             dot.setText(b+"g"); dot.setTextSize(10);
             dot.setTextColor(reached?GOLD:EDGE);
-            dot.setTypeface(null, current?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            dot.setTypeface(null, cur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             dot.setBackground(box(reached?0xFF1A1400:CARD,4,reached?GOLD:EDGE,reached?2:1));
             dot.setPadding(6,4,6,4);
             LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(0,-2,1f); dl.setMargins(2,0,2,0); dot.setLayoutParams(dl);
-            ladder.addView(dot);
+            econLadderTvs[i]=dot; ladder.addView(dot);
         }
         iRow.addView(ladder); root.addView(iRow);
 
@@ -699,28 +748,27 @@ public class OverlayService extends Service {
         sh.setLetterSpacing(0.1f); sh.setPadding(2,14,0,8); root.addView(sh);
 
         LinearLayout streakRow=new LinearLayout(this); streakRow.setGravity(Gravity.CENTER_VERTICAL);
-        // L button
         TextView sL=makeAdjBtn("L", BLOOD, BONE);
         sL.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            int s=pool.getStreak(); pool.setStreak(s>0?-1:s-1); showPanel();
+            int s=pool.getStreak(); pool.setStreak(s>0?-1:s-1); buzz(); refreshEcon();
         }});
-        // streak display
-        String sText = streak==0 ? "—" : Math.abs(streak)+(streak>0?"W":"L");
-        int sColor = streak>0 ? GREEN : (streak<0 ? BLOODL : ASH);
-        TextView sDisp=new TextView(this); sDisp.setText(sText);
-        sDisp.setTextColor(sColor); sDisp.setTextSize(24); sDisp.setTypeface(null, android.graphics.Typeface.BOLD);
-        sDisp.setGravity(Gravity.CENTER); sDisp.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-        // W button
+        econStreakTv=new TextView(this);
+        String sText = streak==0?"—":Math.abs(streak)+(streak>0?"W":"L");
+        int sColor = streak>0?GREEN:(streak<0?BLOODL:ASH);
+        econStreakTv.setText(sText); econStreakTv.setTextColor(sColor);
+        econStreakTv.setTextSize(24); econStreakTv.setTypeface(null, android.graphics.Typeface.BOLD);
+        econStreakTv.setGravity(Gravity.CENTER); econStreakTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView sW=makeAdjBtn("W", 0xFF0D2210, GREEN);
         sW.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            int s=pool.getStreak(); pool.setStreak(s<0?1:s+1); showPanel();
+            int s=pool.getStreak(); pool.setStreak(s<0?1:s+1); buzz(); refreshEcon();
         }});
-        streakRow.addView(sL); streakRow.addView(sDisp); streakRow.addView(sW);
+        streakRow.addView(sL); streakRow.addView(econStreakTv); streakRow.addView(sW);
         root.addView(streakRow);
-        if(sBonus>0){
-            TextView sBonusTv=new TextView(this); sBonusTv.setText("+"+sBonus+"g streak bonus");
-            sBonusTv.setTextColor(ASH); sBonusTv.setTextSize(11); sBonusTv.setPadding(2,4,2,0); root.addView(sBonusTv);
-        }
+        econBonusTv=new TextView(this);
+        econBonusTv.setTextColor(ASH); econBonusTv.setTextSize(11); econBonusTv.setPadding(2,4,2,0);
+        if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
+        else { econBonusTv.setVisibility(View.GONE); }
+        root.addView(econBonusTv);
 
         // expected income card
         LinearLayout incCard=new LinearLayout(this); incCard.setOrientation(LinearLayout.VERTICAL);
@@ -728,21 +776,44 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams icl=new LinearLayout.LayoutParams(-1,-2); icl.setMargins(0,14,0,0); incCard.setLayoutParams(icl);
         TextView icH=new TextView(this); icH.setText("EXPECTED NEXT ROUND");
         icH.setTextColor(ASH); icH.setTextSize(10); icH.setLetterSpacing(0.08f); incCard.addView(icH);
-        TextView icV=new TextView(this); icV.setText(income+"g");
-        icV.setTextColor(GOLD); icV.setTextSize(28); icV.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(icV);
-        TextView icBreak=new TextView(this);
-        icBreak.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
-        icBreak.setTextColor(ASH); icBreak.setTextSize(11); incCard.addView(icBreak);
+        econIncomeTv=new TextView(this); econIncomeTv.setText(income+"g");
+        econIncomeTv.setTextColor(GOLD); econIncomeTv.setTextSize(28); econIncomeTv.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(econIncomeTv);
+        econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
+        econBreakTv.setTextColor(ASH); econBreakTv.setTextSize(11); incCard.addView(econBreakTv);
         root.addView(incCard);
 
         // reset econ button (resets only gold+streak, not pool)
         Button resetEcon=new Button(this); resetEcon.setText("RESET ECON"); resetEcon.setAllCaps(false);
         resetEcon.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); resetEcon.setTextColor(ASH); resetEcon.setTextSize(12);
         resetEcon.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            pool.setGold(0); pool.setStreak(0); showPanel();
+            pool.setGold(0); pool.setStreak(0); refreshEcon();
         }});
         LinearLayout.LayoutParams rel=new LinearLayout.LayoutParams(-1,-2); rel.setMargins(0,16,0,0); resetEcon.setLayoutParams(rel);
         root.addView(resetEcon);
+    }
+
+    private void refreshEcon(){
+        if(econGoldTv==null) return;
+        int gold=pool.getGold(); int streak=pool.getStreak();
+        int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
+        int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
+        econGoldTv.setText(gold+"g");
+        econInterestTv.setText("+"+intr+"g per round");
+        econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
+        econBracketTv.setTextColor(gold>=50?GOLD:ASH);
+        int[] brackets={10,20,30,40,50};
+        for(int i=0;i<5;i++){
+            int b=brackets[i]; boolean reached=gold>=b; boolean cur=(gold/10)*10==b||(b==50&&gold>=50);
+            econLadderTvs[i].setTextColor(reached?GOLD:EDGE);
+            econLadderTvs[i].setTypeface(null,cur?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            econLadderTvs[i].setBackground(box(reached?0xFF1A1400:CARD,4,reached?GOLD:EDGE,reached?2:1));
+        }
+        econStreakTv.setText(streak==0?"—":Math.abs(streak)+(streak>0?"W":"L"));
+        econStreakTv.setTextColor(streak>0?GREEN:(streak<0?BLOODL:ASH));
+        if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
+        else { econBonusTv.setVisibility(View.GONE); }
+        econIncomeTv.setText(income+"g");
+        econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
     }
 
     private TextView makeAdjBtn(String label, int bg, int fg){
@@ -844,6 +915,93 @@ public class OverlayService extends Service {
             tRow.addView(tName); tRow.addView(tBps); tRow.addView(tEff);
             root.addView(tRow);
         }
+    }
+
+    private void buildSettings(LinearLayout root){
+        TextView hdr=new TextView(this); hdr.setText("◇ TRANSPARENCY");
+        hdr.setTextColor(GOLD); hdr.setTextSize(11); hdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdr.setLetterSpacing(0.1f); hdr.setPadding(2,4,0,6); root.addView(hdr);
+
+        float curAlpha=pool.getAlpha();
+        float[] alphaVals={0.4f,0.6f,0.8f,1.0f};
+        String[] alphaLabels={"40%","60%","80%","100%"};
+        LinearLayout aRow=new LinearLayout(this); aRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<alphaVals.length;i++){
+            final float av=alphaVals[i];
+            final String al=alphaLabels[i];
+            TextView btn=new TextView(this); btn.setText(al);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=Math.abs(curAlpha-av)<0.05f;
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setAlpha(av); btnLp.alpha=av;
+                try{ wm.updateViewLayout(button,btnLp); }catch(Exception e){}
+                showPanel();
+            }});
+            aRow.addView(btn);
+        }
+        root.addView(aRow);
+
+        TextView hdr2=new TextView(this); hdr2.setText("◇ HAPTIC");
+        hdr2.setTextColor(GOLD); hdr2.setTextSize(11); hdr2.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdr2.setLetterSpacing(0.1f); hdr2.setPadding(2,18,0,6); root.addView(hdr2);
+
+        boolean curHaptic=pool.getHaptic();
+        LinearLayout hRow=new LinearLayout(this); hRow.setGravity(Gravity.CENTER_VERTICAL);
+        String[] hLabels={"ON","OFF"}; boolean[] hVals={true,false};
+        for(int i=0;i<2;i++){
+            final boolean hv=hVals[i];
+            TextView btn=new TextView(this); btn.setText(hLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curHaptic==hv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setHaptic(hv); showPanel();
+            }});
+            hRow.addView(btn);
+        }
+        root.addView(hRow);
+
+        TextView hdr3=new TextView(this); hdr3.setText("◇ OPEN TAB");
+        hdr3.setTextColor(GOLD); hdr3.setTextSize(11); hdr3.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdr3.setLetterSpacing(0.1f); hdr3.setPadding(2,18,0,6); root.addView(hdr3);
+
+        int curStart=pool.getStartTab();
+        String[] stLabels={"smart","always grid"}; int[] stVals={0,1};
+        LinearLayout stRow=new LinearLayout(this); stRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<2;i++){
+            final int sv=stVals[i];
+            TextView btn=new TextView(this); btn.setText(stLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curStart==sv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setStartTab(sv); showPanel();
+            }});
+            stRow.addView(btn);
+        }
+        root.addView(stRow);
+
+        TextView hdr4=new TextView(this); hdr4.setText("◇ POSITION");
+        hdr4.setTextColor(GOLD); hdr4.setTextSize(11); hdr4.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdr4.setLetterSpacing(0.1f); hdr4.setPadding(2,18,0,6); root.addView(hdr4);
+
+        TextView resetPos=new TextView(this); resetPos.setText("Reset button position");
+        resetPos.setTextColor(BONE); resetPos.setTextSize(12); resetPos.setGravity(Gravity.CENTER);
+        resetPos.setPadding(0,10,0,10);
+        resetPos.setBackground(box(CARD,6,EDGE,1));
+        LinearLayout.LayoutParams rpl=new LinearLayout.LayoutParams(-1,-2); rpl.setMargins(0,0,0,0); resetPos.setLayoutParams(rpl);
+        resetPos.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            btnLp.x=20; btnLp.y=300;
+            try{ wm.updateViewLayout(button,btnLp); }catch(Exception e){}
+        }});
+        root.addView(resetPos);
     }
 
     // opens the GitHub releases page in the user's browser. Uses an Intent,
