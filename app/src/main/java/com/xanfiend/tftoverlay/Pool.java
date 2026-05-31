@@ -74,7 +74,7 @@ public class Pool {
     }
     public int oppCount(String c){ return opp.containsKey(c) ? opp.get(c) : 0; }
 
-    public void reset(){ seen.clear(); opp.clear(); recent.clear(); save(); }
+    public void reset(){ seen.clear(); opp.clear(); recent.clear(); clearJunk(); save(); }
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
 
     // ---- remembered level (persists between opens) ----
@@ -85,6 +85,16 @@ public class Pool {
     public String getPinned(){ return p.getString("pinned", ""); }
     public void setPinned(String name){ p.edit().putString("pinned", name==null?"":name).apply(); }
     public boolean isPinned(String name){ return getPinned().equals(name); }
+
+    // ---- bench-thinning: junk units of a cost you're holding on your bench ----
+    // These temporarily remove copies from the shared pool, nudging your odds up.
+    // Stored per cost tier (1..5).
+    public int getJunk(int cost){ return p.getInt("junk"+cost, 0); }
+    public void addJunk(int cost, int n){
+        int v = Math.max(0, getJunk(cost)+n);
+        p.edit().putInt("junk"+cost, v).apply();
+    }
+    public void clearJunk(){ for(int c=1;c<=5;c++) p.edit().remove("junk"+c).apply(); }
 
     // union of any champ that has either a copy or an opponent tracked,
     // sorted by opponents first (contest pressure), then copies
