@@ -65,6 +65,15 @@ public class OverlayService extends Service {
     private String lastScanStatus = "";
     private TextView scanStatusTv;
     private static OverlayService _instance;
+
+    // in-app debug log — last 30 lines, shown in Settings
+    private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
+    static void addScanLog(String msg){
+        android.util.Log.d("TFTScryer", msg);
+        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>30) scanLog.remove(0); }
+    }
+    static void clearScanLog(){ synchronized(scanLog){ scanLog.clear(); } }
+
     static void deliverScanResult(ScreenScanner.ScanResult r){
         OverlayService s=_instance;
         if(s==null) return;
@@ -983,6 +992,41 @@ public class OverlayService extends Service {
         TextView scanHint=new TextView(this);
         scanHint.setText("Grants screen capture permission and scans immediately. Brief notification appears during capture.");
         scanHint.setTextColor(DIM); scanHint.setTextSize(10); scanHint.setPadding(2,4,0,0); root.addView(scanHint);
+
+        // ◇ DEBUG LOG
+        LinearLayout logHdrRow=new LinearLayout(this); logHdrRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lhrp=new LinearLayout.LayoutParams(-1,-2); lhrp.setMargins(0,14,0,4); logHdrRow.setLayoutParams(lhrp);
+        TextView logHdr=new TextView(this); logHdr.setText("◇ DEBUG LOG");
+        logHdr.setTextColor(GOLD); logHdr.setTextSize(11); logHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        logHdr.setLetterSpacing(0.1f); logHdr.setPadding(2,0,0,0);
+        LinearLayout.LayoutParams lhtp=new LinearLayout.LayoutParams(0,-2,1f); logHdr.setLayoutParams(lhtp);
+        logHdrRow.addView(logHdr);
+        TextView clearLogBtn=new TextView(this); clearLogBtn.setText("clear");
+        clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10);
+        clearLogBtn.setPadding(12,4,4,4);
+        clearLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            clearScanLog(); mode=5; showPanel();
+        }});
+        logHdrRow.addView(clearLogBtn);
+        root.addView(logHdrRow);
+
+        LinearLayout logBox=new LinearLayout(this); logBox.setOrientation(LinearLayout.VERTICAL);
+        logBox.setBackground(box(CARD,4,EDGE,1)); logBox.setPadding(10,8,10,8);
+        LinearLayout.LayoutParams lbp=new LinearLayout.LayoutParams(-1,-2); lbp.setMargins(0,0,0,0); logBox.setLayoutParams(lbp);
+        synchronized(scanLog){
+            if(scanLog.isEmpty()){
+                TextView empty=new TextView(this); empty.setText("no scan log yet — tap Scan Now");
+                empty.setTextColor(DIM); empty.setTextSize(10); logBox.addView(empty);
+            } else {
+                for(String line : scanLog){
+                    TextView lt=new TextView(this); lt.setText(line);
+                    lt.setTextColor(line.startsWith("ERR")?BLOODL:ASH);
+                    lt.setTextSize(9); lt.setPadding(0,1,0,1);
+                    logBox.addView(lt);
+                }
+            }
+        }
+        root.addView(logBox);
 
         // divider
         TextView scanDiv=new TextView(this); scanDiv.setText("────────────────────");
