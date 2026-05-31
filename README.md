@@ -19,21 +19,9 @@
 
 </div>
 
-A floating overlay for **TFT on Android** (the mobile app). Mark the champions you care about, see how drained the shared pool is, how many players are contesting, and your real odds to hit before you spend gold.
+Floating overlay for **TFT Mobile** on Android. Tracks pool state and reroll odds so you can make informed roll/save decisions during the planning phase without switching apps.
 
-It does not tell you what to do. It shows you the truth of the pool and you make the call.
-
-> **Note:** this is an Android overlay app for **TFT Mobile** on your phone. It is not for PC.
-
-## ✦ What it does
-
-- **Fast scout grid.** Tap a champion to add a copy you've seen, tap the count to remove one. Big targets, haptic feedback, built to keep up with the planning timer.
-- **Two signals per champion.** Track copies seen leaving the pool *and* how many players are contesting each unit, separately.
-- **Live reroll odds** per champion by level (4 to 10), adjusted for how many copies the lobby has already taken.
-- **Scry board** showing copies left, players on it, and your hit-per-roll percentage for everything you're watching. No commands, just the read.
-- **Recent champions** surface at the top so the units you keep tapping are always one tap away.
-- **Current set** roster and pool sizes built in, updated each patch.
-- Runs fully offline. Only needs the "draw over other apps" permission.
+> **Note:** Android only — not for PC.
 
 ## ✦ Install
 
@@ -42,15 +30,22 @@ It does not tell you what to do. It shows you the truth of the pool and you make
 3. Open TFT Scryer, grant the overlay permission, start the overlay.
 4. Launch TFT. The floating sigil appears.
 
-## ✦ Using it
+## ✦ Tabs
 
-You don't need to track everything. Mark the units you're contesting or chasing, and Scryer keeps the read for you.
+| Tab | What it does |
+|---|---|
+| **▦ Grid** | Tap a champion to mark a copy seen; tap the count to subtract. ◉ badge tracks how many players are contesting each unit. Recent champions surface at the top. |
+| **≡ Board** | Copies remaining, contest pressure, and per-roll hit % at your current level for everything you're watching. Pin your carry to the top. Bench-thinning mode removes bench junk from the pool count to sharpen odds. |
+| **❖ Augments** | S/A/B/C tier badge per augment and the comps it enables. Comp priorities, exclusions, armory mechanics, and fallback lines below. |
+| **§ Economy** | Gold tracker with interest calculation, interest-bracket ladder (10/20/30/40/50g), win/loss streak tracking, and expected next-round income. Hold `+`/`−` to scroll quickly. |
+| **⊞ Items** | Tap two components to see the combined item. Full trait breakpoint reference below. |
+| **⚙ Settings** | Overlay transparency (40 / 60 / 80 / 100 %), haptic feedback toggle, opening-tab preference, button position reset. |
 
-- **Tap the floating sigil** to open the scry board, or **long-press** it for the full grid.
-- In the grid: tap a name to add a copy seen, tap the count to subtract. Tap the ◉ beside a champion to add a player contesting it.
-- The board shows copies left, players on it, and your odds. You decide whether to roll, save, or pivot.
-- **Drag the sigil** anywhere. Drag it onto the ✕ to close the overlay completely.
-- Reset clears everything between games.
+## ✦ Usage
+
+- **Tap the sigil** → grid. **Long-press** → board.
+- **Drag the sigil** to reposition. Drag onto **✕** to close the overlay completely.
+- **Reset** between games clears pool, econ, and contest data.
 
 ## ✦ Is it safe?
 
@@ -62,12 +57,8 @@ It only asks for the "draw over other apps" permission so the overlay can show o
 
 ## ✦ Roadmap
 
-Actively working on this. Planned:
 - Set data kept current each patch
-- Quality-of-life polish on the grid and board
-- Features based on what people actually ask for
-
-Also experimenting with auto-detection of board champions, but no promises. It's a hard problem on mobile and may not pan out. For now the manual grid is fast and accurate.
+- Experimenting with auto-detection of board champions — hard problem on mobile, no promises
 
 Open an issue or ping me with ideas.
 
@@ -75,6 +66,6 @@ Open an issue or ping me with ideas.
 
 `❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
 
-by **[@ravriks](https://instagram.com/ravriks)**
+by **[@xanfiend](https://instagram.com/xanfiend)**
 
 </div>
