@@ -990,7 +990,7 @@ public class OverlayService extends Service {
         root.addView(scanBtn);
 
         TextView scanHint=new TextView(this);
-        scanHint.setText("Grants screen capture permission and scans immediately. Brief notification appears during capture.");
+        scanHint.setText("Switch to TFT first, then tap Scan. Grant the permission and go back to TFT — the capture runs 2 seconds after you grant it.");
         scanHint.setTextColor(DIM); scanHint.setTextSize(10); scanHint.setPadding(2,4,0,0); root.addView(scanHint);
 
         // ◇ DEBUG LOG
