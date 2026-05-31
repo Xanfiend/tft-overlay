@@ -46,16 +46,10 @@ public class ScanPermActivity extends Activity {
                     (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             MediaProjection mp = mpm.getMediaProjection(res, data);
             if (mp != null) {
-                // Optionally signal service to attempt startForeground with mediaProjection type.
-                // Wrapped in try-catch — if this throws on Xiaomi/MIUI the scan still proceeds.
-                try {
-                    Intent svc = new Intent(this, OverlayService.class).putExtra("mp_fgs", true);
-                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
-                    else startService(svc);
-                } catch (Exception ignored) {}
-
                 // Run scan after 600 ms so the overlay panel and permission dialog are fully gone.
                 // This Activity stays alive (transparent) until scan completes.
+                // No startForegroundService() here — that triggers a 5-second startForeground()
+                // deadline that crashes the overlay service on devices like Xiaomi MIUI.
                 new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 600);
                 return; // do NOT finish yet
             }

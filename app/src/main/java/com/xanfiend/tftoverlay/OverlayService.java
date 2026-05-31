@@ -17,10 +17,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.content.pm.ServiceInfo;
 import android.widget.Toast;
 import java.util.List;
 
@@ -72,15 +68,12 @@ public class OverlayService extends Service {
     static void deliverScanResult(ScreenScanner.ScanResult r){
         OverlayService s=_instance;
         if(s==null) return;
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
-            s.stopScanForeground(); s.applyScanResult(r);
-        });
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.applyScanResult(r));
     }
     static void deliverScanError(String msg){
         OverlayService s=_instance;
         if(s==null) return;
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
-            s.stopScanForeground();
             s.lastScanStatus="✗ "+msg;
             android.widget.Toast.makeText(s,"✗ "+msg,android.widget.Toast.LENGTH_SHORT).show();
             s.mode=5; s.showPanel();
@@ -96,12 +89,7 @@ public class OverlayService extends Service {
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
     }
-    @Override public int onStartCommand(Intent i, int f, int id){
-        if(i!=null && i.getBooleanExtra("mp_fgs",false)){
-            try{ startScanForeground(); }catch(Exception e){}
-        }
-        return START_STICKY;
-    }
+    @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
 
     private int wtype(){
         return Build.VERSION.SDK_INT>=26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1124,36 +1112,6 @@ public class OverlayService extends Service {
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         mode=5; showPanel();
-    }
-
-    private void startScanForeground(){
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            NotificationChannel ch=new NotificationChannel("scan","Screen scan",NotificationManager.IMPORTANCE_LOW);
-            ch.setShowBadge(false); ch.setSound(null,null);
-            ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);
-        }
-        Notification n;
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            n=new Notification.Builder(this,"scan")
-                .setContentTitle("TFT Scryer — Scanning")
-                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
-        } else {
-            n=new Notification.Builder(this)
-                .setContentTitle("TFT Scryer — Scanning")
-                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
-        }
-        if(Build.VERSION.SDK_INT>=29){
-            startForeground(9001,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
-        } else {
-            startForeground(9001,n);
-        }
-    }
-
-    private void stopScanForeground(){
-        try{
-            if(Build.VERSION.SDK_INT>=33) stopForeground(STOP_FOREGROUND_REMOVE);
-            else stopForeground(true);
-        }catch(Exception e){}
     }
 
     // opens the GitHub releases page in the user's browser. Uses an Intent,
