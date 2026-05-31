@@ -115,12 +115,14 @@ public class ScanPermActivity extends Activity {
     }
 
     private void runScan(MediaProjection mp) {
-        // Finish the activity immediately so TFT comes back to the screen.
-        // The scan thread keeps running independently and captures 1.5 s later.
-        log("runScan — finishing so TFT is on screen");
-        finish();
+        // Move TFT Scryer behind TFT automatically — no user action needed.
+        // moveTaskToBack(true) sends this task to the back of the stack so TFT
+        // becomes the visible app. We then wait 800 ms for the transition to finish
+        // before capturing.
+        log("runScan — moveTaskToBack so TFT is on screen");
+        moveTaskToBack(true);
         new Thread(() -> {
-            try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
+            try { Thread.sleep(800); } catch (InterruptedException ignored) {}
             log("capturing now");
             try {
                 ScreenScanner scanner = new ScreenScanner(getApplicationContext(), mp);
@@ -130,12 +132,14 @@ public class ScanPermActivity extends Activity {
                         try { mp.stop(); } catch (Exception ignored) {}
                         ScanService.stop(getApplicationContext());
                         OverlayService.deliverScanResult(r);
+                        runOnUiThread(ScanPermActivity.this::finish);
                     }
                     public void onError(String msg) {
                         err("scan error: " + msg);
                         try { mp.stop(); } catch (Exception ignored) {}
                         ScanService.stop(getApplicationContext());
                         OverlayService.deliverScanError(msg);
+                        runOnUiThread(ScanPermActivity.this::finish);
                     }
                 });
             } catch (Exception e) {
@@ -143,6 +147,7 @@ public class ScanPermActivity extends Activity {
                 try { mp.stop(); } catch (Exception ignored) {}
                 ScanService.stop(getApplicationContext());
                 OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
+                runOnUiThread(ScanPermActivity.this::finish);
             }
         }).start();
     }
