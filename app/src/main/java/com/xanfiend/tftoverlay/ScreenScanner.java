@@ -55,8 +55,8 @@ public class ScreenScanner {
 
     private Bitmap captureFrame() throws Exception {
         DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
-        int w = dm.widthPixels / 2;
-        int h = dm.heightPixels / 2;
+        int w = dm.widthPixels;
+        int h = dm.heightPixels;
 
         ImageReader reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2);
         VirtualDisplay vd = projection.createVirtualDisplay("scryer-scan",
