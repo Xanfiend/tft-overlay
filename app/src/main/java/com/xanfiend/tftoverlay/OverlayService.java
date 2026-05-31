@@ -85,9 +85,11 @@ public class OverlayService extends Service {
         addButton();
     }
     @Override public int onStartCommand(Intent i, int f, int id){
-        if(i!=null && i.getBooleanExtra("mp_ready",false) && _pendingProjection!=null){
-            storeScanToken(_pendingProjection);
-            _pendingProjection=null;
+        if(i!=null && i.getBooleanExtra("mp_scan_now",false) && _pendingProjection!=null){
+            if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} }
+            scanProjection=_pendingProjection; _pendingProjection=null;
+            startScanForeground(); // start FGS before createVirtualDisplay (Android 14 requirement)
+            doScan();
         }
         return START_STICKY;
     }
@@ -963,54 +965,25 @@ public class OverlayService extends Service {
         scanHdr.setTextColor(GOLD); scanHdr.setTextSize(11); scanHdr.setTypeface(null,android.graphics.Typeface.BOLD);
         scanHdr.setLetterSpacing(0.1f); scanHdr.setPadding(2,4,0,6); root.addView(scanHdr);
 
-        if(scanProjection==null){
-            TextView expl=new TextView(this);
-            expl.setText("Capture the screen to auto-fill gold, level, and augments.");
-            expl.setTextColor(ASH); expl.setTextSize(11); expl.setPadding(2,0,0,8); root.addView(expl);
+        scanStatusTv=new TextView(this);
+        scanStatusTv.setText(scanActive?"⌛ scanning…":(lastScanStatus.isEmpty()?"tap Scan to auto-fill gold, level & augments":lastScanStatus));
+        scanStatusTv.setTextColor(scanActive?ASH:(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH)));
+        scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
 
-            TextView enableBtn=new TextView(this); enableBtn.setText("Enable screen scan");
-            enableBtn.setTextColor(BONE); enableBtn.setTextSize(13); enableBtn.setGravity(Gravity.CENTER);
-            enableBtn.setPadding(0,12,0,12); enableBtn.setBackground(box(CARD,6,EDGE,1));
-            LinearLayout.LayoutParams ebl=new LinearLayout.LayoutParams(-1,-2); ebl.setMargins(0,0,0,4); enableBtn.setLayoutParams(ebl);
-            enableBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                Intent i=new Intent(OverlayService.this,ScanPermActivity.class);
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
-            }});
-            root.addView(enableBtn);
+        TextView scanBtn=new TextView(this); scanBtn.setText(scanActive?"⌛ scanning…":"📷 Scan now");
+        scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
+        scanBtn.setPadding(0,12,0,12);
+        scanBtn.setBackground(box(scanActive?CARD:BLOOD,6,scanActive?EDGE:BLOODL,scanActive?1:2));
+        LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(-1,-2); sbl.setMargins(0,0,0,4); scanBtn.setLayoutParams(sbl);
+        if(!scanActive){ scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
+            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+        }}); }
+        root.addView(scanBtn);
 
-            TextView hint=new TextView(this);
-            hint.setText("Requires screen capture permission. A brief notification appears while scanning.");
-            hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,4,0,14); root.addView(hint);
-        } else {
-            scanStatusTv=new TextView(this);
-            scanStatusTv.setText(lastScanStatus.isEmpty()?"ready · tap Scan":lastScanStatus);
-            scanStatusTv.setTextColor(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH));
-            scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
-
-            LinearLayout scanRow=new LinearLayout(this); scanRow.setGravity(Gravity.CENTER_VERTICAL);
-            TextView scanBtn=new TextView(this); scanBtn.setText(scanActive?"⌛ scanning…":"📷 Scan now");
-            scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
-            scanBtn.setPadding(0,12,0,12);
-            scanBtn.setBackground(box(scanActive?CARD:BLOOD,6,scanActive?EDGE:BLOODL,scanActive?1:2));
-            LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(0,-2,2f); sbl.setMargins(0,0,4,0); scanBtn.setLayoutParams(sbl);
-            if(!scanActive){ scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ doScan(); } }); }
-            scanRow.addView(scanBtn);
-
-            TextView disableBtn=new TextView(this); disableBtn.setText("Disable");
-            disableBtn.setTextColor(BLOODL); disableBtn.setTextSize(12); disableBtn.setGravity(Gravity.CENTER);
-            disableBtn.setPadding(0,12,0,12); disableBtn.setBackground(box(CARD,6,BLOOD,1));
-            disableBtn.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-            disableBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} scanProjection=null; }
-                lastScanStatus=""; showPanel();
-            }});
-            scanRow.addView(disableBtn);
-            root.addView(scanRow);
-
-            TextView hint=new TextView(this);
-            hint.setText("Closes the panel, captures the screen, then auto-fills gold & level.");
-            hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,4,0,0); root.addView(hint);
-        }
+        TextView scanHint=new TextView(this);
+        scanHint.setText("Grants screen capture permission and scans immediately. Brief notification appears during capture.");
+        scanHint.setTextColor(DIM); scanHint.setTextSize(10); scanHint.setPadding(2,4,0,0); root.addView(scanHint);
 
         // divider
         TextView scanDiv=new TextView(this); scanDiv.setText("────────────────────");
@@ -1107,40 +1080,51 @@ public class OverlayService extends Service {
             try{ wm.updateViewLayout(button,btnLp); }catch(Exception e){}
         }});
         root.addView(resetPos);
+
+        // ◇ CHANGELOG
+        TextView clDiv=new TextView(this); clDiv.setText("────────────────────");
+        clDiv.setTextColor(EDGE); clDiv.setTextSize(8);
+        LinearLayout.LayoutParams cldl=new LinearLayout.LayoutParams(-1,-2); cldl.setMargins(0,20,0,12); clDiv.setLayoutParams(cldl);
+        root.addView(clDiv);
+
+        TextView clHdr=new TextView(this); clHdr.setText("◇ CHANGELOG");
+        clHdr.setTextColor(GOLD); clHdr.setTextSize(11); clHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        clHdr.setLetterSpacing(0.1f); clHdr.setPadding(2,0,0,8); root.addView(clHdr);
+
+        String[][] cl={
+            {"v1.2  ·  2026-05-31","Screen scan reworked for Android 14 (permission + scan in one tap, FGS starts immediately on grant, full-res capture). Transparency slider 20–100%. No-flash panel updates."},
+            {"v1.1  ·  2026-05-31","Settings tab (transparency, haptic, start-tab, position reset, screen scan). Economy tracker (interest bracket, streak, expected income, hold-to-repeat gold). Item builder. Augment tiers S/A/B/C. Dark launch screen."},
+            {"v1.0  ·  2026-05-30","Grid + board tabs. Contest badge. Drag-to-close. Level memory. Version footer."},
+        };
+        for(String[] entry:cl){
+            TextView ver=new TextView(this); ver.setText(entry[0]);
+            ver.setTextColor(BONE); ver.setTextSize(12); ver.setTypeface(null,android.graphics.Typeface.BOLD);
+            ver.setPadding(2,8,0,2); root.addView(ver);
+            TextView desc=new TextView(this); desc.setText(entry[1]);
+            desc.setTextColor(ASH); desc.setTextSize(11); desc.setPadding(2,0,0,4); root.addView(desc);
+        }
     }
 
     // ---- screen scanning ----
-
-    private void storeScanToken(MediaProjection mp){
-        if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} }
-        scanProjection=mp;
-        lastScanStatus="ready";
-        if(scanStatusTv!=null){ scanStatusTv.setText("ready · tap Scan"); scanStatusTv.setTextColor(GREEN); }
-        scanProjection.registerCallback(new MediaProjection.Callback(){
-            public void onStop(){
-                scanProjection=null; lastScanStatus="";
-                if(scanStatusTv!=null){ scanStatusTv.setText("not enabled"); scanStatusTv.setTextColor(DIM); }
-            }
-        }, new android.os.Handler(android.os.Looper.getMainLooper()));
-    }
 
     private void doScan(){
         if(scanProjection==null||scanActive) return;
         scanActive=true;
         lastScanStatus="scanning…";
         closePanel();
-        // 400 ms delay lets the panel fully disappear before the VirtualDisplay captures a frame
+        // 500 ms so the panel and permission dialog are fully gone before the first frame
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-            startScanForeground();
             try{
                 ScreenScanner scanner=new ScreenScanner(this,scanProjection);
                 scanner.scan(new ScreenScanner.ScanCallback(){
                     public void onResult(ScreenScanner.ScanResult r){
                         stopScanForeground(); scanActive=false;
+                        if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} scanProjection=null; }
                         applyScanResult(r);
                     }
                     public void onError(String msg){
                         stopScanForeground(); scanActive=false;
+                        if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e){} scanProjection=null; }
                         lastScanStatus="✗ "+msg;
                         Toast.makeText(OverlayService.this,"✗ "+msg,Toast.LENGTH_SHORT).show();
                         mode=5; showPanel();
@@ -1148,11 +1132,12 @@ public class OverlayService extends Service {
                 });
             }catch(Exception e){
                 stopScanForeground(); scanActive=false;
+                if(scanProjection!=null){ try{scanProjection.stop();}catch(Exception e2){} scanProjection=null; }
                 lastScanStatus="✗ scan failed";
                 Toast.makeText(OverlayService.this,"✗ scan failed",Toast.LENGTH_SHORT).show();
                 mode=5; showPanel();
             }
-        },400);
+        },500);
     }
 
     private void applyScanResult(ScreenScanner.ScanResult r){

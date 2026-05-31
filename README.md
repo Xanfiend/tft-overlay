@@ -58,10 +58,11 @@ It asks for the "draw over other apps" permission so the overlay can show on top
 ## ✦ Changelog
 
 ### v1.2 - 2026-05-31
-- Screen scan fixed: `getMediaProjection()` now called in Activity context (Android 14 API 34 token requirement); full-resolution capture for better OCR accuracy; 400ms settle delay before capture; Settings panel reopens automatically after scan
+- Screen scan reworked: single "Scan now" tap requests permission and scans immediately (Android 14 compatible - FGS starts in `onStartCommand` right after permission grant, before `createVirtualDisplay`); full-resolution capture; panel reopens with results after scan
 - Transparency is now a slider (20-100%) replacing four preset buttons
 - No-flash panel updates: all tabs refresh in-place without window flicker
 - Versioned APK filename in releases (`tft-scryer-v1.2.apk`) alongside stable `tft-scryer.apk`
+- In-app changelog visible in Settings tab
 
 ### v1.1 - 2026-05-31
 - Settings tab: transparency control, haptic toggle, opening-tab preference, button position reset, experimental screen scan
