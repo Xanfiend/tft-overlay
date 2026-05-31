@@ -65,6 +65,10 @@ public class ScreenScanner {
         int h = dm.heightPixels;
         log("captureFrame " + w + "x" + h + " dpi=" + dm.densityDpi);
 
+        // Android 14 requires a callback registered before createVirtualDisplay()
+        projection.registerCallback(new MediaProjection.Callback() {},
+                new android.os.Handler(android.os.Looper.getMainLooper()));
+
         ImageReader reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2);
         log("ImageReader ok, createVirtualDisplay...");
         VirtualDisplay vd = projection.createVirtualDisplay("scryer-scan",
