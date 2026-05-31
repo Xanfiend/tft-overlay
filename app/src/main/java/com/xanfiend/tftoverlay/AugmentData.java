@@ -22,6 +22,52 @@ public final class AugmentData {
 
     public static final String SET_LABEL = "Set 17 \u00b7 patch 17.4";
 
+    // ---- Per-augment tier list ----
+    // Each entry: display name, tier (S/A/B/C), comma-separated comp tags ("" = universal).
+    // Update every patch. Tiers are editorial; verify against current tier lists.
+    public static final class AugmentEntry {
+        public final String name;
+        public final String tier;
+        public final String comps;
+        public AugmentEntry(String name, String tier, String comps) {
+            this.name = name; this.tier = tier; this.comps = comps;
+        }
+    }
+
+    public static final AugmentEntry[] AUGMENTS = {
+        // --- Prismatic ---
+        new AugmentEntry("Binary Airdrop",        "S", "Any comp"),
+        new AugmentEntry("Radiant Relics",         "S", "Any itemized carry"),
+        new AugmentEntry("Cybernetic Uplink 3",    "S", "Vex Fast 9, Vanguard Fast 9"),
+        new AugmentEntry("Celestial Blessing 3",   "S", "Any comp"),
+        new AugmentEntry("Pandora's Items 3",      "A", "Any flexible comp"),
+        new AugmentEntry("Buried Treasures 3",     "A", "Reroll comps"),
+        new AugmentEntry("Spoils of War 3",        "B", ""),
+        // --- Gold ---
+        new AugmentEntry("Patience",               "S", "Brawler Yi, Reroll"),
+        new AugmentEntry("Double Trouble 1",       "S", "Stargazer Xayah"),
+        new AugmentEntry("Celestial Blessing 2",   "A", "Any comp"),
+        new AugmentEntry("Combat Caster",          "A", "Vex Fast 9"),
+        new AugmentEntry("Luden's Tempest",        "A", "Vex Fast 9, Viktor"),
+        new AugmentEntry("On a Roll",              "A", "Reroll comps"),
+        new AugmentEntry("Spellweaver",            "A", "Vex Fast 9, Shepherd Viktor"),
+        new AugmentEntry("Giant Slayer",           "B", "Dark Stars, Corki Riven"),
+        new AugmentEntry("Saving Grace",           "B", ""),
+        new AugmentEntry("Gold Collector",         "B", ""),
+        new AugmentEntry("Makeshift Armor 2",      "B", ""),
+        // --- Silver ---
+        new AugmentEntry("Tiny Power",             "A", "Reroll comps"),
+        new AugmentEntry("Academy",                "A", "Vex Fast 9, Vanguard Fast 9"),
+        new AugmentEntry("Hustler",                "A", "Any econ-dependent comp"),
+        new AugmentEntry("Component Grab Bag",     "B", ""),
+        new AugmentEntry("Lucky Gloves",           "B", ""),
+        new AugmentEntry("Meditation",             "B", ""),
+        new AugmentEntry("Pandora's Items 1",      "B", ""),
+        new AugmentEntry("Stand Behind Me",        "C", ""),
+        new AugmentEntry("Health Plus",            "C", ""),
+        new AugmentEntry("Makeshift Armor 1",      "C", ""),
+    };
+
     // Timeless-ish mechanics. Rarely changes between sets.
     public static final String[] MECHANICS = {
         "Armories at 2-1, 3-2, 4-2 \u00b7 3 choices each",
