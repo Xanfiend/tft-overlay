@@ -34,24 +34,33 @@ public class ScanPermActivity extends Activity {
     }
 
     private void startProjectionRequest() {
-        MediaProjectionManager mpm =
-                (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_PROJECTION);
+        try {
+            MediaProjectionManager mpm =
+                    (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            if (mpm == null) { finish(); return; }
+            startActivityForResult(mpm.createScreenCaptureIntent(), REQ_PROJECTION);
+        } catch (Exception e) {
+            OverlayService.deliverScanError("permission error");
+            finish();
+        }
     }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         if (req == REQ_PROJECTION && res == RESULT_OK && data != null) {
-            MediaProjectionManager mpm =
-                    (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-            MediaProjection mp = mpm.getMediaProjection(res, data);
-            if (mp != null) {
-                // Run scan after 600 ms so the overlay panel and permission dialog are fully gone.
-                // This Activity stays alive (transparent) until scan completes.
-                // No startForegroundService() here — that triggers a 5-second startForeground()
-                // deadline that crashes the overlay service on devices like Xiaomi MIUI.
-                new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 600);
-                return; // do NOT finish yet
+            try {
+                MediaProjectionManager mpm =
+                        (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+                if (mpm == null) { OverlayService.deliverScanError("permission error"); finish(); return; }
+                MediaProjection mp = mpm.getMediaProjection(res, data);
+                if (mp != null) {
+                    // Run scan after 600 ms so the overlay panel and permission dialog are fully gone.
+                    // This Activity stays alive (transparent) until scan completes.
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 600);
+                    return; // do NOT finish yet
+                }
+            } catch (Exception e) {
+                OverlayService.deliverScanError("permission error");
             }
         }
         finish();
@@ -60,7 +69,7 @@ public class ScanPermActivity extends Activity {
     private void runScan(MediaProjection mp) {
         new Thread(() -> {
             try {
-                ScreenScanner scanner = new ScreenScanner(this, mp);
+                ScreenScanner scanner = new ScreenScanner(getApplicationContext(), mp);
                 scanner.scan(new ScreenScanner.ScanCallback() {
                     public void onResult(ScreenScanner.ScanResult r) {
                         try { mp.stop(); } catch (Exception ignored) {}
