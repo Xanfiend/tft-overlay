@@ -143,12 +143,14 @@ public class OverlayService extends Service {
                     }
                     showCloseTarget(false);
                     if(!moved){
-                        boolean longpress = System.currentTimeMillis()-down>450;
-                        if(longpress) mode=0;
-                        else if(pool.getStartTab()==1) mode=0;
-                        else mode = pool.isEmpty() ? 0 : 1;
-                        itemA=-1; itemB=-1;
-                        showPanel();
+                        long held=System.currentTimeMillis()-down;
+                        if(held>1500){ triggerScan(); }
+                        else {
+                            if(held>450) mode=0;
+                            else if(pool.getStartTab()==1) mode=0;
+                            else mode=pool.isEmpty()?0:1;
+                            itemA=-1; itemB=-1; showPanel();
+                        }
                     }
                     return true;
                 }
@@ -717,10 +719,21 @@ public class OverlayService extends Service {
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
         int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
 
-        // gold row
+        // gold header row with inline scan shortcut
+        LinearLayout econHdrRow=new LinearLayout(this); econHdrRow.setOrientation(LinearLayout.HORIZONTAL);
+        econHdrRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams ehrp=new LinearLayout.LayoutParams(-1,-2); ehrp.setMargins(0,4,0,8); econHdrRow.setLayoutParams(ehrp);
         TextView gh=new TextView(this); gh.setText("◇ GOLD");
-        gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null, android.graphics.Typeface.BOLD);
-        gh.setLetterSpacing(0.1f); gh.setPadding(2,4,0,8); root.addView(gh);
+        gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null,android.graphics.Typeface.BOLD);
+        gh.setLetterSpacing(0.1f); gh.setPadding(2,0,0,0);
+        gh.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        econHdrRow.addView(gh);
+        TextView econScanBtn=new TextView(this); econScanBtn.setText("scan");
+        econScanBtn.setTextColor(ASH); econScanBtn.setTextSize(10);
+        econScanBtn.setPadding(12,4,4,4);
+        econScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
+        econHdrRow.addView(econScanBtn);
+        root.addView(econHdrRow);
 
         LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
@@ -980,13 +993,7 @@ public class OverlayService extends Service {
         scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
         scanBtn.setPadding(0,12,0,12); scanBtn.setBackground(box(BLOOD,6,BLOODL,2));
         LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(-1,-2); sbl.setMargins(0,0,0,4); scanBtn.setLayoutParams(sbl);
-        scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            closePanel(); // hide overlay so TFT is visible for capture
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-                Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
-                si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
-            },150);
-        }});
+        scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
         root.addView(scanBtn);
 
         TextView scanHint=new TextView(this);
@@ -1149,6 +1156,14 @@ public class OverlayService extends Service {
     }
 
     // ---- screen scanning ----
+
+    private void triggerScan(){
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+            Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
+            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+        },150);
+    }
 
     private void applyScanResult(ScreenScanner.ScanResult r){
         if(r.gold>=0) pool.setGold(r.gold);
