@@ -161,22 +161,31 @@ public class OverlayService extends Service {
         root.setPadding(22,18,22,18);
         scroll.addView(root);
 
-        // header: title + mode toggle + close
+        // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
+        title.setText(mode==2?"\u2738 AUGMENTS":(mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED"));
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-        TextView toggle=new TextView(this);
-        toggle.setText(mode==1?"\u25A6 grid":"\u2261 board");
-        toggle.setTextColor(GOLD); toggle.setTextSize(13); toggle.setPadding(16,8,16,8);
-        toggle.setBackground(box(CARD,6,EDGE,1));
-        toggle.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode = mode==1?0:1; showPanel(); } });
         TextView close=new TextView(this); close.setText("  \u2715"); close.setTextColor(ASH); close.setTextSize(20); close.setPadding(18,0,4,0);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); } });
-        head.addView(title); head.addView(toggle); head.addView(close);
+        head.addView(title); head.addView(close);
         root.addView(head);
+
+        // three-way tab row: grid / board / augments
+        LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
+        String[] tabNames={"\u25A6 grid","\u2261 board","\u2756 augs"};
+        for(int t=0;t<3;t++){
+            final int tm=t; boolean on=mode==t;
+            TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
+            tab.setTextColor(on?BONE:ASH); tab.setTextSize(13); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,12,0,12);
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(3,0,3,0); tab.setLayoutParams(tl);
+            tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
+            tabs.addView(tab);
+        }
+        root.addView(tabs);
 
         // occult divider under the header
         TextView div=new TextView(this);
@@ -184,7 +193,8 @@ public class OverlayService extends Service {
         div.setTextColor(EDGE); div.setTextSize(9); div.setGravity(Gravity.CENTER); div.setPadding(0,8,0,2);
         root.addView(div);
 
-        // level row (4-10)
+        // level row (4-10) -- only relevant for grid/board, not augments
+        if(mode!=2){
         LinearLayout lvl=new LinearLayout(this); lvl.setPadding(0,12,0,12);
         TextView ll=new TextView(this); ll.setText("LVL"); ll.setTextColor(ASH); ll.setTextSize(10); ll.setGravity(Gravity.CENTER); ll.setPadding(0,0,8,0);
         ll.setLayoutParams(new LinearLayout.LayoutParams(-2,-1)); lvl.addView(ll);
@@ -200,8 +210,11 @@ public class OverlayService extends Service {
             lvl.addView(b);
         }
         root.addView(lvl);
+        }
 
-        if(mode==1) buildSummary(root); else buildGrid(root);
+        if(mode==2) buildAugments(root);
+        else if(mode==1) buildSummary(root);
+        else buildGrid(root);
 
         WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
             (int)(getResources().getDisplayMetrics().widthPixels*0.96),
@@ -406,6 +419,49 @@ public class OverlayService extends Service {
         if(pct<=0) return 0;
         if(pct>=95) return 95;
         return Math.round(pct/5f)*5; // nearest 5%
+    }
+
+    // AUGMENTS TAB: comp priorities + key exclusions + timeless mechanics.
+    // Pure reference, zero input. Open when the armory pops, read, close.
+    private void buildAugments(LinearLayout root){
+        // set label
+        TextView lbl=new TextView(this); lbl.setText(AugmentData.SET_LABEL);
+        lbl.setTextColor(DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
+
+        // comp priorities
+        TextView h1=new TextView(this); h1.setText("\u25C7 COMP PRIORITIES");
+        h1.setTextColor(GOLD); h1.setTextSize(11); h1.setTypeface(null, android.graphics.Typeface.BOLD);
+        h1.setLetterSpacing(0.1f); h1.setPadding(2,4,0,6); root.addView(h1);
+        for(String[] c : AugmentData.COMP_PRIORITIES){
+            LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
+            row.setBackground(box(CARD,6,EDGE,1)); row.setPadding(12,9,12,9);
+            LinearLayout.LayoutParams rl=new LinearLayout.LayoutParams(-1,-2); rl.setMargins(0,0,0,5); row.setLayoutParams(rl);
+            TextView nm=new TextView(this); nm.setText(c[0]); nm.setTextColor(BONE); nm.setTextSize(13); nm.setTypeface(null, android.graphics.Typeface.BOLD);
+            TextView pr=new TextView(this); pr.setText(c[1]); pr.setTextColor(ASH); pr.setTextSize(11); pr.setLineSpacing(3,1f);
+            row.addView(nm); row.addView(pr); root.addView(row);
+        }
+
+        // exclusions
+        TextView h2=new TextView(this); h2.setText("\u25C7 KEY EXCLUSIONS");
+        h2.setTextColor(GOLD); h2.setTextSize(11); h2.setTypeface(null, android.graphics.Typeface.BOLD);
+        h2.setLetterSpacing(0.1f); h2.setPadding(2,14,0,6); root.addView(h2);
+        for(String ex : AugmentData.EXCLUSIONS){
+            TextView e=new TextView(this); e.setText("\u2022  "+ex);
+            e.setTextColor(BONE); e.setTextSize(11); e.setLineSpacing(3,1f); e.setPadding(2,0,2,5); root.addView(e);
+        }
+
+        // mechanics
+        TextView h3=new TextView(this); h3.setText("\u25C7 MECHANICS");
+        h3.setTextColor(GOLD); h3.setTextSize(11); h3.setTypeface(null, android.graphics.Typeface.BOLD);
+        h3.setLetterSpacing(0.1f); h3.setPadding(2,14,0,6); root.addView(h3);
+        for(String m : AugmentData.MECHANICS){
+            TextView mv=new TextView(this); mv.setText("\u2022  "+m);
+            mv.setTextColor(ASH); mv.setTextSize(11); mv.setLineSpacing(3,1f); mv.setPadding(2,0,2,5); root.addView(mv);
+        }
+
+        // fallback principle
+        TextView fb=new TextView(this); fb.setText(AugmentData.FALLBACK);
+        fb.setTextColor(DIM); fb.setTextSize(10); fb.setLineSpacing(3,1f); fb.setPadding(2,14,2,2); root.addView(fb);
     }
 
     private void buildSummary(LinearLayout root){
