@@ -7,6 +7,8 @@ import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 
 public class ScanPermActivity extends Activity {
 
@@ -40,20 +42,48 @@ public class ScanPermActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         if (req == REQ_PROJECTION && res == RESULT_OK && data != null) {
-            // getMediaProjection() must be called in the Activity — on API 34+ the token is
-            // tied to the activity session and becomes invalid if consumed in a Service.
             MediaProjectionManager mpm =
                     (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             MediaProjection mp = mpm.getMediaProjection(res, data);
             if (mp != null) {
-                OverlayService.acceptProjection(mp);
-                // Use startForegroundService so Android 14 permits startForeground with
-                // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION in onStartCommand.
-                Intent svc = new Intent(this, OverlayService.class).putExtra("mp_scan_now", true);
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
-                else startService(svc);
+                // Optionally signal service to attempt startForeground with mediaProjection type.
+                // Wrapped in try-catch — if this throws on Xiaomi/MIUI the scan still proceeds.
+                try {
+                    Intent svc = new Intent(this, OverlayService.class).putExtra("mp_fgs", true);
+                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
+                    else startService(svc);
+                } catch (Exception ignored) {}
+
+                // Run scan after 600 ms so the overlay panel and permission dialog are fully gone.
+                // This Activity stays alive (transparent) until scan completes.
+                new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 600);
+                return; // do NOT finish yet
             }
         }
         finish();
+    }
+
+    private void runScan(MediaProjection mp) {
+        new Thread(() -> {
+            try {
+                ScreenScanner scanner = new ScreenScanner(this, mp);
+                scanner.scan(new ScreenScanner.ScanCallback() {
+                    public void onResult(ScreenScanner.ScanResult r) {
+                        try { mp.stop(); } catch (Exception ignored) {}
+                        OverlayService.deliverScanResult(r);
+                        runOnUiThread(ScanPermActivity.this::finish);
+                    }
+                    public void onError(String msg) {
+                        try { mp.stop(); } catch (Exception ignored) {}
+                        OverlayService.deliverScanError(msg);
+                        runOnUiThread(ScanPermActivity.this::finish);
+                    }
+                });
+            } catch (Exception e) {
+                try { mp.stop(); } catch (Exception ignored) {}
+                OverlayService.deliverScanError("scan failed");
+                runOnUiThread(ScanPermActivity.this::finish);
+            }
+        }).start();
     }
 }
