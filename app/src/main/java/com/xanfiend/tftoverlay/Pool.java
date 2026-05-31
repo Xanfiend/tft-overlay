@@ -90,6 +90,15 @@ public class Pool {
     public void setPinned(String name){ p.edit().putString("pinned", name==null?"":name).apply(); }
     public boolean isPinned(String name){ return getPinned().equals(name); }
 
+    // ---- settings ----
+    public float getAlpha()        { return p.getFloat("cfg_alpha", 1.0f); }
+    public void  setAlpha(float a) { p.edit().putFloat("cfg_alpha", a).apply(); }
+    public boolean getHaptic()         { return p.getBoolean("cfg_haptic", true); }
+    public void    setHaptic(boolean h){ p.edit().putBoolean("cfg_haptic", h).apply(); }
+    // 0 = smart (board if pool non-empty, else grid), 1 = always grid
+    public int  getStartTab()      { return p.getInt("cfg_start", 0); }
+    public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }
+
     // ---- economy tracker ----
     public int getGold()       { return p.getInt("econ_gold", 0); }
     public void setGold(int g) { p.edit().putInt("econ_gold", Math.max(0, g)).apply(); }
