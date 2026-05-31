@@ -19,69 +19,71 @@
 
 </div>
 
-Floating overlay for **TFT Mobile** on Android. Tracks pool state and reroll odds so you can make informed roll/save decisions during the planning phase without switching apps.
+A floating overlay for TFT Mobile on Android. Tracks the champion pool and reroll odds so you always know whether to roll or save, without switching apps.
 
 > **Note:** Android only. Not for PC.
 
 ## ✦ Install
 
 1. **[Download the APK](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)**
-2. Open it on Android, allow installing from unknown sources.
-3. Open TFT Scryer, grant the overlay permission, start the overlay.
-4. Launch TFT. The floating sigil appears.
+2. Open it on Android and allow installing from unknown sources.
+3. Open TFT Scryer, grant the overlay permission, and start the overlay.
+4. Launch TFT. The floating sigil appears on screen.
 
 ## ✦ Tabs
 
 | Tab | What it does |
 |---|---|
-| **▦ Grid** | Tap a champion to mark a copy seen; tap the count to subtract. ◉ badge tracks how many players are contesting each unit. Recent champions surface at the top. |
-| **≡ Board** | Copies remaining, contest pressure, and per-roll hit % at your current level for everything you're watching. Pin your carry to the top. Bench-thinning mode removes bench junk from the pool count to sharpen odds. |
-| **❖ Augments** | S/A/B/C tier badge per augment and the comps it enables. Comp priorities, exclusions, armory mechanics, and fallback lines below. |
-| **§ Economy** | Gold tracker with interest calculation, interest-bracket ladder (10/20/30/40/50g), win/loss streak tracking, and expected next-round income. Hold `+`/`−` to scroll quickly. |
-| **⊞ Items** | Tap two components to see the combined item. Full trait breakpoint reference below. |
-| **⚙ Settings** | Overlay transparency slider (20-100%), haptic feedback toggle, opening-tab preference, button position reset. Auto-scan button requests screen-capture permission and fills gold/level/augments via on-device OCR. |
+| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. |
+| **≡ Board** | Shows copies left in the pool, how contested each unit is, and your odds of hitting it per roll at your current level. Pin your carry to the top. Turn on bench-thinning to remove your bench units from the count for more accurate odds. |
+| **❖ Augments** | S/A/B/C rating for every augment and the comps it works best with. Comp priorities, conflicts, armory rules, and backup options listed below. |
+| **§ Economy** | Track your gold. Shows interest earned per round, the interest brackets (10/20/30/40/50g), win and loss streaks, and your expected income next round. Hold `+` or `-` to change gold quickly. |
+| **⊞ Items** | Tap two components to see what item they make. Full trait breakpoints listed below. |
+| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to read your screen and fill in your gold, level, and augments automatically. |
 
 ## ✦ Usage
 
-- **Tap the sigil** → grid. **Long-press** → board.
-- **Drag the sigil** to reposition. Drag onto **✕** to close the overlay completely.
-- **Reset** between games clears pool, econ, and contest data.
+- **Tap the sigil** to open the grid. **Long-press** to open the board.
+- **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
+- **Reset** between games to clear pool, gold, and contest data.
 
 ## ✦ Is it safe?
 
-Yes. The full source is in this repo, so you can read exactly what it does or build it yourself.
+Yes. The full source code is in this repo, so you can read exactly what it does or build it yourself.
 
 [VirusTotal scan of the APK](https://www.virustotal.com/gui/file/effaa42fd316d6aa3a2948ee1b0370b176b2a6196d6da846e717dde3ae5f55f0/summary)
 
-It asks for the "draw over other apps" permission so the overlay can show on top of TFT. The optional auto-scan feature requests screen-capture permission to read gold, level, and augments via on-device OCR; all processing stays on your phone and nothing leaves the device. No internet permission, collects nothing, sends nothing. If a scanner shows a flag or two, that is a generic warning common to self-built APKs, not a real detection.
+The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
 
 ### v1.2 - 2026-05-31
-- Screen scan reworked: single "Scan now" tap requests permission and scans immediately (Android 14 compatible - FGS starts in `onStartCommand` right after permission grant, before `createVirtualDisplay`); full-resolution capture; panel reopens with results after scan
-- Transparency is now a slider (20-100%) replacing four preset buttons
-- No-flash panel updates: all tabs refresh in-place without window flicker
-- Versioned APK filename in releases (`tft-scryer-v1.2.apk`) alongside stable `tft-scryer.apk`
-- In-app changelog visible in Settings tab
+- Screen scan fixed: scan now runs entirely inside the permission Activity, removing the foreground service dependency that crashed the overlay on Xiaomi/MIUI devices. Tap Scan Now, grant permission, the scan runs immediately in the background, and the Settings panel reopens with the result.
+- Full-resolution screen capture for better text detection accuracy
+- Transparency control replaced with a smooth slider (20-100%) instead of four preset buttons
+- Fixed touch inputs being blocked at low transparency values
+- All tabs now update in place with no flicker when tapping buttons
+- Versioned APK in releases (`tft-scryer-v1.2.apk`) alongside the stable download link
+- Changelog now visible inside the app under Settings
 
 ### v1.1 - 2026-05-31
-- Settings tab: transparency control, haptic toggle, opening-tab preference, button position reset, experimental screen scan
-- Economy tab: interest bracket ladder, win/loss streak tracker, expected next-round income, hold-to-repeat gold buttons
-- Items tab: tap two components to see the combined item; full trait breakpoint reference
-- Augments tab: S/A/B/C tier badges and comp tags for each augment
-- Dark-themed launch screen; overlay footer credits @xanfiend
+- Added Settings tab: transparency slider, haptic toggle, opening tab choice, button position reset, Scan Now button
+- Added Economy tab: interest brackets, win/loss streak tracker, expected income next round, hold to repeat on gold buttons
+- Added Items tab: tap two components to see the combined item, full trait breakpoints below
+- Augments tab now shows S/A/B/C tier ratings and comp tags for each augment
+- Dark-themed launch screen
+- Overlay footer shows @xanfiend
 
 ### v1.0 - 2026-05-30
-- Grid tab: champion pool tracking with contest badges, recent champions surfaced at top
-- Board tab: copies remaining, per-roll hit odds at current level, bench-thinning mode, pin carry
-- Drag the sigil to reposition; drag onto X to close
-- Level memory, version footer with tap-to-check-release
+- Grid and board tabs with champion pool tracking and contest badges
+- Drag the sigil to move it, drag onto X to close
+- Level memory, recent champions at the top of the grid, version footer
 
 ## ✦ Roadmap
 
-- Set data kept current each patch
-- Auto-scan accuracy improvements: zone tuning per TFT UI layout, better augment matching
-- Champion board detection (hard problem on mobile, no promises)
+- Set data updated each patch
+- Better scan accuracy: improved detection zones and augment name matching
+- Champion detection from the board (difficult on mobile, no promises)
 
 Open an issue or ping me with ideas.
 
