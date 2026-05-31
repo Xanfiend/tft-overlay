@@ -45,6 +45,17 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
+## ✦ Device requirements
+
+| | |
+|---|---|
+| **OS** | Android 7.0 or later (API 24+) |
+| **Permissions** | Draw over other apps (required). Screen capture via Scan Now (optional). |
+| **Internet** | Not required. The app is fully offline. |
+| **Storage** | About 10 MB installed. |
+| **Scan Now** | Works on Android 7.0+. On Android 14+ some devices (Xiaomi MIUI, some Samsung OneUI builds) may have issues with screen capture. The debug log in Settings will show the exact error if it fails. |
+| **Tested on** | Android 10, 12, 13, 14. Should work on 7.0 and above. |
+
 ## ✦ FAQ
 
 **Does it work on iPhone?**
