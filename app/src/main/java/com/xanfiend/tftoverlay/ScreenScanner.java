@@ -134,9 +134,24 @@ public class ScreenScanner {
 
     private ScanResult parse(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
-        int bottomStart = bmpH * 3 / 4;  // bottom quarter = gold zone
-        int leftHalf = bmpW / 2;          // left half = level zone
+        // TFT Mobile landscape layout:
+        //   gold  = bottom-right corner  (cy > 75% of height, cx > 50% of width)
+        //   level = top-left corner      (cy < 25% of height, cx < 50% of width)
+        int bottomStart = bmpH * 3 / 4;
+        int topEnd      = bmpH / 4;
+        int leftHalf    = bmpW / 2;
         int goldBoxH = 0;
+
+        // Log every block so the debug panel shows exactly what OCR found
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            String raw = block.getText().trim().replace("\n", "|");
+            if (box != null && !raw.isEmpty()) {
+                log("blk \"" + raw + "\" x=" + box.centerX() + " y=" + box.centerY()
+                        + " (goldZone: cy>" + bottomStart + " cx>" + leftHalf
+                        + " | lvZone: cy<" + topEnd + " cx<" + leftHalf + ")");
+            }
+        }
 
         for (Text.TextBlock block : text.getTextBlocks()) {
             String raw = block.getText().trim();
@@ -145,8 +160,8 @@ public class ScreenScanner {
             int cy = box.centerY();
             int cx = box.centerX();
 
-            // gold: standalone 0-99 in bottom quarter
-            if (raw.matches("\\d{1,2}") && cy > bottomStart) {
+            // gold: standalone 0-99 in bottom-right corner
+            if (raw.matches("\\d{1,2}") && cy > bottomStart && cx > leftHalf) {
                 int val = Integer.parseInt(raw);
                 if (val >= 0 && val <= 99 && box.height() > goldBoxH) {
                     r.gold = val;
@@ -154,8 +169,8 @@ public class ScreenScanner {
                 }
             }
 
-            // level: standalone 4-10 in lower-left half
-            if (raw.matches("[4-9]|10") && cy > bmpH / 2 && cx < leftHalf && r.level == -1) {
+            // level: standalone 2-10 in top-left corner (TFT Mobile shows level there)
+            if (raw.matches("[2-9]|10") && cy < topEnd && cx < leftHalf && r.level == -1) {
                 r.level = Integer.parseInt(raw);
             }
 
