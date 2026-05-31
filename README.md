@@ -21,7 +21,7 @@
 
 Floating overlay for **TFT Mobile** on Android. Tracks pool state and reroll odds so you can make informed roll/save decisions during the planning phase without switching apps.
 
-> **Note:** Android only — not for PC.
+> **Note:** Android only. Not for PC.
 
 ## ✦ Install
 
@@ -39,7 +39,7 @@ Floating overlay for **TFT Mobile** on Android. Tracks pool state and reroll odd
 | **❖ Augments** | S/A/B/C tier badge per augment and the comps it enables. Comp priorities, exclusions, armory mechanics, and fallback lines below. |
 | **§ Economy** | Gold tracker with interest calculation, interest-bracket ladder (10/20/30/40/50g), win/loss streak tracking, and expected next-round income. Hold `+`/`−` to scroll quickly. |
 | **⊞ Items** | Tap two components to see the combined item. Full trait breakpoint reference below. |
-| **⚙ Settings** | Overlay transparency (40 / 60 / 80 / 100 %), haptic feedback toggle, opening-tab preference, button position reset. |
+| **⚙ Settings** | Overlay transparency slider (20-100%), haptic feedback toggle, opening-tab preference, button position reset. Auto-scan button requests screen-capture permission and fills gold/level/augments via on-device OCR. |
 
 ## ✦ Usage
 
@@ -53,12 +53,12 @@ Yes. The full source is in this repo, so you can read exactly what it does or bu
 
 [VirusTotal scan of the APK](https://www.virustotal.com/gui/file/effaa42fd316d6aa3a2948ee1b0370b176b2a6196d6da846e717dde3ae5f55f0/summary)
 
-It only asks for the "draw over other apps" permission so the overlay can show on top of TFT. No internet permission, collects nothing, reads nothing from the game. If a scanner shows a flag or two, that's a generic warning common to self-built APKs, not a real detection.
+It asks for the "draw over other apps" permission so the overlay can show on top of TFT. The optional auto-scan feature requests screen-capture permission to read gold, level, and augments via on-device OCR; all processing stays on your phone and nothing leaves the device. No internet permission, collects nothing, sends nothing. If a scanner shows a flag or two, that is a generic warning common to self-built APKs, not a real detection.
 
 ## ✦ Roadmap
 
 - Set data kept current each patch
-- Experimenting with auto-detection of board champions - hard problem on mobile, no promises
+- Auto-scan (OCR) in Settings detects gold, level, and augments from the screen. Experimental; accuracy varies by device resolution and TFT skin.
 
 Open an issue or ping me with ideas.
 
