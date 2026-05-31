@@ -44,20 +44,26 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk tft-scryer.apk
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
+          cp app/build/outputs/apk/release/app-release.apk tft-scryer-v${VERSION}.apk
+          cp tft-scryer-v${VERSION}.apk tft-scryer.apk
+          echo "APK_VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: tft-scryer-apk
-          path: tft-scryer.apk
+          path: tft-scryer-v*.apk
 
       - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: TFT Scryer (latest build)
-          files: tft-scryer.apk
+          files: |
+            tft-scryer-v*.apk
+            tft-scryer.apk
           body: |
-            Latest auto-built APK of TFT Scryer.
+            Latest auto-built APK of TFT Scryer (v${{ env.APK_VERSION }}).
             Download tft-scryer.apk below, install on Android (allow unknown sources), grant overlay permission, and scout.
