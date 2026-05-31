@@ -58,7 +58,7 @@ It only asks for the "draw over other apps" permission so the overlay can show o
 ## ✦ Roadmap
 
 - Set data kept current each patch
-- Experimenting with auto-detection of board champions — hard problem on mobile, no promises
+- Experimenting with auto-detection of board champions - hard problem on mobile, no promises
 
 Open an issue or ping me with ideas.
 
