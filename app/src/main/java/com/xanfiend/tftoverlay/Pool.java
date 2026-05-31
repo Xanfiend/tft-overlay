@@ -74,7 +74,11 @@ public class Pool {
     }
     public int oppCount(String c){ return opp.containsKey(c) ? opp.get(c) : 0; }
 
-    public void reset(){ seen.clear(); opp.clear(); recent.clear(); clearJunk(); save(); }
+    public void reset(){
+        seen.clear(); opp.clear(); recent.clear(); clearJunk();
+        p.edit().remove("econ_gold").remove("econ_streak").apply();
+        save();
+    }
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
 
     // ---- remembered level (persists between opens) ----
@@ -85,6 +89,28 @@ public class Pool {
     public String getPinned(){ return p.getString("pinned", ""); }
     public void setPinned(String name){ p.edit().putString("pinned", name==null?"":name).apply(); }
     public boolean isPinned(String name){ return getPinned().equals(name); }
+
+    // ---- economy tracker ----
+    public int getGold()       { return p.getInt("econ_gold", 0); }
+    public void setGold(int g) { p.edit().putInt("econ_gold", Math.max(0, g)).apply(); }
+
+    // positive = win streak count, negative = loss streak count, 0 = neutral
+    public int getStreak()        { return p.getInt("econ_streak", 0); }
+    public void setStreak(int s)  { p.edit().putInt("econ_streak", s).apply(); }
+
+    // Pure math helpers — static for easy unit testing and use without a Pool instance.
+    public static int interest(int gold)       { return Math.min(5, gold / 10); }
+    public static int toNextBracket(int gold)  { return (gold / 10 + 1) * 10 - gold; }
+    public static int streakBonus(int streak)  {
+        int abs = Math.abs(streak);
+        if (abs >= 6) return 3;
+        if (abs >= 4) return 2;
+        if (abs >= 2) return 1;
+        return 0;
+    }
+    public static int expectedIncome(int gold, int streak) {
+        return 5 + interest(gold) + streakBonus(streak);
+    }
 
     // ---- bench-thinning: junk units of a cost you're holding on your bench ----
     // These temporarily remove copies from the shared pool, nudging your odds up.
