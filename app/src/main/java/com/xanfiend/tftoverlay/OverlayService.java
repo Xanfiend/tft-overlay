@@ -111,11 +111,11 @@ public class OverlayService extends Service {
         TextView lb=new TextView(this); lb.setText("SCRY"); lb.setTextColor(GOLD); lb.setTextSize(8);
         lb.setGravity(Gravity.CENTER); lb.setLetterSpacing(0.25f); lb.setPadding(0,2,0,0);
         c.addView(g); c.addView(lb); button=c;
+        button.setAlpha(pool.getAlpha());
 
         btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
         btnLp.gravity=Gravity.TOP|Gravity.START; btnLp.x=20; btnLp.y=300;
-        btnLp.alpha=pool.getAlpha();
         button.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; long down; boolean moved;
             public boolean onTouch(View v, MotionEvent e){
@@ -217,14 +217,14 @@ public class OverlayService extends Service {
                 (int)(getResources().getDisplayMetrics().widthPixels*0.96),
                 (int)(getResources().getDisplayMetrics().heightPixels*0.86),
                 wtype(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-            panelLp.gravity=Gravity.CENTER; panelLp.alpha=pool.getAlpha();
+            panelLp.gravity=Gravity.CENTER;
             wm.addView(panel,panelLp);
+            panel.setAlpha(pool.getAlpha());
         } else {
             // panel already open: reuse the window, just clear and rebuild content — no flash
             root=(LinearLayout)((ScrollView)panel).getChildAt(0);
             root.removeAllViews();
-            panelLp.alpha=pool.getAlpha();
-            try{ wm.updateViewLayout(panel,panelLp); }catch(Exception e){}
+            panel.setAlpha(pool.getAlpha());
         }
 
         // header: title + close
@@ -1022,27 +1022,32 @@ public class OverlayService extends Service {
         hdr.setTextColor(GOLD); hdr.setTextSize(11); hdr.setTypeface(null,android.graphics.Typeface.BOLD);
         hdr.setLetterSpacing(0.1f); hdr.setPadding(2,4,0,6); root.addView(hdr);
 
-        float curAlpha=pool.getAlpha();
-        float[] alphaVals={0.4f,0.6f,0.8f,1.0f};
-        String[] alphaLabels={"40%","60%","80%","100%"};
-        LinearLayout aRow=new LinearLayout(this); aRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<alphaVals.length;i++){
-            final float av=alphaVals[i];
-            final String al=alphaLabels[i];
-            TextView btn=new TextView(this); btn.setText(al);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=Math.abs(curAlpha-av)<0.05f;
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setAlpha(av); btnLp.alpha=av;
-                try{ wm.updateViewLayout(button,btnLp); }catch(Exception e){}
-                showPanel();
-            }});
-            aRow.addView(btn);
-        }
-        root.addView(aRow);
+        int alphaPct=Math.round(pool.getAlpha()*100);
+        final TextView alphaLabel=new TextView(this);
+        alphaLabel.setText(alphaPct+"%");
+        alphaLabel.setTextColor(BONE); alphaLabel.setTextSize(13); alphaLabel.setGravity(Gravity.END);
+        LinearLayout.LayoutParams all=new LinearLayout.LayoutParams(-1,-2); all.setMargins(0,0,0,4); alphaLabel.setLayoutParams(all);
+        root.addView(alphaLabel);
+
+        android.widget.SeekBar alphaBar=new android.widget.SeekBar(this);
+        alphaBar.setMax(80); // progress 0-80 maps to 20%-100%
+        alphaBar.setProgress(Math.max(0,alphaPct-20));
+        alphaBar.setProgressTintList(android.content.res.ColorStateList.valueOf(BLOODL));
+        alphaBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(EDGE));
+        alphaBar.setThumbTintList(android.content.res.ColorStateList.valueOf(BONE));
+        LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,14); alphaBar.setLayoutParams(abl);
+        alphaBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(android.widget.SeekBar bar, int progress, boolean fromUser){
+                float av=(progress+20)/100f;
+                pool.setAlpha(av);
+                button.setAlpha(av);
+                if(panel!=null) panel.setAlpha(av);
+                alphaLabel.setText((progress+20)+"%");
+            }
+            public void onStartTrackingTouch(android.widget.SeekBar bar){}
+            public void onStopTrackingTouch(android.widget.SeekBar bar){}
+        });
+        root.addView(alphaBar);
 
         TextView hdr2=new TextView(this); hdr2.setText("◇ HAPTIC");
         hdr2.setTextColor(GOLD); hdr2.setTextSize(11); hdr2.setTypeface(null,android.graphics.Typeface.BOLD);
