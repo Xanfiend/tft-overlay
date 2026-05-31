@@ -17,6 +17,13 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.pm.ServiceInfo;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
+import android.widget.Toast;
 import java.util.List;
 
 public class OverlayService extends Service {
@@ -58,6 +65,13 @@ public class OverlayService extends Service {
 
     // floating button layout params promoted to field so buildSettings() can update alpha/position
     private WindowManager.LayoutParams btnLp;
+    // panel layout params promoted for flash-free in-place refresh
+    private WindowManager.LayoutParams panelLp;
+    // screen scanning
+    private MediaProjection scanProjection;
+    private boolean scanActive = false;
+    private String lastScanStatus = "";
+    private TextView scanStatusTv;
 
     @Override public void onCreate(){
         super.onCreate();
@@ -67,7 +81,16 @@ public class OverlayService extends Service {
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
     }
-    @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
+    @Override public int onStartCommand(Intent i, int f, int id){
+        if(i!=null && i.hasExtra("mp_code")){
+            int code=i.getIntExtra("mp_code",-1);
+            Intent data=Build.VERSION.SDK_INT>=33
+                ? i.getParcelableExtra("mp_data",Intent.class)
+                : (Intent)i.getParcelableExtra("mp_data");
+            if(code>0 && data!=null) storeScanToken(code,data);
+        }
+        return START_STICKY;
+    }
 
     private int wtype(){
         return Build.VERSION.SDK_INT>=26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -166,21 +189,43 @@ public class OverlayService extends Service {
     }
 
     private void closePanel(){
-        if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; }
+        if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; panelLp=null; }
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
-        econIncomeTv=null; econBreakTv=null;
+        econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
     }
 
     private void showPanel(){
-        closePanel();
-        ScrollView scroll=new ScrollView(this);
-        LinearLayout root=new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackground(box(VOID,8,BLOOD,2));
-        root.setPadding(22,18,22,18);
-        scroll.addView(root);
+        // null per-tab TV refs (they'll be reassigned by the build methods below)
+        econGoldTv=null; econInterestTv=null; econBracketTv=null;
+        econLadderTvs=null; econStreakTv=null; econBonusTv=null;
+        econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
+        if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
+
+        LinearLayout root;
+        if(panel==null){
+            // first open: create the window and add to WindowManager
+            ScrollView scroll=new ScrollView(this);
+            root=new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setBackground(box(VOID,8,BLOOD,2));
+            root.setPadding(22,18,22,18);
+            scroll.addView(root);
+            panel=scroll;
+            panelLp=new WindowManager.LayoutParams(
+                (int)(getResources().getDisplayMetrics().widthPixels*0.96),
+                (int)(getResources().getDisplayMetrics().heightPixels*0.86),
+                wtype(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
+            panelLp.gravity=Gravity.CENTER; panelLp.alpha=pool.getAlpha();
+            wm.addView(panel,panelLp);
+        } else {
+            // panel already open: reuse the window, just clear and rebuild content — no flash
+            root=(LinearLayout)((ScrollView)panel).getChildAt(0);
+            root.removeAllViews();
+            panelLp.alpha=pool.getAlpha();
+            try{ wm.updateViewLayout(panel,panelLp); }catch(Exception e){}
+        }
 
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
@@ -240,11 +285,6 @@ public class OverlayService extends Service {
         else if(mode==1) buildSummary(root);
         else buildGrid(root);
 
-        WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
-            (int)(getResources().getDisplayMetrics().widthPixels*0.96),
-            (int)(getResources().getDisplayMetrics().heightPixels*0.86),
-            wtype(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-        lp.gravity=Gravity.CENTER; lp.alpha=pool.getAlpha(); panel=scroll; wm.addView(panel,lp);
     }
 
     private double rerollChance(String name){
@@ -918,6 +958,66 @@ public class OverlayService extends Service {
     }
 
     private void buildSettings(LinearLayout root){
+        // ◇ AUTO-DETECT
+        TextView scanHdr=new TextView(this); scanHdr.setText("◇ AUTO-DETECT");
+        scanHdr.setTextColor(GOLD); scanHdr.setTextSize(11); scanHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        scanHdr.setLetterSpacing(0.1f); scanHdr.setPadding(2,4,0,6); root.addView(scanHdr);
+
+        if(scanProjection==null){
+            TextView expl=new TextView(this);
+            expl.setText("Capture the screen to auto-fill gold, level, and augments.");
+            expl.setTextColor(ASH); expl.setTextSize(11); expl.setPadding(2,0,0,8); root.addView(expl);
+
+            TextView enableBtn=new TextView(this); enableBtn.setText("Enable screen scan");
+            enableBtn.setTextColor(BONE); enableBtn.setTextSize(13); enableBtn.setGravity(Gravity.CENTER);
+            enableBtn.setPadding(0,12,0,12); enableBtn.setBackground(box(CARD,6,EDGE,1));
+            LinearLayout.LayoutParams ebl=new LinearLayout.LayoutParams(-1,-2); ebl.setMargins(0,0,0,4); enableBtn.setLayoutParams(ebl);
+            enableBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                Intent i=new Intent(OverlayService.this,ScanPermActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
+            }});
+            root.addView(enableBtn);
+
+            TextView hint=new TextView(this);
+            hint.setText("Requires screen capture permission. A brief notification appears while scanning.");
+            hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,4,0,14); root.addView(hint);
+        } else {
+            scanStatusTv=new TextView(this);
+            scanStatusTv.setText(lastScanStatus.isEmpty()?"ready · tap Scan":lastScanStatus);
+            scanStatusTv.setTextColor(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH));
+            scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
+
+            LinearLayout scanRow=new LinearLayout(this); scanRow.setGravity(Gravity.CENTER_VERTICAL);
+            TextView scanBtn=new TextView(this); scanBtn.setText(scanActive?"⌛ scanning…":"📷 Scan now");
+            scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
+            scanBtn.setPadding(0,12,0,12);
+            scanBtn.setBackground(box(scanActive?CARD:BLOOD,6,scanActive?EDGE:BLOODL,scanActive?1:2));
+            LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(0,-2,2f); sbl.setMargins(0,0,4,0); scanBtn.setLayoutParams(sbl);
+            if(!scanActive){ scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ doScan(); } }); }
+            scanRow.addView(scanBtn);
+
+            TextView disableBtn=new TextView(this); disableBtn.setText("Disable");
+            disableBtn.setTextColor(BLOODL); disableBtn.setTextSize(12); disableBtn.setGravity(Gravity.CENTER);
+            disableBtn.setPadding(0,12,0,12); disableBtn.setBackground(box(CARD,6,BLOOD,1));
+            disableBtn.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            disableBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} scanProjection=null; }
+                lastScanStatus=""; showPanel();
+            }});
+            scanRow.addView(disableBtn);
+            root.addView(scanRow);
+
+            TextView hint=new TextView(this);
+            hint.setText("Closes the panel, captures the screen, then auto-fills gold & level.");
+            hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,4,0,0); root.addView(hint);
+        }
+
+        // divider
+        TextView scanDiv=new TextView(this); scanDiv.setText("────────────────────");
+        scanDiv.setTextColor(EDGE); scanDiv.setTextSize(8);
+        LinearLayout.LayoutParams sdl=new LinearLayout.LayoutParams(-1,-2); sdl.setMargins(0,14,0,14); scanDiv.setLayoutParams(sdl);
+        root.addView(scanDiv);
+
         TextView hdr=new TextView(this); hdr.setText("◇ TRANSPARENCY");
         hdr.setTextColor(GOLD); hdr.setTextSize(11); hdr.setTypeface(null,android.graphics.Typeface.BOLD);
         hdr.setLetterSpacing(0.1f); hdr.setPadding(2,4,0,6); root.addView(hdr);
@@ -1004,6 +1104,87 @@ public class OverlayService extends Service {
         root.addView(resetPos);
     }
 
+    // ---- screen scanning ----
+
+    private void storeScanToken(int code, Intent data){
+        if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} }
+        try{
+            MediaProjectionManager mpm=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
+            scanProjection=mpm.getMediaProjection(code,data);
+            lastScanStatus="ready";
+            if(scanStatusTv!=null){ scanStatusTv.setText("ready · tap Scan"); scanStatusTv.setTextColor(GREEN); }
+            scanProjection.registerCallback(new MediaProjection.Callback(){
+                public void onStop(){
+                    scanProjection=null; lastScanStatus="";
+                    if(scanStatusTv!=null){ scanStatusTv.setText("not enabled"); scanStatusTv.setTextColor(DIM); }
+                }
+            }, new android.os.Handler(android.os.Looper.getMainLooper()));
+        }catch(Exception e){ scanProjection=null; lastScanStatus="permission error"; }
+    }
+
+    private void doScan(){
+        if(scanProjection==null||scanActive) return;
+        scanActive=true;
+        lastScanStatus="scanning…";
+        closePanel();
+        startScanForeground();
+        try{
+            ScreenScanner scanner=new ScreenScanner(this,scanProjection);
+            scanner.scan(new ScreenScanner.ScanCallback(){
+                public void onResult(ScreenScanner.ScanResult r){
+                    stopScanForeground(); scanActive=false;
+                    applyScanResult(r);
+                }
+                public void onError(String msg){
+                    stopScanForeground(); scanActive=false;
+                    lastScanStatus="✗ "+msg;
+                    Toast.makeText(OverlayService.this,"✗ "+msg,Toast.LENGTH_SHORT).show();
+                }
+            });
+        }catch(Exception e){
+            stopScanForeground(); scanActive=false;
+            lastScanStatus="✗ scan failed";
+            Toast.makeText(this,"✗ scan failed",Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void applyScanResult(ScreenScanner.ScanResult r){
+        if(r.gold>=0) pool.setGold(r.gold);
+        if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
+        lastScanStatus="✓ "+r.status;
+        Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
+    }
+
+    private void startScanForeground(){
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+            NotificationChannel ch=new NotificationChannel("scan","Screen scan",NotificationManager.IMPORTANCE_LOW);
+            ch.setShowBadge(false); ch.setSound(null,null);
+            ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);
+        }
+        Notification n;
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+            n=new Notification.Builder(this,"scan")
+                .setContentTitle("TFT Scryer — Scanning")
+                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
+        } else {
+            n=new Notification.Builder(this)
+                .setContentTitle("TFT Scryer — Scanning")
+                .setSmallIcon(android.R.drawable.ic_menu_camera).build();
+        }
+        if(Build.VERSION.SDK_INT>=29){
+            startForeground(9001,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+        } else {
+            startForeground(9001,n);
+        }
+    }
+
+    private void stopScanForeground(){
+        try{
+            if(Build.VERSION.SDK_INT>=33) stopForeground(STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+        }catch(Exception e){}
+    }
+
     // opens the GitHub releases page in the user's browser. Uses an Intent,
     // which does NOT require the INTERNET permission -- the browser handles
     // the network, so the app stays fully offline.
@@ -1021,6 +1202,7 @@ public class OverlayService extends Service {
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();
+        if(scanProjection!=null){ try{ scanProjection.stop(); }catch(Exception e){} scanProjection=null; }
     }
     @Override public IBinder onBind(Intent i){ return null; }
 }
