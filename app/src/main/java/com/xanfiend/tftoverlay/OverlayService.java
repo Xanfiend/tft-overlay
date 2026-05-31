@@ -26,6 +26,7 @@ public class OverlayService extends Service {
     private Pool pool;
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
+    private int goldSel = 40; // selected gold amount for "by X gold" estimate
     private Vibrator vib;
     // bump this each release so the footer shows the current version
     private static final String APP_VERSION = "v1.1";
@@ -215,6 +216,10 @@ public class OverlayService extends Service {
         int slot=ODDS[level][cost-1]; if(slot==0) return 0;
         int rem=pool.remaining(name); if(rem<=0) return 0;
         int total=0; for(String n:Pool.CHAMPS[cost]) total+=pool.remaining(n);
+        // bench-thinning: junk units you hold are out of the pool, so the
+        // effective competing total shrinks (but never below your target's own copies).
+        total -= pool.getJunk(cost);
+        if(total < rem) total = rem;
         if(total<=0) return 0;
         double per=(slot/100.0)*((double)rem/total);
         return 1.0-Math.pow(1.0-per,5);
@@ -396,6 +401,14 @@ public class OverlayService extends Service {
         return null; // 1-3 cost with healthy pool: no need to clutter
     }
 
+    // rounds a percentage to a coarse band so we never imply false precision.
+    // (the estimate is only as good as what the user tapped)
+    private int roundBand(int pct){
+        if(pct<=0) return 0;
+        if(pct>=95) return 95;
+        return Math.round(pct/5f)*5; // nearest 5%
+    }
+
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
             TextView e=new TextView(this);
@@ -411,11 +424,49 @@ public class OverlayService extends Service {
         pinTip.setText("long-press a unit to \u2605 pin it as your carry");
         pinTip.setTextColor(DIM); pinTip.setTextSize(9); pinTip.setPadding(2,0,2,8); root.addView(pinTip);
 
+        // gold-to-hit presets: estimate odds by spending this much gold
+        TextView goldLbl=new TextView(this); goldLbl.setText("\u25C7 ESTIMATE BY GOLD");
+        goldLbl.setTextColor(GOLD); goldLbl.setTextSize(10); goldLbl.setTypeface(null, android.graphics.Typeface.BOLD);
+        goldLbl.setLetterSpacing(0.1f); goldLbl.setPadding(2,2,0,4); root.addView(goldLbl);
+        LinearLayout goldRow=new LinearLayout(this); goldRow.setOrientation(LinearLayout.HORIZONTAL);
+        int[] presets={20,40,60};
+        for(int gp : presets){
+            final int g=gp; boolean on=goldSel==g;
+            TextView gb=new TextView(this); gb.setText(g+"g"); gb.setGravity(Gravity.CENTER);
+            gb.setTextColor(on?BONE:ASH); gb.setTextSize(13); gb.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            gb.setBackground(box(on?BLOOD:CARD,5,on?BLOODL:EDGE,on?2:1)); gb.setPadding(0,14,0,14);
+            LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(0,-2,1f); gl.setMargins(3,0,3,0); gb.setLayoutParams(gl);
+            gb.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ goldSel=g; showPanel(); } });
+            goldRow.addView(gb);
+        }
+        root.addView(goldRow);
+
+        // bench-thinning: junk units held shrink the pool and nudge odds up
+        TextView thinLbl=new TextView(this); thinLbl.setText("\u25C7 JUNK ON BENCH (thins the pool)");
+        thinLbl.setTextColor(GOLD); thinLbl.setTextSize(10); thinLbl.setTypeface(null, android.graphics.Typeface.BOLD);
+        thinLbl.setLetterSpacing(0.1f); thinLbl.setPadding(2,12,0,4); root.addView(thinLbl);
+        LinearLayout thinRow=new LinearLayout(this); thinRow.setOrientation(LinearLayout.HORIZONTAL);
+        for(int co=1;co<=5;co++){
+            final int fcost=co; int jv=pool.getJunk(co);
+            LinearLayout jb=new LinearLayout(this); jb.setOrientation(LinearLayout.VERTICAL); jb.setGravity(Gravity.CENTER);
+            jb.setBackground(box(CARD,5,jv>0?GOLD:EDGE,jv>0?2:1)); jb.setPadding(0,8,0,8);
+            LinearLayout.LayoutParams jl=new LinearLayout.LayoutParams(0,-2,1f); jl.setMargins(3,0,3,0); jb.setLayoutParams(jl);
+            TextView ct=new TextView(this); ct.setText(fcost+"c"); ct.setTextColor(COSTC[fcost]); ct.setTextSize(11); ct.setGravity(Gravity.CENTER);
+            TextView nt=new TextView(this); nt.setText(""+jv); nt.setTextColor(jv>0?GOLD:ASH); nt.setTextSize(15); nt.setTypeface(null, android.graphics.Typeface.BOLD); nt.setGravity(Gravity.CENTER);
+            jb.addView(ct); jb.addView(nt);
+            jb.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.addJunk(fcost,1); buzz(); showPanel(); } });
+            jb.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){ pool.addJunk(fcost,-1); buzz(); showPanel(); return true; } });
+            thinRow.addView(jb);
+        }
+        root.addView(thinRow);
+        TextView thinHint=new TextView(this); thinHint.setText("tap +1 junk of a cost, long-press \u22121");
+        thinHint.setTextColor(DIM); thinHint.setTextSize(9); thinHint.setPadding(2,4,2,10); root.addView(thinHint);
+
+
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
             int players=pool.oppCount(name);
             int poolSize=Pool.SIZE[co];
-            double ch=rerollChance(name)*100.0;
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
             final boolean pinned = pool.isPinned(name);
 
@@ -455,14 +506,18 @@ public class OverlayService extends Service {
             }
             card.addView(mid);
 
-            // right side: odds now + odds by a chunk of gold
+            // right side: rough "per roll" estimate + "by selected gold" estimate.
+            // Deliberately rounded to a band, never false-precise, since this is
+            // computed only from what you've tapped (no board scanning).
             LinearLayout vbox=new LinearLayout(this); vbox.setOrientation(LinearLayout.VERTICAL); vbox.setGravity(Gravity.CENTER);
             vbox.setPadding(8,0,8,0);
-            TextView pct=new TextView(this); pct.setText(rem<=0?"0%":String.format("%.0f%%",ch));
+            // ~2 rolls per gold/2... 1 reroll = 2 gold, so gold/2 = number of shops
+            int rolls = goldSel/2;
+            double byGold = rem<=0 ? 0 : (1.0 - Math.pow(1.0 - rerollChance(name), rolls))*100.0;
+            TextView pct=new TextView(this);
+            pct.setText(rem<=0 ? "--" : "~"+roundBand((int)Math.round(byGold))+"%");
             pct.setTextColor(rem<=0?DIM:BONE); pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
-            // "by ~30g" estimate: chance to see at least one across ~6 shops (30g ~ 6 rolls)
-            double byGold = rem<=0 ? 0 : (1.0 - Math.pow(1.0 - rerollChance(name), 6))*100.0;
-            TextView pl=new TextView(this); pl.setText(rem<=0?"gone":String.format("~%.0f%% / 30g", byGold));
+            TextView pl=new TextView(this); pl.setText(rem<=0?"gone":"est. by "+goldSel+"g");
             pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
