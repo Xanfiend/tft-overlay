@@ -60,10 +60,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: TFT Scryer (latest build)
+          name: "TFT Scryer v${{ env.APK_VERSION }}"
+          make_latest: true
           files: |
             tft-scryer-v*.apk
             tft-scryer.apk
           body: |
-            Latest auto-built APK of TFT Scryer (v${{ env.APK_VERSION }}).
-            Download tft-scryer.apk below, install on Android (allow unknown sources), grant overlay permission, and scout.
+            **v${{ env.APK_VERSION }}** — latest auto-built APK.
+            Download **tft-scryer.apk** below, install on Android (allow unknown sources), grant overlay permission, and scout.
