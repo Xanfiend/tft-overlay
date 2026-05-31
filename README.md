@@ -7,8 +7,6 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-![Downloads](https://img.shields.io/github/downloads/Xanfiend/tft-overlay/total?style=flat-square&color=C1121F&label=downloads)
-![Stars](https://img.shields.io/github/stars/Xanfiend/tft-overlay?style=flat-square&color=B8954A)
 ![Platform](https://img.shields.io/badge/platform-Android-1A1A1A?style=flat-square)
 
 </div>
