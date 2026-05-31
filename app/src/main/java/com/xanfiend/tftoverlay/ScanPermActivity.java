@@ -3,6 +3,7 @@ package com.xanfiend.tftoverlay;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -39,10 +40,19 @@ public class ScanPermActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         if (req == REQ_PROJECTION && res == RESULT_OK && data != null) {
-            Intent svc = new Intent(this, OverlayService.class);
-            svc.putExtra("mp_code", res);
-            svc.putExtra("mp_data", data);
-            startService(svc);
+            // getMediaProjection() must be called in the Activity — on API 34+ the token is
+            // tied to the activity session and becomes invalid if consumed in a Service.
+            MediaProjectionManager mpm =
+                    (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            MediaProjection mp = mpm.getMediaProjection(res, data);
+            if (mp != null) {
+                OverlayService.acceptProjection(mp);
+                // Use startForegroundService so Android 14 permits startForeground with
+                // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION in onStartCommand.
+                Intent svc = new Intent(this, OverlayService.class).putExtra("mp_scan_now", true);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
+                else startService(svc);
+            }
         }
         finish();
     }
