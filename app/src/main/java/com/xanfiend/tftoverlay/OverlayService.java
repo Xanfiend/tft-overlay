@@ -26,7 +26,6 @@ public class OverlayService extends Service {
     private Pool pool;
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
-    private int goldSel = 40; // selected gold amount for "by X gold" estimate
     private Vibrator vib;
     // bump this each release so the footer shows the current version
     private static final String APP_VERSION = "v1.1";
@@ -424,23 +423,6 @@ public class OverlayService extends Service {
         pinTip.setText("long-press a unit to \u2605 pin it as your carry");
         pinTip.setTextColor(DIM); pinTip.setTextSize(9); pinTip.setPadding(2,0,2,8); root.addView(pinTip);
 
-        // gold-to-hit presets: estimate odds by spending this much gold
-        TextView goldLbl=new TextView(this); goldLbl.setText("\u25C7 ESTIMATE BY GOLD");
-        goldLbl.setTextColor(GOLD); goldLbl.setTextSize(10); goldLbl.setTypeface(null, android.graphics.Typeface.BOLD);
-        goldLbl.setLetterSpacing(0.1f); goldLbl.setPadding(2,2,0,4); root.addView(goldLbl);
-        LinearLayout goldRow=new LinearLayout(this); goldRow.setOrientation(LinearLayout.HORIZONTAL);
-        int[] presets={20,40,60};
-        for(int gp : presets){
-            final int g=gp; boolean on=goldSel==g;
-            TextView gb=new TextView(this); gb.setText(g+"g"); gb.setGravity(Gravity.CENTER);
-            gb.setTextColor(on?BONE:ASH); gb.setTextSize(13); gb.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            gb.setBackground(box(on?BLOOD:CARD,5,on?BLOODL:EDGE,on?2:1)); gb.setPadding(0,14,0,14);
-            LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(0,-2,1f); gl.setMargins(3,0,3,0); gb.setLayoutParams(gl);
-            gb.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ goldSel=g; showPanel(); } });
-            goldRow.addView(gb);
-        }
-        root.addView(goldRow);
-
         // bench-thinning: junk units held shrink the pool and nudge odds up
         TextView thinLbl=new TextView(this); thinLbl.setText("\u25C7 JUNK ON BENCH (thins the pool)");
         thinLbl.setTextColor(GOLD); thinLbl.setTextSize(10); thinLbl.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -506,19 +488,15 @@ public class OverlayService extends Service {
             }
             card.addView(mid);
 
-            // right side: rough "per roll" estimate + "by selected gold" estimate.
-            // Deliberately rounded to a band, never false-precise, since this is
-            // computed only from what you've tapped (no board scanning).
+            // right side: rough "per roll" estimate, rounded to a band (no false
+            // precision, since it's computed only from what you've tapped).
             LinearLayout vbox=new LinearLayout(this); vbox.setOrientation(LinearLayout.VERTICAL); vbox.setGravity(Gravity.CENTER);
             vbox.setPadding(8,0,8,0);
-            // ~2 rolls per gold/2... 1 reroll = 2 gold, so gold/2 = number of shops
-            int rolls = goldSel/2;
-            double byGold = rem<=0 ? 0 : (1.0 - Math.pow(1.0 - rerollChance(name), rolls))*100.0;
+            double perRoll = rem<=0 ? 0 : rerollChance(name)*100.0;
             TextView pct=new TextView(this);
-            pct.setText(rem<=0 ? "--" : "~"+roundBand((int)Math.round(byGold))+"%");
+            pct.setText(rem<=0 ? "--" : "~"+roundBand((int)Math.round(perRoll))+"%");
             pct.setTextColor(rem<=0?DIM:BONE); pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
-            TextView pl=new TextView(this); pl.setText(rem<=0?"gone":"est. by "+goldSel+"g");
-            pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
+            TextView pl=new TextView(this); pl.setText(rem<=0?"gone":"per shop"); pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
             TextView minus=new TextView(this); minus.setText("\u2212"); minus.setTextColor(BLOODL); minus.setTextSize(20); minus.setGravity(Gravity.CENTER);
