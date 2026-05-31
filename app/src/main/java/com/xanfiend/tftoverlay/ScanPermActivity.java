@@ -15,8 +15,8 @@ public class ScanPermActivity extends Activity {
     private static final int REQ_PROJECTION = 1001;
     private static final int REQ_NOTIF = 1002;
 
-    private static void log(String msg)  { OverlayService.addScanLog(msg); }
-    private static void err(String msg)  { OverlayService.addScanLog("ERR " + msg); }
+    private static void log(String msg) { OverlayService.addScanLog(msg); }
+    private static void err(String msg) { OverlayService.addScanLog("ERR " + msg); }
 
     @Override
     protected void onCreate(Bundle s) {
@@ -65,32 +65,52 @@ public class ScanPermActivity extends Activity {
     protected void onActivityResult(int req, int res, Intent data) {
         log("onActivityResult req=" + req + " res=" + res + " hasData=" + (data != null));
         if (req == REQ_PROJECTION && res == RESULT_OK && data != null) {
+            // Start ScanService so Android 14 FGS requirement is satisfied before
+            // getMediaProjection(). On MIUI, startForeground() inside ScanService will
+            // throw and ScanService calls stopSelf() — we try getMediaProjection() anyway
+            // since MIUI doesn't enforce the FGS requirement.
             try {
-                MediaProjectionManager mpm =
-                        (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-                if (mpm == null) {
-                    err("mpm null in onActivityResult");
-                    OverlayService.deliverScanError("mpm null");
-                    finish();
-                    return;
-                }
-                log("calling getMediaProjection");
-                MediaProjection mp = mpm.getMediaProjection(res, data);
-                if (mp != null) {
-                    log("MediaProjection ok, scan in 600ms");
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 600);
-                    return; // do NOT finish yet
-                } else {
-                    err("getMediaProjection returned null");
-                    OverlayService.deliverScanError("projection null");
-                }
+                Intent svc = new Intent(this, ScanService.class);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
+                else startService(svc);
+                log("ScanService start requested");
             } catch (Exception e) {
-                err(e.getClass().getSimpleName() + ": " + e.getMessage());
-                OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
+                log("ScanService start failed: " + e.getClass().getSimpleName());
             }
-        } else {
-            log("denied or wrong req (res=" + res + ")");
+
+            // Wait 400ms for ScanService.onStartCommand to run startForeground()
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (isFinishing()) return;
+                log("calling getMediaProjection (ScanService.active=" + ScanService.active + ")");
+                try {
+                    MediaProjectionManager mpm =
+                            (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+                    if (mpm == null) {
+                        err("mpm null");
+                        OverlayService.deliverScanError("mpm null");
+                        ScanService.stop(this);
+                        finish();
+                        return;
+                    }
+                    MediaProjection mp = mpm.getMediaProjection(res, data);
+                    if (mp != null) {
+                        log("MediaProjection ok, scan in 300ms");
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 300);
+                        return;
+                    } else {
+                        err("getMediaProjection returned null");
+                        OverlayService.deliverScanError("projection null");
+                    }
+                } catch (Exception e) {
+                    err(e.getClass().getSimpleName() + ": " + e.getMessage());
+                    OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
+                }
+                ScanService.stop(this);
+                finish();
+            }, 400);
+            return;
         }
+        log("denied or wrong req (res=" + res + ")");
         finish();
     }
 
@@ -103,12 +123,14 @@ public class ScanPermActivity extends Activity {
                     public void onResult(ScreenScanner.ScanResult r) {
                         log("scan ok: " + r.status);
                         try { mp.stop(); } catch (Exception ignored) {}
+                        ScanService.stop(getApplicationContext());
                         OverlayService.deliverScanResult(r);
                         runOnUiThread(ScanPermActivity.this::finish);
                     }
                     public void onError(String msg) {
                         err("scan error: " + msg);
                         try { mp.stop(); } catch (Exception ignored) {}
+                        ScanService.stop(getApplicationContext());
                         OverlayService.deliverScanError(msg);
                         runOnUiThread(ScanPermActivity.this::finish);
                     }
@@ -116,6 +138,7 @@ public class ScanPermActivity extends Activity {
             } catch (Exception e) {
                 err(e.getClass().getSimpleName() + ": " + e.getMessage());
                 try { mp.stop(); } catch (Exception ignored) {}
+                ScanService.stop(getApplicationContext());
                 OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
                 runOnUiThread(ScanPermActivity.this::finish);
             }
