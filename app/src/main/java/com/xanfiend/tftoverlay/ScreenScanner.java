@@ -17,8 +17,11 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import android.util.Log;
 
 public class ScreenScanner {
+
+    private static final String TAG = "TFTScryer";
 
     public static class ScanResult {
         public int gold = -1;
@@ -44,11 +47,14 @@ public class ScreenScanner {
     public void scan(ScanCallback cb) {
         new Thread(() -> {
             try {
+                Log.d(TAG, "ScreenScanner.scan start");
                 Bitmap bmp = captureFrame();
+                Log.d(TAG, "Frame captured " + bmp.getWidth() + "x" + bmp.getHeight());
                 recognizeText(bmp, cb);
             } catch (Exception e) {
+                Log.e(TAG, "ScreenScanner.scan error: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
                 new android.os.Handler(android.os.Looper.getMainLooper())
-                        .post(() -> cb.onError(e.getMessage() != null ? e.getMessage() : "capture failed"));
+                        .post(() -> cb.onError(e.getClass().getSimpleName() + ": " + (e.getMessage() != null ? e.getMessage() : "capture failed")));
             }
         }).start();
     }
@@ -57,12 +63,15 @@ public class ScreenScanner {
         DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
         int w = dm.widthPixels;
         int h = dm.heightPixels;
+        Log.d(TAG, "captureFrame " + w + "x" + h + " dpi=" + dm.densityDpi);
 
         ImageReader reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2);
+        Log.d(TAG, "ImageReader created, calling createVirtualDisplay");
         VirtualDisplay vd = projection.createVirtualDisplay("scryer-scan",
                 w, h, dm.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader.getSurface(), null, null);
+        Log.d(TAG, "VirtualDisplay created, polling for frame");
 
         // Poll for the first frame (max 3 s)
         long deadline = System.currentTimeMillis() + 3000;
@@ -73,7 +82,12 @@ public class ScreenScanner {
         }
         vd.release();
 
-        if (img == null) { reader.close(); throw new Exception("no frame captured"); }
+        if (img == null) {
+            reader.close();
+            Log.e(TAG, "No frame captured within 3s");
+            throw new Exception("no frame captured");
+        }
+        Log.d(TAG, "Frame acquired after " + (3000 - (deadline - System.currentTimeMillis())) + "ms");
         Bitmap bmp = imageToBitmap(img, w, h);
         img.close();
         reader.close();
@@ -95,15 +109,20 @@ public class ScreenScanner {
     }
 
     private void recognizeText(Bitmap bmp, ScanCallback cb) {
+        Log.d(TAG, "recognizeText start");
         InputImage image = InputImage.fromBitmap(bmp, 0);
         TextRecognizer rec = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         rec.process(image)
                 .addOnSuccessListener(text -> {
+                    Log.d(TAG, "OCR success blocks=" + text.getTextBlocks().size());
                     ScanResult r = parse(text, bmp.getWidth(), bmp.getHeight());
+                    Log.d(TAG, "parse result: gold=" + r.gold + " level=" + r.level
+                            + " augs=" + r.augments.size() + " status=" + r.status);
                     bmp.recycle();
                     cb.onResult(r);
                 })
                 .addOnFailureListener(e -> {
+                    Log.e(TAG, "OCR failure: " + e.getMessage(), e);
                     bmp.recycle();
                     cb.onError("OCR: " + e.getMessage());
                 });
