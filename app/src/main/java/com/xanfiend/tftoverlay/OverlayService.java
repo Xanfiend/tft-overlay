@@ -29,6 +29,8 @@ public class OverlayService extends Service {
     private Vibrator vib;
     // bump this each release so the footer shows the current version
     private static final String APP_VERSION = "v1.1";
+    // item builder: index of selected components (1-9), -1 = none
+    private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
     private static final int[][] ODDS = {
@@ -102,6 +104,7 @@ public class OverlayService extends Service {
                         boolean longpress = System.currentTimeMillis()-down>450;
                         if(longpress) mode=0;
                         else mode = pool.isEmpty() ? 0 : 1;
+                        itemA=-1; itemB=-1;
                         showPanel();
                     }
                     return true;
@@ -164,19 +167,19 @@ public class OverlayService extends Service {
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==2?"\u2738 AUGMENTS":(mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED"));
+        title.setText(mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView close=new TextView(this); close.setText("  \u2715"); close.setTextColor(ASH); close.setTextSize(20); close.setPadding(18,0,4,0);
-        close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); } });
+        close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         head.addView(title); head.addView(close);
         root.addView(head);
 
-        // three-way tab row: grid / board / augments
+        // five-way tab row: grid / board / augments / economy / items
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        String[] tabNames={"\u25A6 grid","\u2261 board","\u2756 augs"};
-        for(int t=0;t<3;t++){
+        String[] tabNames={"\u25A6 grid","\u2261 board","\u2756 augs","\u00A7 econ","\u229E items"};
+        for(int t=0;t<5;t++){
             final int tm=t; boolean on=mode==t;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(13); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
@@ -193,8 +196,8 @@ public class OverlayService extends Service {
         div.setTextColor(EDGE); div.setTextSize(9); div.setGravity(Gravity.CENTER); div.setPadding(0,8,0,2);
         root.addView(div);
 
-        // level row (4-10) -- only relevant for grid/board, not augments
-        if(mode!=2){
+        // level row (4-10) -- only relevant for grid/board tabs
+        if(mode<=1){
         LinearLayout lvl=new LinearLayout(this); lvl.setPadding(0,12,0,12);
         TextView ll=new TextView(this); ll.setText("LVL"); ll.setTextColor(ASH); ll.setTextSize(10); ll.setGravity(Gravity.CENTER); ll.setPadding(0,0,8,0);
         ll.setLayoutParams(new LinearLayout.LayoutParams(-2,-1)); lvl.addView(ll);
@@ -212,7 +215,9 @@ public class OverlayService extends Service {
         root.addView(lvl);
         }
 
-        if(mode==2) buildAugments(root);
+        if(mode==4) buildItems(root);
+        else if(mode==3) buildEconomy(root);
+        else if(mode==2) buildAugments(root);
         else if(mode==1) buildSummary(root);
         else buildGrid(root);
 
@@ -290,7 +295,7 @@ public class OverlayService extends Service {
         // big done button
         Button done=new Button(this); done.setText("DONE"); done.setAllCaps(false);
         done.setBackground(box(BLOOD,6,BLOODL,2)); done.setTextColor(BONE); done.setTextSize(15); done.setTypeface(null, android.graphics.Typeface.BOLD);
-        done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); } });
+        done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.setMargins(0,14,0,0); done.setLayoutParams(dl);
         root.addView(done);
     }
@@ -421,12 +426,60 @@ public class OverlayService extends Service {
         return Math.round(pct/5f)*5; // nearest 5%
     }
 
-    // AUGMENTS TAB: comp priorities + key exclusions + timeless mechanics.
-    // Pure reference, zero input. Open when the armory pops, read, close.
+    // AUGMENTS TAB: per-augment tier list + comp priorities + exclusions + mechanics.
     private void buildAugments(LinearLayout root){
         // set label
         TextView lbl=new TextView(this); lbl.setText(AugmentData.SET_LABEL);
         lbl.setTextColor(DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
+
+        // ---- tier-grouped augment list ----
+        TextView ah=new TextView(this); ah.setText("◇ AUGMENTS");
+        ah.setTextColor(GOLD); ah.setTextSize(11); ah.setTypeface(null, android.graphics.Typeface.BOLD);
+        ah.setLetterSpacing(0.1f); ah.setPadding(2,4,0,6); root.addView(ah);
+
+        String[] tiers   = {"S",   "A",    "B",  "C"};
+        int[]    tierClr = {GOLD, GREEN,   ASH,  DIM};
+        for(int t=0;t<tiers.length;t++){
+            boolean headerAdded=false;
+            for(AugmentData.AugmentEntry aug : AugmentData.AUGMENTS){
+                if(!aug.tier.equals(tiers[t])) continue;
+                if(!headerAdded){
+                    TextView th=new TextView(this); th.setText(tiers[t]+"-Tier");
+                    th.setTextColor(tierClr[t]); th.setTextSize(10);
+                    th.setTypeface(null, android.graphics.Typeface.BOLD);
+                    th.setPadding(2,8,0,4); root.addView(th);
+                    headerAdded=true;
+                }
+                LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+                card.setBackground(box(CARD,6,EDGE,1)); card.setPadding(10,8,10,8);
+                LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,4); card.setLayoutParams(cl);
+
+                LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                // tier badge
+                TextView badge=new TextView(this); badge.setText(tiers[t]);
+                badge.setTextColor(0xFF000000); badge.setTextSize(10);
+                badge.setTypeface(null, android.graphics.Typeface.BOLD); badge.setGravity(android.view.Gravity.CENTER);
+                badge.setBackground(box(tierClr[t],4,0,0)); badge.setPadding(10,4,10,4);
+                LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-2,-2); bl.setMargins(0,0,8,0); badge.setLayoutParams(bl);
+                // name
+                TextView nm=new TextView(this); nm.setText(aug.name);
+                nm.setTextColor(BONE); nm.setTextSize(13); nm.setTypeface(null, android.graphics.Typeface.BOLD);
+                nm.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                row.addView(badge); row.addView(nm); card.addView(row);
+                // comps
+                if(!aug.comps.isEmpty()){
+                    TextView cv=new TextView(this); cv.setText("→ "+aug.comps);
+                    cv.setTextColor(ASH); cv.setTextSize(11); cv.setPadding(0,2,0,0); card.addView(cv);
+                }
+                root.addView(card);
+            }
+        }
+
+        // divider before existing reference sections
+        TextView adiv=new TextView(this);
+        adiv.setText("❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦");
+        adiv.setTextColor(EDGE); adiv.setTextSize(9); adiv.setGravity(android.view.Gravity.CENTER); adiv.setPadding(0,10,0,4);
+        root.addView(adiv);
 
         // comp priorities
         TextView h1=new TextView(this); h1.setText("\u25C7 COMP PRIORITIES");
@@ -589,6 +642,208 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams vrl=new LinearLayout.LayoutParams(-1,-2); vrl.setMargins(0,4,0,0); ver.setLayoutParams(vrl);
         ver.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ openLatest(); } });
         root.addView(ver);
+    }
+
+    // ---- ECONOMY TAB ----
+    private void buildEconomy(LinearLayout root){
+        int gold=pool.getGold(); int streak=pool.getStreak();
+        int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
+        int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
+
+        // gold row
+        TextView gh=new TextView(this); gh.setText("◇ GOLD");
+        gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null, android.graphics.Typeface.BOLD);
+        gh.setLetterSpacing(0.1f); gh.setPadding(2,4,0,8); root.addView(gh);
+
+        LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
+        gMinus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setGold(pool.getGold()-1); showPanel(); } });
+        TextView gVal=new TextView(this); gVal.setText(gold+"g");
+        gVal.setTextColor(GOLD); gVal.setTextSize(28); gVal.setTypeface(null, android.graphics.Typeface.BOLD);
+        gVal.setGravity(Gravity.CENTER); gVal.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        TextView gPlus=makeAdjBtn("+", 0xFF1A0C0E, BLOODL);
+        gPlus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setGold(pool.getGold()+1); showPanel(); } });
+        goldRow.addView(gMinus); goldRow.addView(gVal); goldRow.addView(gPlus);
+        root.addView(goldRow);
+
+        // interest info
+        LinearLayout iRow=new LinearLayout(this); iRow.setOrientation(LinearLayout.VERTICAL);
+        iRow.setBackground(box(CARD,6,EDGE,1)); iRow.setPadding(12,10,12,10);
+        LinearLayout.LayoutParams irl=new LinearLayout.LayoutParams(-1,-2); irl.setMargins(0,10,0,0); iRow.setLayoutParams(irl);
+        TextView iLbl=new TextView(this); iLbl.setText("INTEREST");
+        iLbl.setTextColor(ASH); iLbl.setTextSize(10); iLbl.setLetterSpacing(0.08f); iRow.addView(iLbl);
+        TextView iVal=new TextView(this); iVal.setText("+"+intr+"g per round");
+        iVal.setTextColor(BONE); iVal.setTextSize(17); iVal.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(iVal);
+        String bracketMsg = gold>=50 ? "max interest (50g+)" : "+"+toNext+"g to next bracket";
+        TextView iSub=new TextView(this); iSub.setText(bracketMsg);
+        iSub.setTextColor(gold>=50?GOLD:ASH); iSub.setTextSize(11); iRow.addView(iSub);
+        // interest ladder dots: 10 / 20 / 30 / 40 / 50
+        LinearLayout ladder=new LinearLayout(this); ladder.setPadding(0,8,0,0);
+        int[] brackets={10,20,30,40,50};
+        for(int b : brackets){
+            boolean reached=gold>=b; boolean current=(gold/10)*10==b||(b==50&&gold>=50);
+            TextView dot=new TextView(this); dot.setGravity(Gravity.CENTER);
+            dot.setText(b+"g"); dot.setTextSize(10);
+            dot.setTextColor(reached?GOLD:EDGE);
+            dot.setTypeface(null, current?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            dot.setBackground(box(reached?0xFF1A1400:CARD,4,reached?GOLD:EDGE,reached?2:1));
+            dot.setPadding(6,4,6,4);
+            LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(0,-2,1f); dl.setMargins(2,0,2,0); dot.setLayoutParams(dl);
+            ladder.addView(dot);
+        }
+        iRow.addView(ladder); root.addView(iRow);
+
+        // streak row
+        TextView sh=new TextView(this); sh.setText("◇ STREAK");
+        sh.setTextColor(GOLD); sh.setTextSize(11); sh.setTypeface(null, android.graphics.Typeface.BOLD);
+        sh.setLetterSpacing(0.1f); sh.setPadding(2,14,0,8); root.addView(sh);
+
+        LinearLayout streakRow=new LinearLayout(this); streakRow.setGravity(Gravity.CENTER_VERTICAL);
+        // L button
+        TextView sL=makeAdjBtn("L", BLOOD, BONE);
+        sL.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int s=pool.getStreak(); pool.setStreak(s>0?-1:s-1); showPanel();
+        }});
+        // streak display
+        String sText = streak==0 ? "—" : Math.abs(streak)+(streak>0?"W":"L");
+        int sColor = streak>0 ? GREEN : (streak<0 ? BLOODL : ASH);
+        TextView sDisp=new TextView(this); sDisp.setText(sText);
+        sDisp.setTextColor(sColor); sDisp.setTextSize(24); sDisp.setTypeface(null, android.graphics.Typeface.BOLD);
+        sDisp.setGravity(Gravity.CENTER); sDisp.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        // W button
+        TextView sW=makeAdjBtn("W", 0xFF0D2210, GREEN);
+        sW.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int s=pool.getStreak(); pool.setStreak(s<0?1:s+1); showPanel();
+        }});
+        streakRow.addView(sL); streakRow.addView(sDisp); streakRow.addView(sW);
+        root.addView(streakRow);
+        if(sBonus>0){
+            TextView sBonusTv=new TextView(this); sBonusTv.setText("+"+sBonus+"g streak bonus");
+            sBonusTv.setTextColor(ASH); sBonusTv.setTextSize(11); sBonusTv.setPadding(2,4,2,0); root.addView(sBonusTv);
+        }
+
+        // expected income card
+        LinearLayout incCard=new LinearLayout(this); incCard.setOrientation(LinearLayout.VERTICAL);
+        incCard.setBackground(box(CARD,6,BLOODL,2)); incCard.setPadding(14,12,14,12);
+        LinearLayout.LayoutParams icl=new LinearLayout.LayoutParams(-1,-2); icl.setMargins(0,14,0,0); incCard.setLayoutParams(icl);
+        TextView icH=new TextView(this); icH.setText("EXPECTED NEXT ROUND");
+        icH.setTextColor(ASH); icH.setTextSize(10); icH.setLetterSpacing(0.08f); incCard.addView(icH);
+        TextView icV=new TextView(this); icV.setText(income+"g");
+        icV.setTextColor(GOLD); icV.setTextSize(28); icV.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(icV);
+        TextView icBreak=new TextView(this);
+        icBreak.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
+        icBreak.setTextColor(ASH); icBreak.setTextSize(11); incCard.addView(icBreak);
+        root.addView(incCard);
+
+        // reset econ button (resets only gold+streak, not pool)
+        Button resetEcon=new Button(this); resetEcon.setText("RESET ECON"); resetEcon.setAllCaps(false);
+        resetEcon.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); resetEcon.setTextColor(ASH); resetEcon.setTextSize(12);
+        resetEcon.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            pool.setGold(0); pool.setStreak(0); showPanel();
+        }});
+        LinearLayout.LayoutParams rel=new LinearLayout.LayoutParams(-1,-2); rel.setMargins(0,16,0,0); resetEcon.setLayoutParams(rel);
+        root.addView(resetEcon);
+    }
+
+    private TextView makeAdjBtn(String label, int bg, int fg){
+        TextView tv=new TextView(this); tv.setText(label);
+        tv.setTextColor(fg); tv.setTextSize(20); tv.setGravity(Gravity.CENTER);
+        tv.setBackground(box(bg,6,BLOOD,2)); tv.setPadding(0,18,0,18);
+        tv.setLayoutParams(new LinearLayout.LayoutParams(120,-2));
+        return tv;
+    }
+
+    // ---- ITEMS TAB ----
+    private void buildItems(LinearLayout root){
+        // instruction hint
+        TextView hint=new TextView(this);
+        hint.setText("Tap two components to see what they make");
+        hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,0,2,8); root.addView(hint);
+
+        // 9 component chips in two rows (5 + 4)
+        int[][] rows={{1,2,3,4,5},{6,7,8,9}};
+        for(int[] row : rows){
+            LinearLayout r=new LinearLayout(this); r.setPadding(0,0,0,4);
+            for(int i : row){
+                final int ci=i; boolean selA=(itemA==ci); boolean selB=(itemB==ci);
+                boolean sel=selA||selB;
+                TextView chip=new TextView(this); chip.setText(ItemData.COMPONENT_SHORT[ci]);
+                chip.setGravity(Gravity.CENTER); chip.setTextSize(11);
+                chip.setTextColor(sel?0xFF000000:BONE);
+                chip.setTypeface(null, sel?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+                int chipBg = selA?GOLD : (selB?GREEN : CARD);
+                int chipBorder = sel?0xFFFFFFFF:EDGE;
+                chip.setBackground(box(chipBg,6,chipBorder,sel?2:1));
+                chip.setPadding(4,10,4,10);
+                LinearLayout.LayoutParams chl=new LinearLayout.LayoutParams(0,-2,1f); chl.setMargins(3,0,3,0); chip.setLayoutParams(chl);
+                chip.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    if(itemA==-1){ itemA=ci; }
+                    else if(itemB==-1){ itemB=ci; }
+                    else { itemA=ci; itemB=-1; }
+                    showPanel();
+                }});
+                r.addView(chip);
+            }
+            // fill last row for even spacing
+            if(row.length<5){ for(int k=row.length;k<5;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); r.addView(sp); } }
+            root.addView(r);
+        }
+
+        // result card
+        if(itemA!=-1 && itemB!=-1){
+            String result = ItemData.COMBOS[itemA][itemB];
+            if(result==null) result="Unknown — verify item table";
+            LinearLayout rCard=new LinearLayout(this); rCard.setOrientation(LinearLayout.VERTICAL);
+            rCard.setBackground(box(CARD,6,GOLD,2)); rCard.setPadding(14,12,14,12);
+            LinearLayout.LayoutParams rcl=new LinearLayout.LayoutParams(-1,-2); rcl.setMargins(0,10,0,0); rCard.setLayoutParams(rcl);
+            TextView rTop=new TextView(this);
+            rTop.setText(ItemData.COMPONENT_SHORT[itemA]+" + "+ItemData.COMPONENT_SHORT[itemB]);
+            rTop.setTextColor(ASH); rTop.setTextSize(11); rCard.addView(rTop);
+            TextView rName=new TextView(this); rName.setText(result);
+            rName.setTextColor(GOLD); rName.setTextSize(18); rName.setTypeface(null, android.graphics.Typeface.BOLD); rCard.addView(rName);
+            root.addView(rCard);
+        } else if(itemA!=-1){
+            // first component selected, waiting for second
+            TextView waiting=new TextView(this);
+            waiting.setText("→ "+ItemData.COMPONENTS[itemA]+" — tap a second component");
+            waiting.setTextColor(GOLD); waiting.setTextSize(12); waiting.setPadding(2,10,2,0); root.addView(waiting);
+        }
+
+        // clear button
+        if(itemA!=-1){
+            Button clear=new Button(this); clear.setText("Clear"); clear.setAllCaps(false);
+            clear.setBackground(box(CARD,6,EDGE,1)); clear.setTextColor(ASH); clear.setTextSize(12);
+            clear.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; showPanel(); } });
+            LinearLayout.LayoutParams brl=new LinearLayout.LayoutParams(-2,-2); brl.setMargins(0,6,0,0); clear.setLayoutParams(brl);
+            root.addView(clear);
+        }
+
+        // traits section
+        TextView tdiv=new TextView(this);
+        tdiv.setText("❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦");
+        tdiv.setTextColor(EDGE); tdiv.setTextSize(9); tdiv.setGravity(Gravity.CENTER); tdiv.setPadding(0,14,0,4);
+        root.addView(tdiv);
+
+        TextView trH=new TextView(this); trH.setText("◇ TRAITS");
+        trH.setTextColor(GOLD); trH.setTextSize(11); trH.setTypeface(null, android.graphics.Typeface.BOLD);
+        trH.setLetterSpacing(0.1f); trH.setPadding(2,4,0,6); root.addView(trH);
+
+        for(String[] tr : TraitData.TRAITS){
+            LinearLayout tRow=new LinearLayout(this); tRow.setGravity(Gravity.CENTER_VERTICAL);
+            tRow.setBackground(box(CARD,6,EDGE,1)); tRow.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams trl=new LinearLayout.LayoutParams(-1,-2); trl.setMargins(0,0,0,4); tRow.setLayoutParams(trl);
+            TextView tName=new TextView(this); tName.setText(tr[0]);
+            tName.setTextColor(BONE); tName.setTextSize(12); tName.setTypeface(null, android.graphics.Typeface.BOLD);
+            tName.setLayoutParams(new LinearLayout.LayoutParams(0,-2,2.2f));
+            TextView tBps=new TextView(this); tBps.setText(tr[1]);
+            tBps.setTextColor(GOLD); tBps.setTextSize(11);
+            tBps.setLayoutParams(new LinearLayout.LayoutParams(0,-2,2f));
+            TextView tEff=new TextView(this); tEff.setText(tr[2]);
+            tEff.setTextColor(ASH); tEff.setTextSize(10);
+            tEff.setLayoutParams(new LinearLayout.LayoutParams(0,-2,3f));
+            tRow.addView(tName); tRow.addView(tBps); tRow.addView(tEff);
+            root.addView(tRow);
+        }
     }
 
     // opens the GitHub releases page in the user's browser. Uses an Intent,
