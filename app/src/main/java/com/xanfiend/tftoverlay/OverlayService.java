@@ -1194,7 +1194,7 @@ public class OverlayService extends Service {
         }
     }
 
-    @android.annotation.RequiresApi(api = 31)
+    @SuppressWarnings("NewApi")
     private void triggerScanAccessibility(){
         addScanLog("triggerScan: accessibility path (no app switch)");
         TFTAccessibilityService svc = TFTAccessibilityService.instance;
