@@ -41,11 +41,11 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 | **❖ Augments** | S/A/B/C rating for every augment and the comps it works best with. Comp priorities, conflicts, armory rules, and backup options listed below. |
 | **§ Economy** | Track your gold. Shows interest earned per round, the interest brackets (10/20/30/40/50g), win and loss streaks, and your expected income next round. Hold `+` or `-` to change gold quickly. |
 | **⊞ Items** | Tap two components to see what item they make. Full trait breakpoints listed below. |
-| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to read your screen and fill in your gold, level, and augments automatically. |
+| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to auto-fill gold, level, and augments. The overlay steps aside automatically after you grant permission. |
 
 ## ✦ Usage
 
-- **Tap the sigil** to open the grid. **Long-press** to open the board.
+- **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
@@ -98,6 +98,13 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.3 - 2026-05-31
+- Scan Now fixed: the overlay now moves aside automatically after you grant permission so TFT is on screen when the capture runs. No need to manually switch apps.
+- Level and gold detection zones corrected for TFT Mobile layout (level is top-left, gold is bottom-right). Level detection now covers levels 2 and 3 as well.
+- Portrait mode support added to the scan zones.
+- Quick scan: hold the floating sigil for 1.5 seconds to trigger a scan without opening any tab.
+- Scan shortcut added to the Economy tab header so you can fill gold without going to Settings.
 
 ### v1.2 - 2026-05-31
 - Screen scan fixed: scan now runs entirely inside the permission Activity, removing the foreground service dependency that crashed the overlay on Xiaomi/MIUI devices. Tap Scan Now, grant permission, the scan runs immediately in the background, and the Settings panel reopens with the result.
