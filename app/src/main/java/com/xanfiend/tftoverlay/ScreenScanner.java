@@ -16,7 +16,9 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ScreenScanner {
 
@@ -27,6 +29,10 @@ public class ScreenScanner {
         public int gold = -1;
         public int level = -1;
         public List<String> augments = new ArrayList<>();
+        // champions found in the shop bar (OCR-readable text during shop phase)
+        public List<String> shopChampions = new ArrayList<>();
+        // star levels found near champion positions (best-effort, not always reliable)
+        public Map<String, Integer> starLevels = new HashMap<>();
         public String status = "";
     }
 
@@ -57,6 +63,13 @@ public class ScreenScanner {
                         .post(() -> cb.onError(e.getClass().getSimpleName() + ": " + (e.getMessage() != null ? e.getMessage() : "capture failed")));
             }
         }).start();
+    }
+
+    // Entry point for the accessibility screenshot path — skips captureFrame().
+    // Must be called from the main thread (ML Kit listener fires on main thread).
+    void scanBitmap(Bitmap bmp, ScanCallback cb) {
+        log("scanBitmap " + bmp.getWidth() + "x" + bmp.getHeight());
+        recognizeText(bmp, cb);
     }
 
     private Bitmap captureFrame() throws Exception {
@@ -121,7 +134,10 @@ public class ScreenScanner {
                     log("OCR blocks=" + text.getTextBlocks().size());
                     ScanResult r = parse(text, bmp.getWidth(), bmp.getHeight());
                     log("parse: gold=" + r.gold + " lv=" + r.level
-                            + " augs=" + r.augments.size() + " -> " + r.status);
+                            + " augs=" + r.augments.size()
+                            + " shop=" + r.shopChampions.size()
+                            + " stars=" + r.starLevels.size()
+                            + " -> " + r.status);
                     bmp.recycle();
                     cb.onResult(r);
                 })
@@ -134,22 +150,29 @@ public class ScreenScanner {
 
     private ScanResult parse(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
-        // TFT Mobile landscape layout:
-        //   gold  = bottom-right corner  (cy > 75% of height, cx > 50% of width)
-        //   level = top-left corner      (cy < 25% of height, cx < 50% of width)
-        int bottomStart = bmpH * 3 / 4;
-        int topEnd      = bmpH / 4;
+        // TFT Mobile layout — level is always top-left, gold is always bottom-right.
+        // Portrait (h>w): HUD elements are in a smaller slice at the screen edges.
+        boolean portrait = bmpH > bmpW;
+        int bottomStart = portrait ? bmpH * 7 / 8 : bmpH * 3 / 4;
+        int topEnd      = portrait ? bmpH / 8     : bmpH / 4;
         int leftHalf    = bmpW / 2;
+        // Shop bar sits just above the gold row in landscape (~65-85% height).
+        // In portrait the shop is compressed toward the bottom edge.
+        int shopTop = portrait ? bmpH * 70 / 100 : bmpH * 65 / 100;
+        int shopBot = portrait ? bmpH * 90 / 100 : bmpH * 85 / 100;
+        log("zones: portrait=" + portrait
+                + " topEnd=" + topEnd + " bottomStart=" + bottomStart
+                + " shopTop=" + shopTop + " shopBot=" + shopBot);
         int goldBoxH = 0;
 
-        // Log every block so the debug panel shows exactly what OCR found
+        List<String> allChamps = buildChampList();
+
+        // Log every block for debugging
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             String raw = block.getText().trim().replace("\n", "|");
             if (box != null && !raw.isEmpty()) {
-                log("blk \"" + raw + "\" x=" + box.centerX() + " y=" + box.centerY()
-                        + " (goldZone: cy>" + bottomStart + " cx>" + leftHalf
-                        + " | lvZone: cy<" + topEnd + " cx<" + leftHalf + ")");
+                log("blk \"" + raw + "\" x=" + box.centerX() + " y=" + box.centerY());
             }
         }
 
@@ -169,16 +192,53 @@ public class ScreenScanner {
                 }
             }
 
-            // level: standalone 2-10 in top-left corner (TFT Mobile shows level there)
+            // level: standalone 2-10 in top-left corner
             if (raw.matches("[2-9]|10") && cy < topEnd && cx < leftHalf && r.level == -1) {
                 r.level = Integer.parseInt(raw);
             }
 
-            // augment name matching against AugmentData
+            // augments: full-screen match
             for (AugmentData.AugmentEntry aug : AugmentData.AUGMENTS) {
                 if (!r.augments.contains(aug.name) && fuzzyMatch(raw, aug.name)) {
                     r.augments.add(aug.name);
                     break;
+                }
+            }
+
+            // shop champions: text in the shop bar zone
+            if (cy >= shopTop && cy <= shopBot) {
+                for (String name : allChamps) {
+                    if (!r.shopChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+                        r.shopChampions.add(name);
+                        log("shop champ: " + name + " from \"" + raw + "\"");
+                        break;
+                    }
+                }
+            }
+
+            // stars: ★ or ⭐ anywhere on screen (best-effort, logged for exploration)
+            int stars = countStars(raw);
+            if (stars > 0) {
+                log("stars x" + stars + " at cx=" + cx + " cy=" + cy + " from \"" + raw + "\"");
+                // Associate with a nearby shop champion if within 400px horizontally
+                String nearest = null;
+                int nearestDx = Integer.MAX_VALUE;
+                for (Text.TextBlock b2 : text.getTextBlocks()) {
+                    android.graphics.Rect b2box = b2.getBoundingBox();
+                    if (b2box == null) continue;
+                    String b2raw = b2.getText().trim();
+                    int b2cy = b2box.centerY();
+                    if (b2cy < shopTop || b2cy > shopBot) continue;
+                    for (String name : r.shopChampions) {
+                        if (fuzzyMatchChamp(b2raw, name)) {
+                            int dx = Math.abs(b2box.centerX() - cx);
+                            if (dx < 400 && dx < nearestDx) { nearest = name; nearestDx = dx; }
+                        }
+                    }
+                }
+                if (nearest != null && !r.starLevels.containsKey(nearest)) {
+                    r.starLevels.put(nearest, stars);
+                    log("star level: " + nearest + " = " + stars + "★");
                 }
             }
         }
@@ -187,12 +247,45 @@ public class ScreenScanner {
         if (r.gold >= 0) sb.append(r.gold).append("g");
         if (r.level >= 0) { if (sb.length() > 0) sb.append(" · "); sb.append("Lv").append(r.level); }
         if (!r.augments.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.augments.size()).append(r.augments.size() == 1 ? " aug" : " augs"); }
+        if (!r.shopChampions.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.shopChampions.size()).append(r.shopChampions.size() == 1 ? " shop champ" : " shop champs"); }
         r.status = sb.length() > 0 ? sb.toString() : "nothing detected";
         return r;
     }
 
+    // Flattens SetData.CHAMPS into a single list for shop matching.
+    private List<String> buildChampList() {
+        List<String> list = new ArrayList<>();
+        for (String[] tier : SetData.CHAMPS) {
+            for (String name : tier) list.add(name);
+        }
+        return list;
+    }
+
+    // Count ★ / ⭐ characters in a string.
+    private int countStars(String s) {
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '★' || c == '⭐') n++;
+        }
+        return n;
+    }
+
+    // Champion names in SetData are CamelCase with no spaces (e.g. "TwistedFate",
+    // "MissFortune"). OCR reads the game UI as "Twisted Fate" / "Miss Fortune".
+    // This method normalises both strings before comparing.
+    private boolean fuzzyMatchChamp(String ocr, String target) {
+        // Strip all non-alpha and compare lowercase
+        String ocrNorm = ocr.toLowerCase().replaceAll("[^a-z]", "");
+        String tarNorm = target.toLowerCase().replaceAll("[^a-z]", "");
+        if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm) || tarNorm.contains(ocrNorm)) return true;
+        // Split CamelCase target into words and use the existing fuzzyMatch
+        String tarWords = target.replaceAll("([A-Z])", " $1").trim();
+        return fuzzyMatch(ocr, tarWords);
+    }
+
     // Returns true if the OCR text is a plausible match for the augment name.
-    // Tries direct containment first; falls back to word-overlap at ≥60%.
+    // Tries direct containment first; falls back to word-overlap at >= 60%.
     private boolean fuzzyMatch(String ocr, String target) {
         String ocrL = ocr.toLowerCase();
         String tarL = target.toLowerCase();
