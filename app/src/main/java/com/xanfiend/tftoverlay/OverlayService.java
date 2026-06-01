@@ -1,13 +1,16 @@
 package com.xanfiend.tftoverlay;
 
+import android.accessibilityservice.AccessibilityService;
 import android.app.Service;
 import android.content.Intent;
 import android.net.Uri;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -29,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.2";
+    private static final String APP_VERSION = "v1.3";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -143,12 +146,14 @@ public class OverlayService extends Service {
                     }
                     showCloseTarget(false);
                     if(!moved){
-                        boolean longpress = System.currentTimeMillis()-down>450;
-                        if(longpress) mode=0;
-                        else if(pool.getStartTab()==1) mode=0;
-                        else mode = pool.isEmpty() ? 0 : 1;
-                        itemA=-1; itemB=-1;
-                        showPanel();
+                        long held=System.currentTimeMillis()-down;
+                        if(held>1500){ triggerScan(); }
+                        else {
+                            if(held>450) mode=0;
+                            else if(pool.getStartTab()==1) mode=0;
+                            else mode=pool.isEmpty()?0:1;
+                            itemA=-1; itemB=-1; showPanel();
+                        }
                     }
                     return true;
                 }
@@ -717,10 +722,21 @@ public class OverlayService extends Service {
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
         int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
 
-        // gold row
+        // gold header row with inline scan shortcut
+        LinearLayout econHdrRow=new LinearLayout(this); econHdrRow.setOrientation(LinearLayout.HORIZONTAL);
+        econHdrRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams ehrp=new LinearLayout.LayoutParams(-1,-2); ehrp.setMargins(0,4,0,8); econHdrRow.setLayoutParams(ehrp);
         TextView gh=new TextView(this); gh.setText("◇ GOLD");
-        gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null, android.graphics.Typeface.BOLD);
-        gh.setLetterSpacing(0.1f); gh.setPadding(2,4,0,8); root.addView(gh);
+        gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null,android.graphics.Typeface.BOLD);
+        gh.setLetterSpacing(0.1f); gh.setPadding(2,0,0,0);
+        gh.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        econHdrRow.addView(gh);
+        TextView econScanBtn=new TextView(this); econScanBtn.setText("scan");
+        econScanBtn.setTextColor(ASH); econScanBtn.setTextSize(10);
+        econScanBtn.setPadding(12,4,4,4);
+        econScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
+        econHdrRow.addView(econScanBtn);
+        root.addView(econHdrRow);
 
         LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
@@ -976,21 +992,37 @@ public class OverlayService extends Service {
         scanStatusTv.setTextColor(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH));
         scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
 
+        // accessibility scan status
+        boolean accEnabled = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
+        TextView accStatus=new TextView(this);
+        accStatus.setText(accEnabled
+            ? "Silent scan: enabled — no app switch"
+            : "Silent scan: disabled");
+        accStatus.setTextColor(accEnabled ? GREEN : ASH);
+        accStatus.setTextSize(11); accStatus.setPadding(2,0,0,4); root.addView(accStatus);
+        if(!accEnabled){
+            TextView accBtn=new TextView(this); accBtn.setText("Enable silent scan (Accessibility Settings)");
+            accBtn.setTextColor(BONE); accBtn.setTextSize(12); accBtn.setGravity(Gravity.CENTER);
+            accBtn.setPadding(0,10,0,10); accBtn.setBackground(box(CARD,6,EDGE,1));
+            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,8); accBtn.setLayoutParams(abl);
+            accBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                try{
+                    Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
+                }catch(Exception e){}
+            }});
+            root.addView(accBtn);
+        }
+
         TextView scanBtn=new TextView(this); scanBtn.setText("📷 Scan now");
         scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
         scanBtn.setPadding(0,12,0,12); scanBtn.setBackground(box(BLOOD,6,BLOODL,2));
         LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(-1,-2); sbl.setMargins(0,0,0,4); scanBtn.setLayoutParams(sbl);
-        scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            closePanel(); // hide overlay so TFT is visible for capture
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-                Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
-                si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
-            },150);
-        }});
+        scanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
         root.addView(scanBtn);
 
         TextView scanHint=new TextView(this);
-        scanHint.setText("Switch to TFT first, then tap Scan. Grant the permission and go back to TFT — the capture runs 2 seconds after you grant it.");
+        scanHint.setText("Tap Scan while TFT is running. Grant the permission — the overlay steps aside and scans the game automatically.");
         scanHint.setTextColor(DIM); scanHint.setTextSize(10); scanHint.setPadding(2,4,0,0); root.addView(scanHint);
 
         // ◇ DEBUG LOG
@@ -1150,9 +1182,74 @@ public class OverlayService extends Service {
 
     // ---- screen scanning ----
 
+    private void triggerScan(){
+        if(Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null){
+            triggerScanAccessibility();
+        } else {
+            closePanel();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
+                si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+            },150);
+        }
+    }
+
+    @android.annotation.RequiresApi(api = 31)
+    private void triggerScanAccessibility(){
+        addScanLog("triggerScan: accessibility path (no app switch)");
+        TFTAccessibilityService svc = TFTAccessibilityService.instance;
+        if(svc == null){ // race: service disconnected between check and call
+            closePanel();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
+                si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+            },150);
+            return;
+        }
+        svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+            new AccessibilityService.TakeScreenshotCallback(){
+                @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                    addScanLog("screenshot ok, running OCR");
+                    try {
+                        android.hardware.HardwareBuffer hb = result.getHardwareBuffer();
+                        Bitmap hw = Bitmap.wrapHardwareBuffer(hb, null);
+                        hb.close();
+                        Bitmap bmp = hw.copy(Bitmap.Config.ARGB_8888, false);
+                        hw.recycle();
+                        new ScreenScanner(OverlayService.this, null).scanBitmap(bmp,
+                            new ScreenScanner.ScanCallback(){
+                                public void onResult(ScreenScanner.ScanResult r){ applyScanResult(r); }
+                                public void onError(String msg){
+                                    lastScanStatus="✗ "+msg;
+                                    android.widget.Toast.makeText(OverlayService.this,"✗ "+msg,android.widget.Toast.LENGTH_SHORT).show();
+                                    mode=5; showPanel();
+                                }
+                            });
+                    } catch(Exception e){
+                        addScanLog("ERR accessibility scan: "+e.getMessage());
+                        lastScanStatus="✗ "+e.getMessage();
+                        mode=5; showPanel();
+                    }
+                }
+                @Override public void onFailure(int errorCode){
+                    addScanLog("ERR screenshot failed: "+errorCode);
+                    lastScanStatus="✗ screenshot failed ("+errorCode+")";
+                    android.widget.Toast.makeText(OverlayService.this,"✗ screenshot failed",android.widget.Toast.LENGTH_SHORT).show();
+                    mode=5; showPanel();
+                }
+            });
+    }
+
     private void applyScanResult(ScreenScanner.ScanResult r){
         if(r.gold>=0) pool.setGold(r.gold);
         if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
+        // Report shop champions in status but don't auto-mark them —
+        // seeing a unit in the shop doesn't mean it was bought from the pool.
+        // The debug log shows which names were detected so the user can verify.
+        if(!r.shopChampions.isEmpty()){
+            addScanLog("shop champs found: "+r.shopChampions.toString());
+            if(!r.starLevels.isEmpty()) addScanLog("star levels: "+r.starLevels.toString());
+        }
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         mode=5; showPanel();
