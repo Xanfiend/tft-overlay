@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.3";
+    private static final String APP_VERSION = "v1.4";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -68,6 +68,17 @@ public class OverlayService extends Service {
     private String lastScanStatus = "";
     private TextView scanStatusTv;
     private static OverlayService _instance;
+
+    // floating button label — promoted for board scan countdown updates
+    private TextView btnLabel;
+
+    // board scan mode: accessibility screenshot polls popup zone while user taps units
+    private boolean boardScanMode = false;
+    private long boardScanDeadline = 0;
+    private java.util.List<String> boardScanResults = new java.util.ArrayList<>();
+    private final android.os.Handler boardHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable boardPollRunnable;
+    private Runnable boardCountdownRunnable;
 
     // in-app debug log — last 30 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
@@ -119,9 +130,9 @@ public class OverlayService extends Service {
         c.setBackground(box(0xF20B0709,40,BLOOD,3)); c.setPadding(28,18,28,18);
         // all-seeing sigil over the wordmark
         TextView g=new TextView(this); g.setText("\u29BF"); g.setTextColor(BLOODL); g.setTextSize(22); g.setGravity(Gravity.CENTER);
-        TextView lb=new TextView(this); lb.setText("SCRY"); lb.setTextColor(GOLD); lb.setTextSize(8);
-        lb.setGravity(Gravity.CENTER); lb.setLetterSpacing(0.25f); lb.setPadding(0,2,0,0);
-        c.addView(g); c.addView(lb); button=c;
+        btnLabel=new TextView(this); btnLabel.setText("SCRY"); btnLabel.setTextColor(GOLD); btnLabel.setTextSize(8);
+        btnLabel.setGravity(Gravity.CENTER); btnLabel.setLetterSpacing(0.25f); btnLabel.setPadding(0,2,0,0);
+        c.addView(g); c.addView(btnLabel); button=c;
         button.setAlpha(pool.getAlpha());
 
         btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
@@ -146,6 +157,7 @@ public class OverlayService extends Service {
                     }
                     showCloseTarget(false);
                     if(!moved){
+                        if(boardScanMode){ stopBoardScanMode(); return true; }
                         long held=System.currentTimeMillis()-down;
                         if(held>1500){ triggerScan(); }
                         else {
@@ -321,6 +333,52 @@ public class OverlayService extends Service {
         chipViews=new TextView[totalChamps];
         chipNames=new String[totalChamps];
         int idx=0;
+
+        // board scan button \u2014 only active when accessibility service is available
+        boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
+        if(boardScanMode){
+            long rem=boardScanDeadline-System.currentTimeMillis();
+            int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
+            TextView bsActive=new TextView(this);
+            bsActive.setText("\u25C9 Board scan: "+remSec+"s remaining \u00b7 tap to stop");
+            bsActive.setTextColor(GOLD); bsActive.setTextSize(12); bsActive.setGravity(Gravity.CENTER);
+            bsActive.setBackground(box(BLOOD,6,BLOODL,2)); bsActive.setPadding(0,12,0,12);
+            LinearLayout.LayoutParams bsal=new LinearLayout.LayoutParams(-1,-2); bsal.setMargins(0,0,0,6); bsActive.setLayoutParams(bsal);
+            bsActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopBoardScanMode(); }});
+            root.addView(bsActive);
+        } else {
+            TextView bsBtn=new TextView(this); bsBtn.setText("\u25C9 Board Scan");
+            bsBtn.setTextColor(accAvail?BONE:ASH); bsBtn.setTextSize(12); bsBtn.setGravity(Gravity.CENTER);
+            bsBtn.setPadding(0,10,0,10);
+            bsBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            LinearLayout.LayoutParams bsl=new LinearLayout.LayoutParams(-1,-2); bsl.setMargins(0,0,0,4); bsBtn.setLayoutParams(bsl);
+            if(accAvail){
+                bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startBoardScanMode(); }});
+            } else {
+                bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+                }});
+            }
+            root.addView(bsBtn);
+            TextView bsHint=new TextView(this);
+            bsHint.setText(accAvail?"Tap Board Scan, then tap each unit on board \u2014 auto-reads the champion name":"Enable Accessibility service for board scan (Settings tab)");
+            bsHint.setTextColor(DIM); bsHint.setTextSize(10); bsHint.setPadding(2,2,2,6); root.addView(bsHint);
+        }
+
+        // board scan results (shown when mode was used this session)
+        if(!boardScanResults.isEmpty()){
+            TextView bsrHdr=new TextView(this); bsrHdr.setText("\u25c7 BOARD SCAN");
+            bsrHdr.setTextColor(GOLD); bsrHdr.setTextSize(11); bsrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+            bsrHdr.setLetterSpacing(0.1f); bsrHdr.setPadding(2,4,0,4); root.addView(bsrHdr);
+            StringBuilder bsrSb=new StringBuilder();
+            for(String s:boardScanResults){ if(bsrSb.length()>0) bsrSb.append(" \u00b7 "); bsrSb.append(s); }
+            TextView bsrTv=new TextView(this); bsrTv.setText(bsrSb.toString());
+            bsrTv.setTextColor(BONE); bsrTv.setTextSize(12); bsrTv.setPadding(2,0,2,4); root.addView(bsrTv);
+            TextView clearBsr=new TextView(this); clearBsr.setText("clear board results");
+            clearBsr.setTextColor(ASH); clearBsr.setTextSize(10); clearBsr.setPadding(2,0,2,8);
+            clearBsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ boardScanResults.clear(); showPanel(); }});
+            root.addView(clearBsr);
+        }
 
         TextView tipv=new TextView(this);
         tipv.setText("Tap a name = +1 copy \u00b7 tap the count = \u22121 \u00b7 tap \u25C9 = +1 player");
@@ -1189,6 +1247,7 @@ public class OverlayService extends Service {
 
     private void buildChangelog(LinearLayout root){
         String[][] cl={
+            {"v1.4  ·  2026-06-01","Board scan mode: tap Board Scan in the grid tab, then tap each unit on the board. App auto-reads the champion name from the stat popup and marks it in the pool. 25s scan window, haptic feedback per unit detected. Bench detection: full scan now reads champion names from the bench zone below the board."},
             {"v1.3  ·  2026-06-01","Silent scan via Accessibility Service (Android 12+): no app switch, no permission dialog after setup. Shop champion detection: OCR reads champion names from the shop bar. Portrait mode OCR zones. Sigil hold (1.5s) triggers scan. Economy tab scan shortcut. Changelog tab."},
             {"v1.2  ·  2026-05-31","Screen scan: runs inside the permission Activity (no FGS required, works on Xiaomi/MIUI). One tap — grant permission, scan happens immediately. Transparency slider 20-100%. No-flash panel updates."},
             {"v1.1  ·  2026-05-31","Settings tab (transparency, haptic, start-tab, position reset, screen scan). Economy tracker (interest bracket, streak, expected income, hold-to-repeat gold). Item builder. Augment tiers S/A/B/C. Dark launch screen."},
@@ -1273,9 +1332,98 @@ public class OverlayService extends Service {
             addScanLog("shop champs found: "+r.shopChampions.toString());
             if(!r.starLevels.isEmpty()) addScanLog("star levels: "+r.starLevels.toString());
         }
+        if(!r.benchChampions.isEmpty()){
+            addScanLog("bench champs: "+r.benchChampions.toString());
+        }
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         mode=5; showPanel();
+    }
+
+    // ---- board scan mode ----
+
+    private void startBoardScanMode(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boardScanMode=true;
+        boardScanDeadline=System.currentTimeMillis()+25000;
+        boardScanResults=new java.util.ArrayList<>();
+        closePanel();
+        addScanLog("board scan: started 25s window");
+
+        boardCountdownRunnable=new Runnable(){ public void run(){
+            if(!boardScanMode) return;
+            long rem=boardScanDeadline-System.currentTimeMillis();
+            if(rem<=0){ stopBoardScanMode(); return; }
+            if(btnLabel!=null) btnLabel.setText(((int)((rem+999)/1000))+"s");
+            boardHandler.postDelayed(this,500);
+        }};
+        boardHandler.post(boardCountdownRunnable);
+
+        boardPollRunnable=new Runnable(){ public void run(){
+            if(!boardScanMode) return;
+            if(System.currentTimeMillis()>=boardScanDeadline){ stopBoardScanMode(); return; }
+            triggerPopupScan();
+            boardHandler.postDelayed(this,2500);
+        }};
+        boardHandler.postDelayed(boardPollRunnable,600);
+    }
+
+    private void stopBoardScanMode(){
+        boardScanMode=false;
+        if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
+        if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        addScanLog("board scan: stopped, found "+boardScanResults.size()+" champs");
+        mode=0; showPanel();
+    }
+
+    @SuppressWarnings("NewApi")
+    private void triggerPopupScan(){
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null){ addScanLog("board scan: svc null"); return; }
+        addScanLog("board scan: popup screenshot");
+        try{
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            hb.close();
+                            Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hw.recycle();
+                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){ applyPopupScanResult(r); }
+                                    public void onError(String msg){ addScanLog("board scan OCR err: "+msg); }
+                                }, ScreenScanner.MODE_POPUP);
+                        }catch(Exception e){ addScanLog("ERR board scan: "+e.getMessage()); }
+                    }
+                    @Override public void onFailure(int errorCode){ addScanLog("ERR board scan shot: "+errorCode); }
+                });
+        }catch(Exception e){ addScanLog("ERR triggerPopupScan: "+e.getMessage()); }
+    }
+
+    private void applyPopupScanResult(ScreenScanner.ScanResult r){
+        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()) return;
+        String name=r.detectedBoardUnit;
+        if(boardScanResults.contains(name)) return;
+        boardScanResults.add(name);
+        pool.add(name,1);
+        buzz();
+        addScanLog("board scan: added "+name);
+        if(btnLabel!=null){
+            btnLabel.setText("+"+name.split(" ")[0]);
+            boardHandler.postDelayed(new Runnable(){ public void run(){
+                if(boardScanMode&&btnLabel!=null){
+                    long rem=boardScanDeadline-System.currentTimeMillis();
+                    if(rem>0) btnLabel.setText(((int)((rem+999)/1000))+"s");
+                }
+            }},1200);
+        }
     }
 
     // opens the GitHub releases page in the user's browser. Uses an Intent,
@@ -1293,6 +1441,8 @@ public class OverlayService extends Service {
     @Override public void onDestroy(){
         super.onDestroy();
         _instance=null;
+        if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
+        if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();

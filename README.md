@@ -36,16 +36,17 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 
 | Tab | What it does |
 |---|---|
-| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. |
+| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. Tap **Board Scan** to auto-detect every unit on your board by tapping each one. |
 | **≡ Board** | Shows copies left in the pool, how contested each unit is, and your odds of hitting it per roll at your current level. Pin your carry to the top. Turn on bench-thinning to remove your bench units from the count for more accurate odds. |
 | **❖ Augments** | S/A/B/C rating for every augment and the comps it works best with. Comp priorities, conflicts, armory rules, and backup options listed below. |
 | **§ Economy** | Track your gold. Shows interest earned per round, the interest brackets (10/20/30/40/50g), win and loss streaks, and your expected income next round. Hold `+` or `-` to change gold quickly. |
 | **⊞ Items** | Tap two components to see what item they make. Full trait breakpoints listed below. |
-| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to auto-fill gold, level, and augments. The overlay steps aside automatically after you grant permission. |
+| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to auto-fill gold, level, and augments. Enable Silent Scan (Accessibility service) to scan without switching apps. |
 
 ## ✦ Usage
 
 - **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
+- **Board Scan**: tap Board Scan in the Grid tab, then tap each unit on the board one by one. The app reads the name from the stat popup and marks it automatically. Requires the Accessibility service (one-time setup in Settings).
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
@@ -58,6 +59,7 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 | **Internet** | Not required. The app is fully offline. |
 | **Storage** | About 10 MB installed. |
 | **Scan Now** | Works on Android 7.0+. On Android 14+ some devices (Xiaomi MIUI, some Samsung OneUI builds) may have issues with screen capture. The debug log in Settings will show the exact error if it fails. |
+| **Board Scan / Silent Scan** | Requires the Accessibility service enabled (Android 12+ only). Go to Settings tab in the overlay, tap App settings, allow restricted settings, then go to Accessibility and turn on TFT Scryer. |
 | **Tested on** | Android 10, 12, 13, 14. Should work on 7.0 and above. |
 
 ## ✦ FAQ
@@ -99,6 +101,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.4 - 2026-06-01
+- Board scan mode: tap Board Scan in the grid tab, then tap each unit on the board. The app reads the champion name from the stat popup and marks it in your pool automatically. 25 second scan window, vibrates once per unit detected. Requires Accessibility service.
+- Bench detection: full scan now reads champion names from the bench row below the board and logs them.
+- Version bump to 1.4.
+
 ### v1.3 - 2026-05-31
 - Scan Now fixed: the overlay now moves aside automatically after you grant permission so TFT is on screen when the capture runs. No need to manually switch apps.
 - Level and gold detection zones corrected for TFT Mobile layout (level is top-left, gold is bottom-right). Level detection now covers levels 2 and 3 as well.
@@ -132,7 +139,7 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 - Set data updated each patch
 - Better scan accuracy: improved detection zones and augment name matching
-- Champion detection from the board (difficult on mobile, no promises)
+- Opponent board scanning (no OCR path exists for opponent boards on mobile)
 
 Open an issue or ping me with ideas.
 
