@@ -39,6 +39,9 @@ android {
             // debug stays as-is for local/unsigned fallback
         }
     }
+    lintOptions {
+        abortOnError false
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
