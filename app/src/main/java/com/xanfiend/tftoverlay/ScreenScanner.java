@@ -25,14 +25,18 @@ public class ScreenScanner {
     private static void log(String m){ OverlayService.addScanLog(m); }
     private static void err(String m){ OverlayService.addScanLog("ERR " + m); }
 
+    // scan mode constants
+    static final int MODE_FULL  = 0; // normal scan: gold, level, augments, shop, bench
+    static final int MODE_POPUP = 1; // board scan mode: read champion name from unit popup zone only
+
     public static class ScanResult {
         public int gold = -1;
         public int level = -1;
         public List<String> augments = new ArrayList<>();
-        // champions found in the shop bar (OCR-readable text during shop phase)
         public List<String> shopChampions = new ArrayList<>();
-        // star levels found near champion positions (best-effort, not always reliable)
+        public List<String> benchChampions = new ArrayList<>();
         public Map<String, Integer> starLevels = new HashMap<>();
+        public String detectedBoardUnit = ""; // board scan mode: champion name from popup
         public String status = "";
     }
 
@@ -56,7 +60,7 @@ public class ScreenScanner {
                 log("scanner start");
                 Bitmap bmp = captureFrame();
                 log("frame " + bmp.getWidth() + "x" + bmp.getHeight());
-                recognizeText(bmp, cb);
+                recognizeText(bmp, cb, MODE_FULL);
             } catch (Exception e) {
                 err(e.getClass().getSimpleName() + ": " + e.getMessage());
                 new android.os.Handler(android.os.Looper.getMainLooper())
@@ -65,11 +69,15 @@ public class ScreenScanner {
         }).start();
     }
 
-    // Entry point for the accessibility screenshot path — skips captureFrame().
-    // Must be called from the main thread (ML Kit listener fires on main thread).
+    // Full scan from bitmap (accessibility screenshot path).
     void scanBitmap(Bitmap bmp, ScanCallback cb) {
-        log("scanBitmap " + bmp.getWidth() + "x" + bmp.getHeight());
-        recognizeText(bmp, cb);
+        scanBitmap(bmp, cb, MODE_FULL);
+    }
+
+    // Scan from bitmap with explicit mode (MODE_FULL or MODE_POPUP).
+    void scanBitmap(Bitmap bmp, ScanCallback cb, int mode) {
+        log("scanBitmap " + bmp.getWidth() + "x" + bmp.getHeight() + " mode=" + mode);
+        recognizeText(bmp, cb, mode);
     }
 
     private Bitmap captureFrame() throws Exception {
@@ -90,7 +98,6 @@ public class ScreenScanner {
                 reader.getSurface(), null, null);
         log("VirtualDisplay ok, polling for frame");
 
-        // Poll for the first frame (max 3 s)
         long deadline = System.currentTimeMillis() + 3000;
         Image img = null;
         while (img == null && System.currentTimeMillis() < deadline) {
@@ -125,19 +132,26 @@ public class ScreenScanner {
         return cropped;
     }
 
-    private void recognizeText(Bitmap bmp, ScanCallback cb) {
-        log("OCR start");
+    private void recognizeText(Bitmap bmp, ScanCallback cb, int mode) {
+        log("OCR start mode=" + mode);
         InputImage image = InputImage.fromBitmap(bmp, 0);
         TextRecognizer rec = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         rec.process(image)
                 .addOnSuccessListener(text -> {
                     log("OCR blocks=" + text.getTextBlocks().size());
-                    ScanResult r = parse(text, bmp.getWidth(), bmp.getHeight());
-                    log("parse: gold=" + r.gold + " lv=" + r.level
-                            + " augs=" + r.augments.size()
-                            + " shop=" + r.shopChampions.size()
-                            + " stars=" + r.starLevels.size()
-                            + " -> " + r.status);
+                    ScanResult r;
+                    if (mode == MODE_POPUP) {
+                        r = parsePopup(text, bmp.getWidth(), bmp.getHeight());
+                        log("popup parse: unit=" + (r.detectedBoardUnit.isEmpty() ? "none" : r.detectedBoardUnit));
+                    } else {
+                        r = parse(text, bmp.getWidth(), bmp.getHeight());
+                        log("parse: gold=" + r.gold + " lv=" + r.level
+                                + " augs=" + r.augments.size()
+                                + " shop=" + r.shopChampions.size()
+                                + " bench=" + r.benchChampions.size()
+                                + " stars=" + r.starLevels.size()
+                                + " -> " + r.status);
+                    }
                     bmp.recycle();
                     cb.onResult(r);
                 })
@@ -150,19 +164,20 @@ public class ScreenScanner {
 
     private ScanResult parse(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
-        // TFT Mobile layout — level is always top-left, gold is always bottom-right.
-        // Portrait (h>w): HUD elements are in a smaller slice at the screen edges.
         boolean portrait = bmpH > bmpW;
         int bottomStart = portrait ? bmpH * 7 / 8 : bmpH * 3 / 4;
         int topEnd      = portrait ? bmpH / 8     : bmpH / 4;
         int leftHalf    = bmpW / 2;
-        // Shop bar sits just above the gold row in landscape (~65-85% height).
-        // In portrait the shop is compressed toward the bottom edge.
+        // Shop bar: just above the gold row
         int shopTop = portrait ? bmpH * 70 / 100 : bmpH * 65 / 100;
         int shopBot = portrait ? bmpH * 90 / 100 : bmpH * 85 / 100;
+        // Bench: row of waiting units between board and shop bar
+        int benchTop = portrait ? bmpH * 53 / 100 : bmpH * 50 / 100;
+        int benchBot = portrait ? bmpH * 65 / 100 : bmpH * 63 / 100;
         log("zones: portrait=" + portrait
                 + " topEnd=" + topEnd + " bottomStart=" + bottomStart
-                + " shopTop=" + shopTop + " shopBot=" + shopBot);
+                + " shopTop=" + shopTop + " shopBot=" + shopBot
+                + " benchTop=" + benchTop + " benchBot=" + benchBot);
         int goldBoxH = 0;
 
         List<String> allChamps = buildChampList();
@@ -216,11 +231,21 @@ public class ScreenScanner {
                 }
             }
 
-            // stars: ★ or ⭐ anywhere on screen (best-effort, logged for exploration)
+            // bench champions: text in the bench zone (units waiting below the board)
+            if (cy >= benchTop && cy <= benchBot) {
+                for (String name : allChamps) {
+                    if (!r.benchChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+                        r.benchChampions.add(name);
+                        log("bench champ: " + name + " from \"" + raw + "\"");
+                        break;
+                    }
+                }
+            }
+
+            // stars: ★ or ⭐ anywhere on screen (best-effort)
             int stars = countStars(raw);
             if (stars > 0) {
                 log("stars x" + stars + " at cx=" + cx + " cy=" + cy + " from \"" + raw + "\"");
-                // Associate with a nearby shop champion if within 400px horizontally
                 String nearest = null;
                 int nearestDx = Integer.MAX_VALUE;
                 for (Text.TextBlock b2 : text.getTextBlocks()) {
@@ -248,11 +273,56 @@ public class ScreenScanner {
         if (r.level >= 0) { if (sb.length() > 0) sb.append(" · "); sb.append("Lv").append(r.level); }
         if (!r.augments.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.augments.size()).append(r.augments.size() == 1 ? " aug" : " augs"); }
         if (!r.shopChampions.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.shopChampions.size()).append(r.shopChampions.size() == 1 ? " shop champ" : " shop champs"); }
+        if (!r.benchChampions.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.benchChampions.size()).append(r.benchChampions.size() == 1 ? " bench" : " bench"); }
         r.status = sb.length() > 0 ? sb.toString() : "nothing detected";
         return r;
     }
 
-    // Flattens SetData.CHAMPS into a single list for shop matching.
+    // Board scan mode: only reads the unit stat popup zone.
+    // Popup appears in the left-center of the screen when a unit is tapped.
+    private ScanResult parsePopup(Text text, int bmpW, int bmpH) {
+        ScanResult r = new ScanResult();
+        boolean portrait = bmpH > bmpW;
+        // In landscape the popup appears roughly in the left 45% and middle 20-65% vertically.
+        // In portrait it's wider and sits higher.
+        int popLeft  = bmpW * 3  / 100;
+        int popRight = portrait ? bmpW * 85 / 100 : bmpW * 50 / 100;
+        int popTop   = portrait ? bmpH * 10 / 100 : bmpH * 20 / 100;
+        int popBot   = portrait ? bmpH * 55 / 100 : bmpH * 70 / 100;
+        log("popup zone: x=" + popLeft + "-" + popRight + " y=" + popTop + "-" + popBot);
+
+        List<String> allChamps = buildChampList();
+
+        // Log all blocks in popup zone
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim().replace("\n", "|");
+            int cx = box.centerX(), cy = box.centerY();
+            if (cx >= popLeft && cx <= popRight && cy >= popTop && cy <= popBot) {
+                log("popup blk \"" + raw + "\" x=" + cx + " y=" + cy);
+            }
+        }
+
+        // Find the first champion name in the popup zone — it's the unit's name label
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim();
+            if (raw.isEmpty()) continue;
+            int cx = box.centerX(), cy = box.centerY();
+            if (cx < popLeft || cx > popRight || cy < popTop || cy > popBot) continue;
+            for (String name : allChamps) {
+                if (fuzzyMatchChamp(raw, name)) {
+                    r.detectedBoardUnit = name;
+                    log("popup unit: " + name + " from \"" + raw + "\"");
+                    return r;
+                }
+            }
+        }
+        return r;
+    }
+
     private List<String> buildChampList() {
         List<String> list = new ArrayList<>();
         for (String[] tier : SetData.CHAMPS) {
@@ -261,7 +331,6 @@ public class ScreenScanner {
         return list;
     }
 
-    // Count ★ / ⭐ characters in a string.
     private int countStars(String s) {
         int n = 0;
         for (int i = 0; i < s.length(); i++) {
@@ -271,21 +340,14 @@ public class ScreenScanner {
         return n;
     }
 
-    // Champion names in SetData are CamelCase with no spaces (e.g. "TwistedFate",
-    // "MissFortune"). OCR reads the game UI as "Twisted Fate" / "Miss Fortune".
-    // This method normalises both strings before comparing.
     private boolean fuzzyMatchChamp(String ocr, String target) {
-        // Strip all non-alpha and compare lowercase
         String ocrNorm = ocr.toLowerCase().replaceAll("[^a-z]", "");
         String tarNorm = target.toLowerCase().replaceAll("[^a-z]", "");
         if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm) || tarNorm.contains(ocrNorm)) return true;
-        // Split CamelCase target into words and use the existing fuzzyMatch
         String tarWords = target.replaceAll("([A-Z])", " $1").trim();
         return fuzzyMatch(ocr, tarWords);
     }
 
-    // Returns true if the OCR text is a plausible match for the augment name.
-    // Tries direct containment first; falls back to word-overlap at >= 60%.
     private boolean fuzzyMatch(String ocr, String target) {
         String ocrL = ocr.toLowerCase();
         String tarL = target.toLowerCase();
