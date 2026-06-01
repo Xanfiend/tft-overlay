@@ -243,7 +243,7 @@ public class OverlayService extends Service {
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
+        title.setText(mode==6?"\u2263 CHANGELOG":mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
@@ -252,10 +252,10 @@ public class OverlayService extends Service {
         head.addView(title); head.addView(close);
         root.addView(head);
 
-        // six-way tab row: grid / board / augments / economy / items / settings
+        // seven-way tab row: grid / board / augments / economy / items / settings / changelog
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699"};
-        for(int t=0;t<6;t++){
+        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699","\u2263"};
+        for(int t=0;t<7;t++){
             final int tm=t; boolean on=mode==t;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(11); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
@@ -291,7 +291,8 @@ public class OverlayService extends Service {
         root.addView(lvl);
         }
 
-        if(mode==5) buildSettings(root);
+        if(mode==6) buildChangelog(root);
+        else if(mode==5) buildSettings(root);
         else if(mode==4) buildItems(root);
         else if(mode==3) buildEconomy(root);
         else if(mode==2) buildAugments(root);
@@ -1001,17 +1002,45 @@ public class OverlayService extends Service {
         accStatus.setTextColor(accEnabled ? GREEN : ASH);
         accStatus.setTextSize(11); accStatus.setPadding(2,0,0,4); root.addView(accStatus);
         if(!accEnabled){
-            TextView accBtn=new TextView(this); accBtn.setText("Enable silent scan (Accessibility Settings)");
+            // Step-by-step setup instructions
+            TextView accInstr=new TextView(this);
+            String steps = Build.VERSION.SDK_INT >= 33
+                ? "To enable silent scan:\n1. App settings → Allow restricted settings\n2. Accessibility → TFT Scryer → On"
+                : "To enable silent scan:\nAccessibility → TFT Scryer → On";
+            accInstr.setText(steps);
+            accInstr.setTextColor(ASH); accInstr.setTextSize(11); accInstr.setPadding(2,0,0,8);
+            root.addView(accInstr);
+
+            LinearLayout accBtnRow=new LinearLayout(this); accBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams abrp=new LinearLayout.LayoutParams(-1,-2); abrp.setMargins(0,0,0,8); accBtnRow.setLayoutParams(abrp);
+
+            if(Build.VERSION.SDK_INT >= 33){
+                TextView appInfoBtn=new TextView(this); appInfoBtn.setText("App settings");
+                appInfoBtn.setTextColor(BONE); appInfoBtn.setTextSize(12); appInfoBtn.setGravity(Gravity.CENTER);
+                appInfoBtn.setPadding(0,10,0,10); appInfoBtn.setBackground(box(CARD,6,EDGE,1));
+                LinearLayout.LayoutParams aibl=new LinearLayout.LayoutParams(0,-2,1f); aibl.setMargins(0,0,4,0); appInfoBtn.setLayoutParams(aibl);
+                appInfoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    try{
+                        Intent i=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        i.setData(android.net.Uri.parse("package:"+getPackageName()));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
+                    }catch(Exception e){}
+                }});
+                accBtnRow.addView(appInfoBtn);
+            }
+
+            TextView accBtn=new TextView(this); accBtn.setText("Accessibility settings");
             accBtn.setTextColor(BONE); accBtn.setTextSize(12); accBtn.setGravity(Gravity.CENTER);
             accBtn.setPadding(0,10,0,10); accBtn.setBackground(box(CARD,6,EDGE,1));
-            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,8); accBtn.setLayoutParams(abl);
+            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(0,-2,1f); accBtn.setLayoutParams(abl);
             accBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 try{
                     Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
                 }catch(Exception e){}
             }});
-            root.addView(accBtn);
+            accBtnRow.addView(accBtn);
+            root.addView(accBtnRow);
         }
 
         TextView scanBtn=new TextView(this); scanBtn.setText("📷 Scan now");
@@ -1156,18 +1185,12 @@ public class OverlayService extends Service {
         }});
         root.addView(resetPos);
 
-        // ◇ CHANGELOG
-        TextView clDiv=new TextView(this); clDiv.setText("────────────────────");
-        clDiv.setTextColor(EDGE); clDiv.setTextSize(8);
-        LinearLayout.LayoutParams cldl=new LinearLayout.LayoutParams(-1,-2); cldl.setMargins(0,20,0,12); clDiv.setLayoutParams(cldl);
-        root.addView(clDiv);
+    }
 
-        TextView clHdr=new TextView(this); clHdr.setText("◇ CHANGELOG");
-        clHdr.setTextColor(GOLD); clHdr.setTextSize(11); clHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        clHdr.setLetterSpacing(0.1f); clHdr.setPadding(2,0,0,8); root.addView(clHdr);
-
+    private void buildChangelog(LinearLayout root){
         String[][] cl={
-            {"v1.2  ·  2026-05-31","Screen scan: runs inside the permission Activity (no FGS required, works on Xiaomi/MIUI). One tap — grant permission, scan happens immediately. Transparency slider 20–100%. No-flash panel updates."},
+            {"v1.3  ·  2026-06-01","Silent scan via Accessibility Service (Android 12+): no app switch, no permission dialog after setup. Shop champion detection: OCR reads champion names from the shop bar. Portrait mode OCR zones. Sigil hold (1.5s) triggers scan. Economy tab scan shortcut. Changelog tab."},
+            {"v1.2  ·  2026-05-31","Screen scan: runs inside the permission Activity (no FGS required, works on Xiaomi/MIUI). One tap — grant permission, scan happens immediately. Transparency slider 20-100%. No-flash panel updates."},
             {"v1.1  ·  2026-05-31","Settings tab (transparency, haptic, start-tab, position reset, screen scan). Economy tracker (interest bracket, streak, expected income, hold-to-repeat gold). Item builder. Augment tiers S/A/B/C. Dark launch screen."},
             {"v1.0  ·  2026-05-30","Grid + board tabs. Contest badge. Drag-to-close. Level memory. Version footer."},
         };
