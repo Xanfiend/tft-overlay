@@ -91,7 +91,7 @@ public class OverlayService extends Service {
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
     static void addScanLog(String msg){
         android.util.Log.d("TFTScryer", msg);
-        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>30) scanLog.remove(0); }
+        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>80) scanLog.remove(0); }
     }
     static void clearScanLog(){ synchronized(scanLog){ scanLog.clear(); } }
 
@@ -1169,14 +1169,41 @@ public class OverlayService extends Service {
         logHdr.setLetterSpacing(0.1f); logHdr.setPadding(2,0,0,0);
         LinearLayout.LayoutParams lhtp=new LinearLayout.LayoutParams(0,-2,1f); logHdr.setLayoutParams(lhtp);
         logHdrRow.addView(logHdr);
+        TextView copyLogBtn=new TextView(this); copyLogBtn.setText("copy");
+        copyLogBtn.setTextColor(ASH); copyLogBtn.setTextSize(10);
+        copyLogBtn.setPadding(12,4,4,4);
+        copyLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            StringBuilder sb=new StringBuilder();
+            synchronized(scanLog){ for(String l:scanLog) sb.append(l).append("\n"); }
+            android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-scan-log",sb.toString()));
+            toast("Log copied to clipboard");
+        }});
+        logHdrRow.addView(copyLogBtn);
         TextView clearLogBtn=new TextView(this); clearLogBtn.setText("clear");
         clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10);
-        clearLogBtn.setPadding(12,4,4,4);
+        clearLogBtn.setPadding(6,4,4,4);
         clearLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             clearScanLog(); mode=5; showPanel();
         }});
         logHdrRow.addView(clearLogBtn);
         root.addView(logHdrRow);
+
+        // Debug scan: takes a popup screenshot and dumps every OCR block to the log
+        // with its height and coordinates so you can diagnose detection failures.
+        boolean canDbgScan = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
+        TextView dbgScanBtn=new TextView(this); dbgScanBtn.setText("Debug scan (dump all OCR blocks)");
+        dbgScanBtn.setTextColor(canDbgScan?BONE:ASH); dbgScanBtn.setTextSize(11); dbgScanBtn.setGravity(Gravity.CENTER);
+        dbgScanBtn.setPadding(0,10,0,10); dbgScanBtn.setBackground(box(CARD,6,canDbgScan?EDGE:DIM,1));
+        LinearLayout.LayoutParams dbgl=new LinearLayout.LayoutParams(-1,-2); dbgl.setMargins(0,6,0,4); dbgScanBtn.setLayoutParams(dbgl);
+        dbgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(!canDbgScan){ toast("Enable Accessibility service first"); return; }
+            clearScanLog();
+            addScanLog("=== DEBUG SCAN ===");
+            triggerPopupScan();
+            toast("Scanning — open Debug Log in a moment");
+        }});
+        root.addView(dbgScanBtn);
 
         LinearLayout logBox=new LinearLayout(this); logBox.setOrientation(LinearLayout.VERTICAL);
         logBox.setBackground(box(CARD,4,EDGE,1)); logBox.setPadding(10,8,10,8);
