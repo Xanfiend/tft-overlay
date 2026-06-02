@@ -138,6 +138,11 @@ public class MainActivity extends Activity {
         setContentView(frame);
     }
 
+    @Override protected void onResume(){
+        super.onResume();
+        if(contentArea != null) rebuildContent();
+    }
+
     private void rebuildContent(){
         for(int i = 0; i < tabViews.length; i++){
             boolean on = i == activeTab;
