@@ -46,11 +46,11 @@ public final class SetData {
          "MissFortune","Ornn","Rhaast","Samira","Urgot","Viktor"},
 
         // 4-cost
-        {"AurelionSol","Corki","Karma","Kindred","Leblanc","MasterYi","Nami",
-         "Nunu","Rammus","Riven","TahmKench","MightyMech","Xayah"},
+        {"AurelionSol","Corki","Karma","Kindred","Leblanc","MasterYi","Morgana",
+         "Nami","Nunu","Rammus","Riven","TahmKench","MightyMech","Xayah"},
 
         // 5-cost
-        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Morgana","Shen","Sona","Vex"}
+        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Shen","Sona","Vex"}
     };
 
     private SetData() {} // no instances
