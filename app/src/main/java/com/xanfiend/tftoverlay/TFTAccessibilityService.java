@@ -30,7 +30,15 @@ public class TFTAccessibilityService extends AccessibilityService {
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {}
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if(event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+            CharSequence pkg = event.getPackageName();
+            if(pkg != null){
+                boolean isTFT = "com.riotgames.league.teamfighttactics".contentEquals(pkg);
+                OverlayService.setOverlayVisible(isTFT);
+            }
+        }
+    }
 
     @Override
     public void onInterrupt() {}
