@@ -1582,6 +1582,24 @@ public class OverlayService extends Service {
         } catch(Exception e){}
     }
 
+    @Override public void onConfigurationChanged(android.content.res.Configuration newConfig){
+        super.onConfigurationChanged(newConfig);
+        // screen rotated — rebuild panel with fresh dimensions so it fits the new orientation
+        if(panel != null){
+            int savedMode = mode;
+            closePanel();
+            mode = savedMode;
+            showPanel();
+        }
+        // keep floating button on-screen after rotation
+        if(button != null && btnLp != null){
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            btnLp.x = Math.min(btnLp.x, dm.widthPixels - 150);
+            btnLp.y = Math.min(btnLp.y, dm.heightPixels - 150);
+            try{ wm.updateViewLayout(button, btnLp); }catch(Exception e){}
+        }
+    }
+
     @Override public void onDestroy(){
         super.onDestroy();
         _instance=null;
