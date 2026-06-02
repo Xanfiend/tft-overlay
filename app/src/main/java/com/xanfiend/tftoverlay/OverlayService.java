@@ -90,6 +90,10 @@ public class OverlayService extends Service {
     // debug scan: close panel, scan, reopen settings so user sees results
     private boolean debugScanPending = false;
 
+    // auto board scan: one-shot full-screen scan, marks all found champions
+    private boolean autoScanPending = false;
+    private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
+
     // in-app debug log — last 80 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
     static void addScanLog(String msg){
@@ -354,8 +358,30 @@ public class OverlayService extends Service {
         chipNames=new String[totalChamps];
         int idx=0;
 
-        // scan button row \u2014 board scan (own) + opp scan (side by side)
+        // auto scan: one-tap full-screen champion detection, no tapping required
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
+        if(autoScanPending){
+            TextView asActive=new TextView(this); asActive.setText("\u25c9 Scanning board...");
+            asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
+            asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
+            LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
+            root.addView(asActive);
+        } else {
+            TextView asBtn=new TextView(this); asBtn.setText(accAvail?"\u29bf Auto Scan Board":"\u29bf Auto Scan (enable Accessibility first)");
+            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(12); asBtn.setGravity(Gravity.CENTER);
+            asBtn.setPadding(0,12,0,12);
+            asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(-1,-2); asl.setMargins(0,0,0,4); asBtn.setLayoutParams(asl);
+            asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                autoScanPending=true;
+                closePanel();
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){ triggerAutoScan(); }}, 350);
+            }});
+            root.addView(asBtn);
+        }
+
+        // scan button row \u2014 board scan (own) + opp scan (side by side)
         if(boardScanMode){
             long rem=boardScanDeadline-System.currentTimeMillis();
             int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
@@ -421,6 +447,21 @@ public class OverlayService extends Service {
             clearBsr.setTextColor(ASH); clearBsr.setTextSize(10); clearBsr.setPadding(2,0,2,8);
             clearBsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ boardScanResults.clear(); showPanel(); }});
             root.addView(clearBsr);
+        }
+
+        // auto scan results
+        if(!autoScanResults.isEmpty()){
+            TextView asrHdr=new TextView(this); asrHdr.setText("◇ AUTO SCAN");
+            asrHdr.setTextColor(GOLD); asrHdr.setTextSize(11); asrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+            asrHdr.setLetterSpacing(0.1f); asrHdr.setPadding(2,4,0,4); root.addView(asrHdr);
+            StringBuilder asrSb=new StringBuilder();
+            for(String s:autoScanResults){ if(asrSb.length()>0) asrSb.append(" · "); asrSb.append(s); }
+            TextView asrTv=new TextView(this); asrTv.setText(asrSb.toString());
+            asrTv.setTextColor(BONE); asrTv.setTextSize(12); asrTv.setPadding(2,0,2,4); root.addView(asrTv);
+            TextView clearAsr=new TextView(this); clearAsr.setText("clear");
+            clearAsr.setTextColor(ASH); clearAsr.setTextSize(10); clearAsr.setPadding(2,0,2,8);
+            clearAsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }});
+            root.addView(clearAsr);
         }
 
         // opponent scan results
@@ -1452,6 +1493,42 @@ public class OverlayService extends Service {
         if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("board scan: stopped, found "+boardScanResults.size()+" champs");
+        mode=0; showPanel();
+    }
+
+    @SuppressWarnings("NewApi")
+    private void triggerAutoScan(){
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null){ autoScanPending=false; addScanLog("auto-scan: svc null"); mode=0; showPanel(); return; }
+        addScanLog("auto-scan: taking screenshot");
+        try{
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            hb.close();
+                            Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hw.recycle();
+                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){ applyAutoScanResult(r); }
+                                    public void onError(String msg){ autoScanPending=false; addScanLog("ERR auto-scan: "+msg); mode=0; showPanel(); }
+                                }, ScreenScanner.MODE_BOARD);
+                        }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-scan: "+e.getMessage()); mode=0; showPanel(); }
+                    }
+                    @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-scan shot: "+errorCode); mode=0; showPanel(); }
+                });
+        }catch(Exception e){ autoScanPending=false; addScanLog("ERR triggerAutoScan: "+e.getMessage()); mode=0; showPanel(); }
+    }
+
+    private void applyAutoScanResult(ScreenScanner.ScanResult r){
+        autoScanPending=false;
+        autoScanResults=new java.util.ArrayList<>(r.autoChampions);
+        for(String name : r.autoChampions) pool.add(name,1);
+        buzz();
+        addScanLog("auto-scan complete: "+r.autoChampions.size()+" champs marked");
         mode=0; showPanel();
     }
 
