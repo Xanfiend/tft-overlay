@@ -255,7 +255,7 @@ public class OverlayService extends Service {
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==6?"\u2263 CHANGELOG":mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
+        title.setText(mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
@@ -264,10 +264,10 @@ public class OverlayService extends Service {
         head.addView(title); head.addView(close);
         root.addView(head);
 
-        // seven-way tab row: grid / board / augments / economy / items / settings / changelog
+        // six-way tab row: grid / board / augments / economy / items / settings
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699","\u2263"};
-        for(int t=0;t<7;t++){
+        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699"};
+        for(int t=0;t<6;t++){
             final int tm=t; boolean on=mode==t;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(11); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
@@ -303,8 +303,7 @@ public class OverlayService extends Service {
         root.addView(lvl);
         }
 
-        if(mode==6) buildChangelog(root);
-        else if(mode==5) buildSettings(root);
+        if(mode==5) buildSettings(root);
         else if(mode==4) buildItems(root);
         else if(mode==3) buildEconomy(root);
         else if(mode==2) buildAugments(root);
@@ -1243,23 +1242,6 @@ public class OverlayService extends Service {
         }});
         root.addView(resetPos);
 
-    }
-
-    private void buildChangelog(LinearLayout root){
-        String[][] cl={
-            {"v1.4  ·  2026-06-01","Board scan mode: tap Board Scan in the grid tab, then tap each unit on the board. App auto-reads the champion name from the stat popup and marks it in the pool. 25s scan window, haptic feedback per unit detected. Bench detection: full scan now reads champion names from the bench zone below the board."},
-            {"v1.3  ·  2026-06-01","Silent scan via Accessibility Service (Android 12+): no app switch, no permission dialog after setup. Shop champion detection: OCR reads champion names from the shop bar. Portrait mode OCR zones. Sigil hold (1.5s) triggers scan. Economy tab scan shortcut. Changelog tab."},
-            {"v1.2  ·  2026-05-31","Screen scan: runs inside the permission Activity (no FGS required, works on Xiaomi/MIUI). One tap — grant permission, scan happens immediately. Transparency slider 20-100%. No-flash panel updates."},
-            {"v1.1  ·  2026-05-31","Settings tab (transparency, haptic, start-tab, position reset, screen scan). Economy tracker (interest bracket, streak, expected income, hold-to-repeat gold). Item builder. Augment tiers S/A/B/C. Dark launch screen."},
-            {"v1.0  ·  2026-05-30","Grid + board tabs. Contest badge. Drag-to-close. Level memory. Version footer."},
-        };
-        for(String[] entry:cl){
-            TextView ver=new TextView(this); ver.setText(entry[0]);
-            ver.setTextColor(BONE); ver.setTextSize(12); ver.setTypeface(null,android.graphics.Typeface.BOLD);
-            ver.setPadding(2,8,0,2); root.addView(ver);
-            TextView desc=new TextView(this); desc.setText(entry[1]);
-            desc.setTextColor(ASH); desc.setTextSize(11); desc.setPadding(2,0,0,4); root.addView(desc);
-        }
     }
 
     // ---- screen scanning ----
