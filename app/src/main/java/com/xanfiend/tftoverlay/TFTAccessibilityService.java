@@ -29,13 +29,16 @@ public class TFTAccessibilityService extends AccessibilityService {
         return super.onUnbind(intent);
     }
 
+    private boolean lastWasTFT = false;
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if(event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
             CharSequence pkg = event.getPackageName();
             if(pkg != null){
                 boolean isTFT = "com.riotgames.league.teamfighttactics".contentEquals(pkg);
-                OverlayService.setOverlayVisible(isTFT);
+                if(lastWasTFT && !isTFT) OverlayService.setOverlayVisible(false);
+                lastWasTFT = isTFT;
             }
         }
     }
