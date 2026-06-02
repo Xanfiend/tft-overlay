@@ -279,7 +279,8 @@ public class OverlayService extends Service {
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-        TextView close=new TextView(this); close.setText("  \u2715"); close.setTextColor(ASH); close.setTextSize(20); close.setPadding(18,0,4,0);
+        TextView close=new TextView(this); close.setText("\u2715"); close.setTextColor(BONE); close.setTextSize(18);
+        close.setGravity(Gravity.CENTER); close.setBackground(box(BLOOD,6,BLOODL,2)); close.setPadding(22,14,22,14);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         head.addView(title); head.addView(close);
         root.addView(head);

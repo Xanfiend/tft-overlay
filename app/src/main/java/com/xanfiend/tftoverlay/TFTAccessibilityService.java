@@ -35,11 +35,13 @@ public class TFTAccessibilityService extends AccessibilityService {
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if(event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
             CharSequence pkg = event.getPackageName();
-            if(pkg != null){
-                boolean isTFT = "com.riotgames.league.teamfighttactics".contentEquals(pkg);
-                if(lastWasTFT && !isTFT) OverlayService.setOverlayVisible(false);
-                lastWasTFT = isTFT;
-            }
+            if(pkg == null) return;
+            String p = pkg.toString();
+            // ignore own overlay windows and system UI — they don't count as leaving TFT
+            if(p.equals("com.xanfiend.tftoverlay") || p.equals("com.android.systemui") || p.equals("android")) return;
+            boolean isTFT = p.equals("com.riotgames.league.teamfighttactics");
+            if(lastWasTFT && !isTFT) OverlayService.setOverlayVisible(false);
+            lastWasTFT = isTFT;
         }
     }
 
