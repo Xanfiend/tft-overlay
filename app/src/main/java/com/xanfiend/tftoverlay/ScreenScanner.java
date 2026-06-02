@@ -37,6 +37,7 @@ public class ScreenScanner {
         public List<String> benchChampions = new ArrayList<>();
         public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
+        public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
         public String status = "";
     }
 
@@ -316,9 +317,24 @@ public class ScreenScanner {
                 if (fuzzyMatchChamp(raw, name)) {
                     r.detectedBoardUnit = name;
                     log("popup unit: " + name + " from \"" + raw + "\"");
-                    return r;
+                    break;
                 }
             }
+            if (!r.detectedBoardUnit.isEmpty()) break;
+        }
+
+        // Sweep the popup zone for star characters to determine star level
+        if (!r.detectedBoardUnit.isEmpty()) {
+            for (Text.TextBlock block : text.getTextBlocks()) {
+                android.graphics.Rect box = block.getBoundingBox();
+                if (box == null) continue;
+                int cx = box.centerX(), cy = box.centerY();
+                if (cx < popLeft || cx > popRight || cy < popTop || cy > popBot) continue;
+                int stars = countStars(block.getText());
+                if (stars > r.detectedBoardStars) r.detectedBoardStars = stars;
+            }
+            if (r.detectedBoardStars > 0)
+                log("popup stars: " + r.detectedBoardStars + " for " + r.detectedBoardUnit);
         }
         return r;
     }
