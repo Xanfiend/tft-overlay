@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.4";
+    private static final String APP_VERSION = "v1.6";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -80,11 +80,18 @@ public class OverlayService extends Service {
     private Runnable boardPollRunnable;
     private Runnable boardCountdownRunnable;
 
+    // opponent scan mode: same polling but routes into opponent tracking + records star levels
+    private boolean oppScanMode = false;
+    private long oppScanDeadline = 0;
+    private java.util.Map<String, Integer> oppScanResults = new java.util.LinkedHashMap<>();
+    private Runnable oppPollRunnable;
+    private Runnable oppCountdownRunnable;
+
     // in-app debug log — last 30 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
     static void addScanLog(String msg){
         android.util.Log.d("TFTScryer", msg);
-        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>30) scanLog.remove(0); }
+        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>80) scanLog.remove(0); }
     }
     static void clearScanLog(){ synchronized(scanLog){ scanLog.clear(); } }
 
@@ -157,6 +164,7 @@ public class OverlayService extends Service {
                     }
                     showCloseTarget(false);
                     if(!moved){
+                        if(oppScanMode){ stopOppScanMode(); return true; }
                         if(boardScanMode){ stopBoardScanMode(); return true; }
                         long held=System.currentTimeMillis()-down;
                         if(held>1500){ triggerScan(); }
@@ -333,50 +341,92 @@ public class OverlayService extends Service {
         chipNames=new String[totalChamps];
         int idx=0;
 
-        // board scan button \u2014 only active when accessibility service is available
+        // scan button row \u2014 board scan (own) + opp scan (side by side)
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
         if(boardScanMode){
             long rem=boardScanDeadline-System.currentTimeMillis();
             int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
             TextView bsActive=new TextView(this);
-            bsActive.setText("\u25C9 Board scan: "+remSec+"s remaining \u00b7 tap to stop");
+            bsActive.setText("\u25C9 My board: "+remSec+"s \u00b7 tap to stop");
             bsActive.setTextColor(GOLD); bsActive.setTextSize(12); bsActive.setGravity(Gravity.CENTER);
             bsActive.setBackground(box(BLOOD,6,BLOODL,2)); bsActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams bsal=new LinearLayout.LayoutParams(-1,-2); bsal.setMargins(0,0,0,6); bsActive.setLayoutParams(bsal);
             bsActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopBoardScanMode(); }});
             root.addView(bsActive);
+        } else if(oppScanMode){
+            long rem=oppScanDeadline-System.currentTimeMillis();
+            int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
+            TextView osActive=new TextView(this);
+            osActive.setText("\u25C9 Opp scan: "+remSec+"s \u00b7 tap to stop");
+            osActive.setTextColor(GOLD); osActive.setTextSize(12); osActive.setGravity(Gravity.CENTER);
+            osActive.setBackground(box(BLOOD,6,BLOODL,2)); osActive.setPadding(0,12,0,12);
+            LinearLayout.LayoutParams osal=new LinearLayout.LayoutParams(-1,-2); osal.setMargins(0,0,0,6); osActive.setLayoutParams(osal);
+            osActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopOppScanMode(); }});
+            root.addView(osActive);
         } else {
-            TextView bsBtn=new TextView(this); bsBtn.setText("\u25C9 Board Scan");
+            LinearLayout scanRow=new LinearLayout(this); scanRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams srl=new LinearLayout.LayoutParams(-1,-2); srl.setMargins(0,0,0,4); scanRow.setLayoutParams(srl);
+
+            TextView bsBtn=new TextView(this); bsBtn.setText("\u25C9 My Board");
             bsBtn.setTextColor(accAvail?BONE:ASH); bsBtn.setTextSize(12); bsBtn.setGravity(Gravity.CENTER);
             bsBtn.setPadding(0,10,0,10);
             bsBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams bsl=new LinearLayout.LayoutParams(-1,-2); bsl.setMargins(0,0,0,4); bsBtn.setLayoutParams(bsl);
-            if(accAvail){
-                bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startBoardScanMode(); }});
-            } else {
-                bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                    try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
-                }});
-            }
-            root.addView(bsBtn);
+            LinearLayout.LayoutParams bsl=new LinearLayout.LayoutParams(0,-2,1f); bsl.setMargins(0,0,4,0); bsBtn.setLayoutParams(bsl);
+            if(accAvail){ bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startBoardScanMode(); }}); }
+            else { bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+            }}); }
+            scanRow.addView(bsBtn);
+
+            TextView osBtn=new TextView(this); osBtn.setText("\u25C9 Opp Board");
+            osBtn.setTextColor(accAvail?BONE:ASH); osBtn.setTextSize(12); osBtn.setGravity(Gravity.CENTER);
+            osBtn.setPadding(0,10,0,10);
+            osBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(0,-2,1f); osBtn.setLayoutParams(osl);
+            if(accAvail){ osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startOppScanMode(); }}); }
+            else { osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+            }}); }
+            scanRow.addView(osBtn);
+            root.addView(scanRow);
+
             TextView bsHint=new TextView(this);
-            bsHint.setText(accAvail?"Tap Board Scan, then tap each unit on board \u2014 auto-reads the champion name":"Enable Accessibility service for board scan (Settings tab)");
+            bsHint.setText(accAvail?"Tap a scan, then tap each unit on the board \u2014 reads name + star level":"Enable Accessibility service for board scan (Settings tab)");
             bsHint.setTextColor(DIM); bsHint.setTextSize(10); bsHint.setPadding(2,2,2,6); root.addView(bsHint);
         }
 
-        // board scan results (shown when mode was used this session)
+        // my board scan results
         if(!boardScanResults.isEmpty()){
-            TextView bsrHdr=new TextView(this); bsrHdr.setText("\u25c7 BOARD SCAN");
+            TextView bsrHdr=new TextView(this); bsrHdr.setText("\u25c7 MY BOARD");
             bsrHdr.setTextColor(GOLD); bsrHdr.setTextSize(11); bsrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
             bsrHdr.setLetterSpacing(0.1f); bsrHdr.setPadding(2,4,0,4); root.addView(bsrHdr);
             StringBuilder bsrSb=new StringBuilder();
             for(String s:boardScanResults){ if(bsrSb.length()>0) bsrSb.append(" \u00b7 "); bsrSb.append(s); }
             TextView bsrTv=new TextView(this); bsrTv.setText(bsrSb.toString());
             bsrTv.setTextColor(BONE); bsrTv.setTextSize(12); bsrTv.setPadding(2,0,2,4); root.addView(bsrTv);
-            TextView clearBsr=new TextView(this); clearBsr.setText("clear board results");
+            TextView clearBsr=new TextView(this); clearBsr.setText("clear");
             clearBsr.setTextColor(ASH); clearBsr.setTextSize(10); clearBsr.setPadding(2,0,2,8);
             clearBsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ boardScanResults.clear(); showPanel(); }});
             root.addView(clearBsr);
+        }
+
+        // opponent scan results
+        if(!oppScanResults.isEmpty()){
+            TextView osrHdr=new TextView(this); osrHdr.setText("\u25c7 OPP SCAN");
+            osrHdr.setTextColor(GOLD); osrHdr.setTextSize(11); osrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+            osrHdr.setLetterSpacing(0.1f); osrHdr.setPadding(2,4,0,4); root.addView(osrHdr);
+            StringBuilder osrSb=new StringBuilder();
+            for(java.util.Map.Entry<String,Integer> e:oppScanResults.entrySet()){
+                if(osrSb.length()>0) osrSb.append(" \u00b7 ");
+                osrSb.append(e.getKey());
+                int st=e.getValue(); if(st>0){ osrSb.append(" "); for(int si=0;si<st;si++) osrSb.append("\u2605"); }
+            }
+            TextView osrTv=new TextView(this); osrTv.setText(osrSb.toString());
+            osrTv.setTextColor(BONE); osrTv.setTextSize(12); osrTv.setPadding(2,0,2,4); root.addView(osrTv);
+            TextView clearOsr=new TextView(this); clearOsr.setText("clear");
+            clearOsr.setTextColor(ASH); clearOsr.setTextSize(10); clearOsr.setPadding(2,0,2,8);
+            clearOsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }});
+            root.addView(clearOsr);
         }
 
         TextView tipv=new TextView(this);
@@ -1119,14 +1169,41 @@ public class OverlayService extends Service {
         logHdr.setLetterSpacing(0.1f); logHdr.setPadding(2,0,0,0);
         LinearLayout.LayoutParams lhtp=new LinearLayout.LayoutParams(0,-2,1f); logHdr.setLayoutParams(lhtp);
         logHdrRow.addView(logHdr);
+        TextView copyLogBtn=new TextView(this); copyLogBtn.setText("copy");
+        copyLogBtn.setTextColor(ASH); copyLogBtn.setTextSize(10);
+        copyLogBtn.setPadding(12,4,4,4);
+        copyLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            StringBuilder sb=new StringBuilder();
+            synchronized(scanLog){ for(String l:scanLog) sb.append(l).append("\n"); }
+            android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-scan-log",sb.toString()));
+            Toast.makeText(OverlayService.this,"Log copied to clipboard",Toast.LENGTH_SHORT).show();
+        }});
+        logHdrRow.addView(copyLogBtn);
         TextView clearLogBtn=new TextView(this); clearLogBtn.setText("clear");
         clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10);
-        clearLogBtn.setPadding(12,4,4,4);
+        clearLogBtn.setPadding(6,4,4,4);
         clearLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             clearScanLog(); mode=5; showPanel();
         }});
         logHdrRow.addView(clearLogBtn);
         root.addView(logHdrRow);
+
+        // Debug scan: takes a popup screenshot and dumps every OCR block to the log
+        // with its height and coordinates so you can diagnose detection failures.
+        boolean canDbgScan = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
+        TextView dbgScanBtn=new TextView(this); dbgScanBtn.setText("Debug scan (dump all OCR blocks)");
+        dbgScanBtn.setTextColor(canDbgScan?BONE:ASH); dbgScanBtn.setTextSize(11); dbgScanBtn.setGravity(Gravity.CENTER);
+        dbgScanBtn.setPadding(0,10,0,10); dbgScanBtn.setBackground(box(CARD,6,canDbgScan?EDGE:DIM,1));
+        LinearLayout.LayoutParams dbgl=new LinearLayout.LayoutParams(-1,-2); dbgl.setMargins(0,6,0,4); dbgScanBtn.setLayoutParams(dbgl);
+        dbgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(!canDbgScan){ Toast.makeText(OverlayService.this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show(); return; }
+            clearScanLog();
+            addScanLog("=== DEBUG SCAN ===");
+            triggerPopupScan();
+            Toast.makeText(OverlayService.this,"Scanning — open Debug Log in a moment",Toast.LENGTH_SHORT).show();
+        }});
+        root.addView(dbgScanBtn);
 
         LinearLayout logBox=new LinearLayout(this); logBox.setOrientation(LinearLayout.VERTICAL);
         logBox.setBackground(box(CARD,4,EDGE,1)); logBox.setPadding(10,8,10,8);
@@ -1379,7 +1456,10 @@ public class OverlayService extends Service {
                             hw.recycle();
                             new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
                                 new ScreenScanner.ScanCallback(){
-                                    public void onResult(ScreenScanner.ScanResult r){ applyPopupScanResult(r); }
+                                    public void onResult(ScreenScanner.ScanResult r){
+                                        if(oppScanMode) applyOppPopupScanResult(r);
+                                        else applyPopupScanResult(r);
+                                    }
                                     public void onError(String msg){ addScanLog("board scan OCR err: "+msg); }
                                 }, ScreenScanner.MODE_POPUP);
                         }catch(Exception e){ addScanLog("ERR board scan: "+e.getMessage()); }
@@ -1408,6 +1488,66 @@ public class OverlayService extends Service {
         }
     }
 
+    private void startOppScanMode(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        oppScanMode=true;
+        oppScanDeadline=System.currentTimeMillis()+30000;
+        oppScanResults=new java.util.LinkedHashMap<>();
+        closePanel();
+        addScanLog("opp scan: started 30s window");
+
+        oppCountdownRunnable=new Runnable(){ public void run(){
+            if(!oppScanMode) return;
+            long rem=oppScanDeadline-System.currentTimeMillis();
+            if(rem<=0){ stopOppScanMode(); return; }
+            if(btnLabel!=null) btnLabel.setText(((int)((rem+999)/1000))+"s");
+            boardHandler.postDelayed(this,500);
+        }};
+        boardHandler.post(oppCountdownRunnable);
+
+        oppPollRunnable=new Runnable(){ public void run(){
+            if(!oppScanMode) return;
+            if(System.currentTimeMillis()>=oppScanDeadline){ stopOppScanMode(); return; }
+            triggerPopupScan();
+            boardHandler.postDelayed(this,2500);
+        }};
+        boardHandler.postDelayed(oppPollRunnable,600);
+    }
+
+    private void stopOppScanMode(){
+        oppScanMode=false;
+        if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
+        if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        addScanLog("opp scan: stopped, found "+oppScanResults.size()+" champs");
+        mode=0; showPanel();
+    }
+
+    private void applyOppPopupScanResult(ScreenScanner.ScanResult r){
+        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()) return;
+        String name=r.detectedBoardUnit;
+        if(oppScanResults.containsKey(name)) return;
+        int stars=Math.max(1,r.detectedBoardStars);
+        oppScanResults.put(name,stars);
+        pool.addOpp(name,1);
+        buzz();
+        StringBuilder flash=new StringBuilder("+").append(name.split(" ")[0]);
+        for(int i=0;i<stars;i++) flash.append("★");
+        addScanLog("opp scan: "+name+" "+stars+"★");
+        if(btnLabel!=null){
+            btnLabel.setText(flash.toString());
+            boardHandler.postDelayed(new Runnable(){ public void run(){
+                if(oppScanMode&&btnLabel!=null){
+                    long rem=oppScanDeadline-System.currentTimeMillis();
+                    if(rem>0) btnLabel.setText(((int)((rem+999)/1000))+"s");
+                }
+            }},1200);
+        }
+    }
+
     // opens the GitHub releases page in the user's browser. Uses an Intent,
     // which does NOT require the INTERNET permission -- the browser handles
     // the network, so the app stays fully offline.
@@ -1425,6 +1565,8 @@ public class OverlayService extends Service {
         _instance=null;
         if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
         if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
+        if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
+        if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();
