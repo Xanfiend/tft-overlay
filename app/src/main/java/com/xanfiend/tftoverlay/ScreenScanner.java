@@ -288,26 +288,27 @@ public class ScreenScanner {
         // Skip the very top (system bar, traits panel) and very bottom (shop/bench).
         int popTop = portrait ? bmpH * 8  / 100 : bmpH * 12 / 100;
         int popBot = portrait ? bmpH * 62 / 100 : bmpH * 82 / 100;
-        // Minimum block height filter: champion name in the popup is rendered at a
-        // large size (~14sp+). Small UI labels (trait counts, gold, etc.) are tiny
-        // and get filtered out here. bmpH/52 ≈ 20px at 1080p, ≈ 30px at 1600p.
+        // Minimum block height to skip tiny UI labels (interest brackets, gold, etc.).
         int minH = Math.max(16, bmpH / 52);
-        log("popup zone: y=" + popTop + "-" + popBot + " minH=" + minH);
+        log("popup zone: y=" + popTop + "-" + popBot + " minH=" + minH + " bmp=" + bmpW + "x" + bmpH);
 
         List<String> allChamps = buildChampList();
 
-        // Log all qualifying blocks for debug
+        // Log every block in the vertical zone — show rejections so debug log is useful
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
             String raw = block.getText().trim().replace("\n", "|");
             int cx = box.centerX(), cy = box.centerY();
-            if (cy >= popTop && cy <= popBot && box.height() >= minH) {
-                log("popup blk \"" + raw + "\" x=" + cx + " y=" + cy + " h=" + box.height());
+            if (cy < popTop || cy > popBot) continue;
+            if (box.height() < minH) {
+                log("skip h=" + box.height() + " \"" + raw + "\"");
+            } else {
+                log("cand h=" + box.height() + " x=" + cx + " \"" + raw + "\"");
             }
         }
 
-        // Find the best champion match: prefer tallest text block (most likely name label)
+        // Find the best champion match: prefer tallest block (most likely the name label)
         int bestH = 0;
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
@@ -321,13 +322,16 @@ public class ScreenScanner {
                 if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
                     r.detectedBoardUnit = name;
                     bestH = box.height();
-                    log("popup candidate: " + name + " h=" + box.height() + " from \"" + raw + "\"");
+                    log("match: " + name + " h=" + box.height() + " from \"" + raw + "\"");
                     break;
                 }
             }
         }
-        if (!r.detectedBoardUnit.isEmpty())
-            log("popup unit: " + r.detectedBoardUnit + " (best h=" + bestH + ")");
+        if (r.detectedBoardUnit.isEmpty()) {
+            log("popup: no champion matched");
+        } else {
+            log("popup unit: " + r.detectedBoardUnit + " (h=" + bestH + ")");
+        }
 
         // Star sweep — same zone and height filter
         if (!r.detectedBoardUnit.isEmpty()) {
@@ -365,11 +369,15 @@ public class ScreenScanner {
     private boolean fuzzyMatchChamp(String ocr, String target) {
         String ocrNorm = ocr.toLowerCase().replaceAll("[^a-z]", "");
         String tarNorm = target.toLowerCase().replaceAll("[^a-z]", "");
-        // Require at least 5 chars — 3-char fragments produce too many false positives
-        if (ocrNorm.length() < 5) return false;
-        // Exact or OCR contains the full name
+        // Short champion names (Zoe, Vex, Jhin, Fizz, Nami, Ornn…) — exact match only.
+        // Fuzzy matching on 3-4 char strings causes too many false positives.
+        if (tarNorm.length() <= 4) return ocrNorm.equals(tarNorm);
+        // Longer names: require the OCR string itself to be at least 4 chars
+        if (ocrNorm.length() < 4) return false;
+        // Exact, or OCR wraps extra text around the full name
         if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm)) return true;
-        // Partial match only when OCR covers >=80% of the target (e.g. "Lissandr" → Lissandra)
+        // Partial: OCR must cover >=80% of the target (e.g. "Lissandr" → Lissandra OK,
+        // "sandra" → Lissandra NOT OK — 6/9 = 67% < 80%)
         if (tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
         String tarWords = target.replaceAll("([A-Z])", " $1").trim();
         return fuzzyMatch(ocr, tarWords);
@@ -380,12 +388,10 @@ public class ScreenScanner {
         String tarL = target.toLowerCase();
         if (ocrL.length() < 4) return false;
         if (ocrL.contains(tarL)) return true;
-        // Reverse containment only if OCR is substantial relative to target
         if (tarL.contains(ocrL) && ocrL.length() * 10 >= tarL.length() * 8) return true;
         String[] words = tarL.split("[ ']+");
         if (words.length == 0) return false;
         int matched = 0;
-        // Require word length > 3 to avoid single-syllable false matches
         for (String w : words) { if (w.length() > 3 && ocrL.contains(w)) matched++; }
         return matched > 0 && (float) matched / words.length >= 0.6f;
     }
