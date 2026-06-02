@@ -36,7 +36,7 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 
 | Tab | What it does |
 |---|---|
-| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. Tap **Board Scan** to auto-detect every unit on your board by tapping each one. |
+| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. Tap **My Board** to auto-detect units on your board; tap **Opp Board** to scan an opponent's board with star levels. Both require the Accessibility service. |
 | **≡ Board** | Shows copies left in the pool, how contested each unit is, and your odds of hitting it per roll at your current level. Pin your carry to the top. Turn on bench-thinning to remove your bench units from the count for more accurate odds. |
 | **❖ Augments** | S/A/B/C rating for every augment and the comps it works best with. Comp priorities, conflicts, armory rules, and backup options listed below. |
 | **§ Economy** | Track your gold. Shows interest earned per round, the interest brackets (10/20/30/40/50g), win and loss streaks, and your expected income next round. Hold `+` or `-` to change gold quickly. |
@@ -46,7 +46,8 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 ## ✦ Usage
 
 - **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
-- **Board Scan**: tap Board Scan in the Grid tab, then tap each unit on the board one by one. The app reads the name from the stat popup and marks it automatically. Requires the Accessibility service (one-time setup in Settings).
+- **My Board scan**: tap My Board in the grid tab, then tap each unit on your board. The app reads the name from the stat popup and marks it in your pool. 25 second window.
+- **Opp Board scan**: navigate to an opponent's board in TFT, tap Opp Board, then tap each of their units. Reads name and star level (shown as Jinx ★★) and increments their contest badge. 30 second window. Both scans require the Accessibility service (one-time setup in Settings).
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
@@ -101,10 +102,21 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.6 - 2026-06-02
+- Fix: board scan was detecting ghost champions (Lissandra on every scan regardless of board). Scan zone now covers the full screen width so the popup is found whether it appears on the left or right side of the screen.
+- Fix: OCR fuzzy matching tightened. Short text fragments like "issa" or "sandra" no longer match champion names. A minimum of 5 characters is required and partial matches must cover at least 80% of the target name.
+- Fix: overlay permission status now refreshes when you return from Android Settings. Previously the "not granted" card stayed even after granting permission.
+- Fix: Morgana moved to 4-cost pool. She was incorrectly listed as 5-cost since the app launched. Riot moved her to 4-cost in patch 17.3.
+- Occult theme added to the app UI: inverted pentagram sigil, repeating symbol background pattern, occult dividers.
+
+### v1.5 - 2026-06-02
+- Opponent board scan: tap Opp Board in the grid tab, navigate to an opponent's board in TFT, then tap each unit. The app reads the champion name and star level from the stat popup and shows the results with star counts (Jinx ★★, TwistedFate ★). Contest badges increment automatically. 30 second window. Requires Accessibility service.
+- My Board scan button renamed from Board Scan to My Board to distinguish from Opp Board.
+- Star level detection added to the popup OCR engine.
+
 ### v1.4 - 2026-06-01
-- Board scan mode: tap Board Scan in the grid tab, then tap each unit on the board. The app reads the champion name from the stat popup and marks it in your pool automatically. 25 second scan window, vibrates once per unit detected. Requires Accessibility service.
+- My board scan: tap My Board in the grid tab, then tap each unit on your board. The app reads the champion name from the stat popup and marks it in your pool automatically. 25 second scan window, vibrates once per unit detected. Requires Accessibility service.
 - Bench detection: full scan now reads champion names from the bench row below the board and logs them.
-- Version bump to 1.4.
 
 ### v1.3 - 2026-05-31
 - Scan Now fixed: the overlay now moves aside automatically after you grant permission so TFT is on screen when the capture runs. No need to manually switch apps.
