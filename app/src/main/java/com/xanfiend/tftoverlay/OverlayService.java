@@ -102,9 +102,8 @@ public class OverlayService extends Service {
     static void setOverlayVisible(boolean visible){
         OverlayService s=_instance;
         if(s==null) return;
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable(){ public void run(){
-            if(s.button!=null) s.button.setVisibility(visible ? View.VISIBLE : View.GONE);
-            if(!visible && s.panel!=null) s.closePanel();
+        if(!visible) new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable(){ public void run(){
+            if(s.panel!=null) s.closePanel();
         }});
     }
 
