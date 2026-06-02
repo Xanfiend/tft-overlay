@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.6";
+    private static final String APP_VERSION = "v1.7";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -87,13 +87,26 @@ public class OverlayService extends Service {
     private Runnable oppPollRunnable;
     private Runnable oppCountdownRunnable;
 
-    // in-app debug log — last 30 lines, shown in Settings
+    // debug scan: close panel, scan, reopen settings so user sees results
+    private boolean debugScanPending = false;
+
+    // in-app debug log — last 80 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
     static void addScanLog(String msg){
         android.util.Log.d("TFTScryer", msg);
         synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>80) scanLog.remove(0); }
     }
     static void clearScanLog(){ synchronized(scanLog){ scanLog.clear(); } }
+
+    // called by TFTAccessibilityService when the foreground app changes
+    static void setOverlayVisible(boolean visible){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable(){ public void run(){
+            if(s.button!=null) s.button.setVisibility(visible ? View.VISIBLE : View.GONE);
+            if(!visible && s.panel!=null) s.closePanel();
+        }});
+    }
 
     static void deliverScanResult(ScreenScanner.ScanResult r){
         OverlayService s=_instance;
@@ -1200,8 +1213,11 @@ public class OverlayService extends Service {
             if(!canDbgScan){ Toast.makeText(OverlayService.this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show(); return; }
             clearScanLog();
             addScanLog("=== DEBUG SCAN ===");
-            triggerPopupScan();
-            Toast.makeText(OverlayService.this,"Scanning — open Debug Log in a moment",Toast.LENGTH_SHORT).show();
+            debugScanPending=true;
+            closePanel(); // close so TFT is visible when screenshot runs
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
+                triggerPopupScan();
+            }}, 350);
         }});
         root.addView(dbgScanBtn);
 
@@ -1458,7 +1474,13 @@ public class OverlayService extends Service {
                                 new ScreenScanner.ScanCallback(){
                                     public void onResult(ScreenScanner.ScanResult r){
                                         if(oppScanMode) applyOppPopupScanResult(r);
-                                        else applyPopupScanResult(r);
+                                        else if(boardScanMode) applyPopupScanResult(r);
+                                        else if(debugScanPending){
+                                            debugScanPending=false;
+                                            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
+                                                mode=5; showPanel();
+                                            }}, 500);
+                                        }
                                     }
                                     public void onError(String msg){ addScanLog("board scan OCR err: "+msg); }
                                 }, ScreenScanner.MODE_POPUP);
