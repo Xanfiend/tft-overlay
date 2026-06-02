@@ -279,57 +279,63 @@ public class ScreenScanner {
         return r;
     }
 
-    // Board scan mode: only reads the unit stat popup zone.
-    // Popup appears in the left-center of the screen when a unit is tapped.
+    // Board scan mode: reads the unit stat popup wherever it appears on screen.
+    // The popup can appear on either side depending on which unit was tapped.
     private ScanResult parsePopup(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
         boolean portrait = bmpH > bmpW;
-        // In landscape the popup appears roughly in the left 45% and middle 20-65% vertically.
-        // In portrait it's wider and sits higher.
-        int popLeft  = bmpW * 3  / 100;
-        int popRight = portrait ? bmpW * 85 / 100 : bmpW * 50 / 100;
-        int popTop   = portrait ? bmpH * 10 / 100 : bmpH * 20 / 100;
-        int popBot   = portrait ? bmpH * 55 / 100 : bmpH * 70 / 100;
-        log("popup zone: x=" + popLeft + "-" + popRight + " y=" + popTop + "-" + popBot);
+        // Full width scan — popup can appear on either side of the screen.
+        // Skip the very top (system bar, traits panel) and very bottom (shop/bench).
+        int popTop = portrait ? bmpH * 8  / 100 : bmpH * 12 / 100;
+        int popBot = portrait ? bmpH * 62 / 100 : bmpH * 82 / 100;
+        // Minimum block height filter: champion name in the popup is rendered at a
+        // large size (~14sp+). Small UI labels (trait counts, gold, etc.) are tiny
+        // and get filtered out here. bmpH/52 ≈ 20px at 1080p, ≈ 30px at 1600p.
+        int minH = Math.max(16, bmpH / 52);
+        log("popup zone: y=" + popTop + "-" + popBot + " minH=" + minH);
 
         List<String> allChamps = buildChampList();
 
-        // Log all blocks in popup zone
+        // Log all qualifying blocks for debug
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
             String raw = block.getText().trim().replace("\n", "|");
             int cx = box.centerX(), cy = box.centerY();
-            if (cx >= popLeft && cx <= popRight && cy >= popTop && cy <= popBot) {
-                log("popup blk \"" + raw + "\" x=" + cx + " y=" + cy);
+            if (cy >= popTop && cy <= popBot && box.height() >= minH) {
+                log("popup blk \"" + raw + "\" x=" + cx + " y=" + cy + " h=" + box.height());
             }
         }
 
-        // Find the first champion name in the popup zone — it's the unit's name label
+        // Find the best champion match: prefer tallest text block (most likely name label)
+        int bestH = 0;
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
             String raw = block.getText().trim();
             if (raw.isEmpty()) continue;
-            int cx = box.centerX(), cy = box.centerY();
-            if (cx < popLeft || cx > popRight || cy < popTop || cy > popBot) continue;
+            int cy = box.centerY();
+            if (cy < popTop || cy > popBot) continue;
+            if (box.height() < minH) continue;
             for (String name : allChamps) {
-                if (fuzzyMatchChamp(raw, name)) {
+                if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
                     r.detectedBoardUnit = name;
-                    log("popup unit: " + name + " from \"" + raw + "\"");
+                    bestH = box.height();
+                    log("popup candidate: " + name + " h=" + box.height() + " from \"" + raw + "\"");
                     break;
                 }
             }
-            if (!r.detectedBoardUnit.isEmpty()) break;
         }
+        if (!r.detectedBoardUnit.isEmpty())
+            log("popup unit: " + r.detectedBoardUnit + " (best h=" + bestH + ")");
 
-        // Sweep the popup zone for star characters to determine star level
+        // Star sweep — same zone and height filter
         if (!r.detectedBoardUnit.isEmpty()) {
             for (Text.TextBlock block : text.getTextBlocks()) {
                 android.graphics.Rect box = block.getBoundingBox();
                 if (box == null) continue;
-                int cx = box.centerX(), cy = box.centerY();
-                if (cx < popLeft || cx > popRight || cy < popTop || cy > popBot) continue;
+                int cy = box.centerY();
+                if (cy < popTop || cy > popBot) continue;
                 int stars = countStars(block.getText());
                 if (stars > r.detectedBoardStars) r.detectedBoardStars = stars;
             }
@@ -359,7 +365,12 @@ public class ScreenScanner {
     private boolean fuzzyMatchChamp(String ocr, String target) {
         String ocrNorm = ocr.toLowerCase().replaceAll("[^a-z]", "");
         String tarNorm = target.toLowerCase().replaceAll("[^a-z]", "");
-        if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm) || tarNorm.contains(ocrNorm)) return true;
+        // Require at least 5 chars — 3-char fragments produce too many false positives
+        if (ocrNorm.length() < 5) return false;
+        // Exact or OCR contains the full name
+        if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm)) return true;
+        // Partial match only when OCR covers >=80% of the target (e.g. "Lissandr" → Lissandra)
+        if (tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
         String tarWords = target.replaceAll("([A-Z])", " $1").trim();
         return fuzzyMatch(ocr, tarWords);
     }
@@ -367,11 +378,15 @@ public class ScreenScanner {
     private boolean fuzzyMatch(String ocr, String target) {
         String ocrL = ocr.toLowerCase();
         String tarL = target.toLowerCase();
-        if (ocrL.contains(tarL) || tarL.contains(ocrL)) return true;
+        if (ocrL.length() < 4) return false;
+        if (ocrL.contains(tarL)) return true;
+        // Reverse containment only if OCR is substantial relative to target
+        if (tarL.contains(ocrL) && ocrL.length() * 10 >= tarL.length() * 8) return true;
         String[] words = tarL.split("[ ']+");
         if (words.length == 0) return false;
         int matched = 0;
-        for (String w : words) { if (w.length() > 2 && ocrL.contains(w)) matched++; }
+        // Require word length > 3 to avoid single-syllable false matches
+        for (String w : words) { if (w.length() > 3 && ocrL.contains(w)) matched++; }
         return matched > 0 && (float) matched / words.length >= 0.6f;
     }
 }
