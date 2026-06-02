@@ -28,6 +28,7 @@ public class ScreenScanner {
     // scan mode constants
     static final int MODE_FULL  = 0; // normal scan: gold, level, augments, shop, bench
     static final int MODE_POPUP = 1; // board scan mode: read champion name from unit popup zone only
+    static final int MODE_BOARD = 2; // auto board scan: full-screen sweep, very low minH, returns all champion matches
 
     public static class ScanResult {
         public int gold = -1;
@@ -38,6 +39,7 @@ public class ScreenScanner {
         public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
         public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
+        public List<String> autoChampions = new ArrayList<>(); // auto board scan: all champion names found
         public String status = "";
     }
 
@@ -144,6 +146,9 @@ public class ScreenScanner {
                     if (mode == MODE_POPUP) {
                         r = parsePopup(text, bmp.getWidth(), bmp.getHeight());
                         log("popup parse: unit=" + (r.detectedBoardUnit.isEmpty() ? "none" : r.detectedBoardUnit));
+                    } else if (mode == MODE_BOARD) {
+                        r = parseBoard(text, bmp.getWidth(), bmp.getHeight());
+                        log("auto-scan: " + r.autoChampions.size() + " champs found");
                     } else {
                         r = parse(text, bmp.getWidth(), bmp.getHeight());
                         log("parse: gold=" + r.gold + " lv=" + r.level
@@ -345,6 +350,30 @@ public class ScreenScanner {
             }
             if (r.detectedBoardStars > 0)
                 log("popup stars: " + r.detectedBoardStars + " for " + r.detectedBoardUnit);
+        }
+        return r;
+    }
+
+    // Auto board scan: sweep the entire screen with a very low height filter.
+    // Catches small name labels on bench units, shop cards, and any popup visible.
+    // Returns every champion name found anywhere on screen.
+    private ScanResult parseBoard(Text text, int bmpW, int bmpH) {
+        ScanResult r = new ScanResult();
+        int minH = 8;
+        List<String> allChamps = buildChampList();
+        log("auto-scan: full screen minH=" + minH + " bmp=" + bmpW + "x" + bmpH + " blocks=" + text.getTextBlocks().size());
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim();
+            if (raw.isEmpty() || box.height() < minH) continue;
+            for (String name : allChamps) {
+                if (!r.autoChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+                    r.autoChampions.add(name);
+                    log("auto: " + name + " h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " from \"" + raw.replace("\n","|") + "\"");
+                    break;
+                }
+            }
         }
         return r;
     }
