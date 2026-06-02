@@ -1177,7 +1177,7 @@ public class OverlayService extends Service {
             synchronized(scanLog){ for(String l:scanLog) sb.append(l).append("\n"); }
             android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
             cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-scan-log",sb.toString()));
-            toast("Log copied to clipboard");
+            Toast.makeText(OverlayService.this,"Log copied to clipboard",Toast.LENGTH_SHORT).show();
         }});
         logHdrRow.addView(copyLogBtn);
         TextView clearLogBtn=new TextView(this); clearLogBtn.setText("clear");
@@ -1197,11 +1197,11 @@ public class OverlayService extends Service {
         dbgScanBtn.setPadding(0,10,0,10); dbgScanBtn.setBackground(box(CARD,6,canDbgScan?EDGE:DIM,1));
         LinearLayout.LayoutParams dbgl=new LinearLayout.LayoutParams(-1,-2); dbgl.setMargins(0,6,0,4); dbgScanBtn.setLayoutParams(dbgl);
         dbgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(!canDbgScan){ toast("Enable Accessibility service first"); return; }
+            if(!canDbgScan){ Toast.makeText(OverlayService.this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show(); return; }
             clearScanLog();
             addScanLog("=== DEBUG SCAN ===");
             triggerPopupScan();
-            toast("Scanning — open Debug Log in a moment");
+            Toast.makeText(OverlayService.this,"Scanning — open Debug Log in a moment",Toast.LENGTH_SHORT).show();
         }});
         root.addView(dbgScanBtn);
 
