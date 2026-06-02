@@ -366,11 +366,17 @@ public class ScreenScanner {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
             String raw = block.getText().trim();
-            if (raw.isEmpty() || box.height() < minH) continue;
+            if (raw.isEmpty()) continue;
+            String rawLog = raw.replace("\n", "|");
+            if (box.height() < minH) {
+                log("skip h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
+                continue;
+            }
+            log("cand h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
             for (String name : allChamps) {
                 if (!r.autoChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
                     r.autoChampions.add(name);
-                    log("auto: " + name + " h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " from \"" + raw.replace("\n","|") + "\"");
+                    log("auto match: " + name + " from \"" + rawLog + "\"");
                     break;
                 }
             }
