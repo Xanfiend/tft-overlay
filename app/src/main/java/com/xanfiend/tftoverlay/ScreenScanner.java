@@ -39,8 +39,17 @@ public class ScreenScanner {
         public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
         public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
+        public android.graphics.Rect detectedPopupBounds = null; // popup scan: bounding rect of all popup-zone blocks
         public List<String> autoChampions = new ArrayList<>(); // auto board scan: all champion names found
+        public List<BoardUnit> boardUnits = new ArrayList<>();  // board vision: template-matched units
         public String status = "";
+    }
+
+    public static class BoardUnit {
+        public final String name;
+        public final float confidence;
+        public final int probeX, probeY;
+        public BoardUnit(String n, float c, int x, int y){ name=n; confidence=c; probeX=x; probeY=y; }
     }
 
     public interface ScanCallback {
@@ -75,6 +84,56 @@ public class ScreenScanner {
     // Full scan from bitmap (accessibility screenshot path).
     void scanBitmap(Bitmap bmp, ScanCallback cb) {
         scanBitmap(bmp, cb, MODE_FULL);
+    }
+
+    // Board vision: match board hex crops against saved templates. No OCR — pure image signatures.
+    // Runs on a background thread; callback fires on main thread.
+    void scanBoardVision(Bitmap bmp, Context ctx, ScanCallback cb) {
+        new Thread(() -> {
+            log("scanBoardVision " + bmp.getWidth() + "x" + bmp.getHeight());
+            ChampionTemplates.load(ctx);
+            if (ChampionTemplates.templateCount() == 0) {
+                log("boardVision: no templates — run My Board scan first");
+                ScanResult r = new ScanResult();
+                r.status = "no templates — tap My Board and scan each unit first";
+                bmp.recycle();
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> cb.onResult(r));
+                return;
+            }
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            int boardTop = h * 10 / 100;
+            int boardBot = h * 68 / 100;
+            int cropSize = Math.max(60, h / 14);
+            int cols = 7, rows = 4;
+            ScanResult r = new ScanResult();
+            log("boardVision: " + ChampionTemplates.templateCount() + " templates, " + cols + "x" + rows + " grid, crop=" + cropSize);
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    int cx = (int) ((col + 0.5f) * w / cols);
+                    int cy = boardTop + (int) ((row + 0.5f) * (boardBot - boardTop) / rows);
+                    int x0 = Math.max(0, cx - cropSize / 2);
+                    int y0 = Math.max(0, cy - cropSize / 2);
+                    int cw = Math.min(cropSize, w - x0);
+                    int ch = Math.min(cropSize, h - y0);
+                    if (cw <= 0 || ch <= 0) continue;
+                    Bitmap crop = Bitmap.createBitmap(bmp, x0, y0, cw, ch);
+                    ChampionTemplates.Match m = ChampionTemplates.match(crop);
+                    crop.recycle();
+                    if (m != null) {
+                        boolean dup = false;
+                        for (BoardUnit bu : r.boardUnits) { if (bu.name.equals(m.name)) { dup = true; break; } }
+                        if (!dup) {
+                            r.boardUnits.add(new BoardUnit(m.name, m.sim, cx, cy));
+                            log("boardVision: " + m.name + " sim=" + (int)(m.sim*100) + "% at " + cx + "," + cy);
+                        }
+                    }
+                }
+            }
+            r.status = r.boardUnits.size() + " unit" + (r.boardUnits.size() == 1 ? "" : "s") + " found";
+            log("boardVision done: " + r.boardUnits.size() + " units");
+            bmp.recycle();
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> cb.onResult(r));
+        }).start();
     }
 
     // Scan from bitmap with explicit mode (MODE_FULL or MODE_POPUP).
@@ -315,6 +374,7 @@ public class ScreenScanner {
 
         // Find the best champion match: prefer tallest block (most likely the name label)
         int bestH = 0;
+        int pMinX = Integer.MAX_VALUE, pMinY = Integer.MAX_VALUE, pMaxX = 0, pMaxY = 0;
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
@@ -323,6 +383,11 @@ public class ScreenScanner {
             int cy = box.centerY();
             if (cy < popTop || cy > popBot) continue;
             if (box.height() < minH) continue;
+            // accumulate overall popup bounds from all qualifying blocks
+            if (box.left < pMinX) pMinX = box.left;
+            if (box.top < pMinY) pMinY = box.top;
+            if (box.right > pMaxX) pMaxX = box.right;
+            if (box.bottom > pMaxY) pMaxY = box.bottom;
             for (String name : allChamps) {
                 if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
                     r.detectedBoardUnit = name;
@@ -336,6 +401,10 @@ public class ScreenScanner {
             log("popup: no champion matched");
         } else {
             log("popup unit: " + r.detectedBoardUnit + " (h=" + bestH + ")");
+            if (pMaxX > pMinX) {
+                r.detectedPopupBounds = new android.graphics.Rect(pMinX, pMinY, pMaxX, pMaxY);
+                log("popup bounds: " + pMinX + "," + pMinY + "-" + pMaxX + "," + pMaxY);
+            }
         }
 
         // Star sweep — same zone and height filter

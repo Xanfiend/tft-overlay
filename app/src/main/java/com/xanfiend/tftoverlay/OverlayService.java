@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.7";
+    private static final String APP_VERSION = "v1.8";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -134,6 +134,7 @@ public class OverlayService extends Service {
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
+        new Thread(new Runnable(){ public void run(){ ChampionTemplates.load(OverlayService.this); }}).start();
     }
     @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
 
@@ -367,7 +368,11 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
             root.addView(asActive);
         } else {
-            TextView asBtn=new TextView(this); asBtn.setText(accAvail?"\u29bf Auto Scan Board":"\u29bf Auto Scan (enable Accessibility first)");
+            int tplCount=ChampionTemplates.templateCount();
+            String asLabel=accAvail
+                ? (tplCount>0?"\u29bf Auto Scan Board ("+tplCount+" templates)":"\u29bf Auto Scan Board (no templates yet)")
+                : "\u29bf Auto Scan (enable Accessibility first)";
+            TextView asBtn=new TextView(this); asBtn.setText(asLabel);
             asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(12); asBtn.setGravity(Gravity.CENTER);
             asBtn.setPadding(0,12,0,12);
             asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
@@ -430,7 +435,7 @@ public class OverlayService extends Service {
             root.addView(scanRow);
 
             TextView bsHint=new TextView(this);
-            bsHint.setText(accAvail?"Tap a scan, then tap each unit on the board \u2014 reads name + star level":"Enable Accessibility service for board scan (Settings tab)");
+            bsHint.setText(accAvail?"My/Opp Board: tap each unit to read the popup. Templates are saved automatically for Auto Scan.":"Enable Accessibility service for board scan (Settings tab)");
             bsHint.setTextColor(DIM); bsHint.setTextSize(10); bsHint.setPadding(2,2,2,6); root.addView(bsHint);
         }
 
@@ -1280,6 +1285,28 @@ public class OverlayService extends Service {
         }
         root.addView(logBox);
 
+        // ◇ TEMPLATES
+        TextView tplHdr=new TextView(this); tplHdr.setText("◇ TEMPLATES");
+        tplHdr.setTextColor(GOLD); tplHdr.setTextSize(11); tplHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        tplHdr.setLetterSpacing(0.1f); tplHdr.setPadding(2,14,0,4); root.addView(tplHdr);
+        int tplCount=ChampionTemplates.templateCount();
+        TextView tplCountTv=new TextView(this);
+        tplCountTv.setText(tplCount==0
+            ?"No templates — run My Board or Opp Board scan to capture champion portraits"
+            :tplCount+" template"+(tplCount==1?"":"s")+" saved (auto-captured during board scans)");
+        tplCountTv.setTextColor(tplCount>0?ASH:DIM); tplCountTv.setTextSize(11); tplCountTv.setPadding(2,0,0,6);
+        root.addView(tplCountTv);
+        if(tplCount>0){
+            TextView clearTpl=new TextView(this); clearTpl.setText("Clear all templates");
+            clearTpl.setTextColor(BONE); clearTpl.setTextSize(12); clearTpl.setGravity(Gravity.CENTER);
+            clearTpl.setPadding(0,10,0,10); clearTpl.setBackground(box(0xFF1A0C0E,6,BLOOD,2));
+            LinearLayout.LayoutParams ctll=new LinearLayout.LayoutParams(-1,-2); ctll.setMargins(0,0,0,6); clearTpl.setLayoutParams(ctll);
+            clearTpl.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                ChampionTemplates.clearAll(OverlayService.this); mode=5; showPanel();
+            }});
+            root.addView(clearTpl);
+        }
+
         // divider
         TextView scanDiv=new TextView(this); scanDiv.setText("────────────────────");
         scanDiv.setTextColor(EDGE); scanDiv.setTextSize(8);
@@ -1500,7 +1527,14 @@ public class OverlayService extends Service {
     private void triggerAutoScan(){
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null){ autoScanPending=false; addScanLog("auto-scan: svc null"); mode=0; showPanel(); return; }
-        addScanLog("auto-scan: taking screenshot");
+        ChampionTemplates.load(OverlayService.this);
+        if(ChampionTemplates.templateCount()==0){
+            autoScanPending=false;
+            addScanLog("auto-scan: no templates — do My Board scan first to capture them");
+            Toast.makeText(OverlayService.this,"No templates yet — tap My Board and scan each unit first",Toast.LENGTH_LONG).show();
+            mode=0; showPanel(); return;
+        }
+        addScanLog("auto-scan: "+ChampionTemplates.templateCount()+" templates, taking screenshot");
         try{
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
@@ -1511,11 +1545,11 @@ public class OverlayService extends Service {
                             hb.close();
                             Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
-                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                            new ScreenScanner(OverlayService.this,null).scanBoardVision(bmp,OverlayService.this,
                                 new ScreenScanner.ScanCallback(){
                                     public void onResult(ScreenScanner.ScanResult r){ applyAutoScanResult(r); }
                                     public void onError(String msg){ autoScanPending=false; addScanLog("ERR auto-scan: "+msg); mode=0; showPanel(); }
-                                }, ScreenScanner.MODE_BOARD);
+                                });
                         }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-scan: "+e.getMessage()); mode=0; showPanel(); }
                     }
                     @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-scan shot: "+errorCode); mode=0; showPanel(); }
@@ -1525,10 +1559,17 @@ public class OverlayService extends Service {
 
     private void applyAutoScanResult(ScreenScanner.ScanResult r){
         autoScanPending=false;
-        autoScanResults=new java.util.ArrayList<>(r.autoChampions);
-        for(String name : r.autoChampions) pool.add(name,1);
-        buzz();
-        addScanLog("auto-scan complete: "+r.autoChampions.size()+" champs marked");
+        autoScanResults=new java.util.ArrayList<>();
+        if(r.boardUnits!=null && !r.boardUnits.isEmpty()){
+            for(ScreenScanner.BoardUnit bu : r.boardUnits){
+                autoScanResults.add(bu.name+" ("+Math.round(bu.confidence*100)+"%)");
+                pool.add(bu.name,1);
+            }
+            buzz();
+            addScanLog("auto-scan complete: "+r.boardUnits.size()+" units via template matching");
+        } else {
+            addScanLog("auto-scan: "+r.status);
+        }
         mode=0; showPanel();
     }
 
@@ -1547,19 +1588,20 @@ public class OverlayService extends Service {
                             hb.close();
                             Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
+                            final Bitmap bmpForTemplate=bmp.copy(Bitmap.Config.ARGB_8888,false);
                             new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
                                 new ScreenScanner.ScanCallback(){
                                     public void onResult(ScreenScanner.ScanResult r){
-                                        if(oppScanMode) applyOppPopupScanResult(r);
-                                        else if(boardScanMode) applyPopupScanResult(r);
-                                        else if(debugScanPending){
+                                        if(oppScanMode) applyOppPopupScanResult(r,bmpForTemplate);
+                                        else if(boardScanMode) applyPopupScanResult(r,bmpForTemplate);
+                                        else { bmpForTemplate.recycle(); if(debugScanPending){
                                             debugScanPending=false;
                                             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
                                                 mode=5; showPanel();
                                             }}, 500);
-                                        }
+                                        }}
                                     }
-                                    public void onError(String msg){ addScanLog("board scan OCR err: "+msg); }
+                                    public void onError(String msg){ bmpForTemplate.recycle(); addScanLog("board scan OCR err: "+msg); }
                                 }, ScreenScanner.MODE_POPUP);
                         }catch(Exception e){ addScanLog("ERR board scan: "+e.getMessage()); }
                     }
@@ -1568,14 +1610,23 @@ public class OverlayService extends Service {
         }catch(Exception e){ addScanLog("ERR triggerPopupScan: "+e.getMessage()); }
     }
 
-    private void applyPopupScanResult(ScreenScanner.ScanResult r){
-        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()) return;
-        String name=r.detectedBoardUnit;
-        if(boardScanResults.contains(name)) return;
+    private void applyPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
+        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()){ sourceBmp.recycle(); return; }
+        final String name=r.detectedBoardUnit;
+        if(boardScanResults.contains(name)){ sourceBmp.recycle(); return; }
         boardScanResults.add(name);
         pool.add(name,1);
         buzz();
-        addScanLog("board scan: added "+name);
+        if(r.detectedPopupBounds!=null){
+            final android.graphics.Rect bounds=r.detectedPopupBounds;
+            new Thread(new Runnable(){ public void run(){
+                ChampionTemplates.saveTemplate(OverlayService.this, name, sourceBmp, bounds);
+                sourceBmp.recycle();
+            }}).start();
+        } else {
+            sourceBmp.recycle();
+        }
+        addScanLog("board scan: added "+name+(r.detectedPopupBounds!=null?" (template saved)":""));
         if(btnLabel!=null){
             btnLabel.setText("+"+name.split(" ")[0]);
             boardHandler.postDelayed(new Runnable(){ public void run(){
@@ -1625,17 +1676,26 @@ public class OverlayService extends Service {
         mode=0; showPanel();
     }
 
-    private void applyOppPopupScanResult(ScreenScanner.ScanResult r){
-        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()) return;
-        String name=r.detectedBoardUnit;
-        if(oppScanResults.containsKey(name)) return;
+    private void applyOppPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
+        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()){ sourceBmp.recycle(); return; }
+        final String name=r.detectedBoardUnit;
+        if(oppScanResults.containsKey(name)){ sourceBmp.recycle(); return; }
         int stars=Math.max(1,r.detectedBoardStars);
         oppScanResults.put(name,stars);
         pool.addOpp(name,1);
         buzz();
+        if(r.detectedPopupBounds!=null){
+            final android.graphics.Rect bounds=r.detectedPopupBounds;
+            new Thread(new Runnable(){ public void run(){
+                ChampionTemplates.saveTemplate(OverlayService.this, name, sourceBmp, bounds);
+                sourceBmp.recycle();
+            }}).start();
+        } else {
+            sourceBmp.recycle();
+        }
         StringBuilder flash=new StringBuilder("+").append(name.split(" ")[0]);
         for(int i=0;i<stars;i++) flash.append("★");
-        addScanLog("opp scan: "+name+" "+stars+"★");
+        addScanLog("opp scan: "+name+" "+stars+"★"+(r.detectedPopupBounds!=null?" (template saved)":""));
         if(btnLabel!=null){
             btnLabel.setText(flash.toString());
             boardHandler.postDelayed(new Runnable(){ public void run(){
