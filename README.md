@@ -142,6 +142,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.18 - 2026-06-05
+- Fix: default probe grid was too narrow. Board left edge moved from 28% to 8% — units in the left 3 columns were never tapped. Board right extended from 70% to 88%. Front row bottom corrected from 60% to 65%. Bench moved from 72% to 80%.
+- Use Settings -> Calibrate Scan -> SHOW DOTS to fine-tune for your specific device.
+
 ### v1.17 - 2026-06-05
 - Calibrate Scan (Settings tab): nudge board top, bottom, left edge, right edge, and bench row by 1% increments until the probe dots land on your board hexes.
 - SHOW DOTS button closes the panel and draws numbered circles over TFT — red for board probes, blue for bench probes, in scan order. Fades after 5 seconds.
