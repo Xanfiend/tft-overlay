@@ -121,6 +121,22 @@ public class Pool {
         return 5 + interest(gold) + streakBonus(streak);
     }
 
+    // ---- scan calibration: probe grid percentages ----
+    public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
+    public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   60); }
+    public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
+    public int getBoardLeftPct()       { return p.getInt("cal_left",  28); }
+    public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
+    public int getBoardRightPct()      { return p.getInt("cal_right", 70); }
+    public void setBoardRightPct(int v){ p.edit().putInt("cal_right", Math.max(50, Math.min(100,v))).apply(); }
+    public int getBenchYPct()          { return p.getInt("cal_bench", 72); }
+    public void setBenchYPct(int v)    { p.edit().putInt("cal_bench", Math.max(50, Math.min(95,v))).apply(); }
+    public void resetCalibration()     {
+        p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
+                .remove("cal_right").remove("cal_bench").apply();
+    }
+
     // ---- bench-thinning: junk units of a cost you're holding on your bench ----
     // These temporarily remove copies from the shared pool, nudging your odds up.
     // Stored per cost tier (1..5).
