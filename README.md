@@ -85,8 +85,9 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 ## ✦ Usage
 
 - **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
-- **My Board scan**: tap My Board in the grid tab, then tap each unit on your board. The app reads the name from the stat popup and marks it in your pool. 25 second window.
-- **Opp Board scan**: navigate to an opponent's board in TFT, tap Opp Board, then tap each of their units. Reads name and star level (shown as Jinx ★★) and increments their contest badge. 30 second window. Both scans require the Accessibility service (one-time setup in Settings).
+- **Auto Scan Board**: tap Auto Scan Board in the grid tab. The app dispatches taps to every board hex automatically, reads the popup after each one, and marks all found champions. Takes 30-40 seconds. Tap the sigil to stop early.
+- **My Board scan**: tap My Board in the grid tab, then tap each unit on your board manually. The app reads the name from the stat popup and marks it in your pool. 25 second window.
+- **Opp Board scan**: navigate to an opponent's board in TFT, tap Opp Board, then tap each of their units. Reads name and star level (shown as Jinx ★★) and increments their contest badge. 30 second window. All three scans require the Accessibility service (one-time setup in Settings).
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
 - **Reset** between games to clear pool, gold, and contest data.
 
@@ -140,6 +141,12 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.9 - 2026-06-05
+- Auto Scan Board now taps every hex automatically. The app dispatches tap gestures to all 28 board positions, waits for the stat popup to appear, reads the champion name and star level via OCR, then moves to the next position. No templates required, no manual tapping. Takes 30-40 seconds for a full sweep. Tap the sigil to stop early. Results show in the grid with star counts. Templates are still saved during the sweep as a bonus.
+- Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi devices (was caused by a missing description string and accessibility flags in the service config).
+- Fix: Scan Now was scanning the overlay panel instead of TFT when the accessibility path was used. The overlay now closes and waits 350ms before taking the screenshot.
+- Fix: popup OCR now ignores the trait sidebar (left 12% of screen in landscape). Previously the Brawler/Eradicator trait list was being picked up as candidate champion names.
 
 ### v1.8 - 2026-06-03
 - Auto Scan Board now uses template matching instead of OCR. My Board and Opp Board scans automatically save a portrait crop of each champion detected via the stat popup. Once templates are saved, Auto Scan compares hex crops against them to identify board units without user input. Template count shown on the Auto Scan button. Templates survive restarts and can be cleared from Settings.
