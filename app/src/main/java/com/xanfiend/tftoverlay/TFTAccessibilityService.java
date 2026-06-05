@@ -31,13 +31,17 @@ public class TFTAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if(event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
-            CharSequence pkg = event.getPackageName();
-            if(pkg == null) return;
-            String p = pkg.toString();
-            // ignore own overlay windows and core system — not real app switches
-            if(p.equals("com.xanfiend.tftoverlay") || p.equals("com.android.systemui") || p.equals("android")) return;
-            if(!p.equals("com.riotgames.league.teamfighttactics")) OverlayService.setOverlayVisible(false);
+        try {
+            if(event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+                CharSequence pkg = event.getPackageName();
+                if(pkg == null) return;
+                String p = pkg.toString();
+                // ignore own overlay windows and core system — not real app switches
+                if(p.equals("com.xanfiend.tftoverlay") || p.equals("com.android.systemui") || p.equals("android")) return;
+                if(!p.equals("com.riotgames.league.teamfighttactics")) OverlayService.setOverlayVisible(false);
+            }
+        } catch(Exception e) {
+            android.util.Log.e("TFTScryer", "onAccessibilityEvent err: " + e.getMessage());
         }
     }
 

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TFT Scryer</string>
+    <string name="accessibility_description">TFT Scryer reads champion names and star levels from the TFT stat popup to track your board. It also silently captures screenshots for scanning without leaving the game.</string>
 </resources>
