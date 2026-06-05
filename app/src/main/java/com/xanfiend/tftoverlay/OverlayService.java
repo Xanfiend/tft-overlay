@@ -95,6 +95,7 @@ public class OverlayService extends Service {
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoTapIndex = 0;
     private int autoTapConsecutiveMisses = 0;
+    private int autoTapBoardProbeCount = 0; // index where bench probes start
     private java.util.List<int[]> autoTapProbes = new java.util.ArrayList<>();
     private final android.os.Handler autoTapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -1537,6 +1538,7 @@ public class OverlayService extends Service {
         autoScanResults=new java.util.ArrayList<>();
         autoTapIndex=0;
         autoTapConsecutiveMisses=0;
+        autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
@@ -1570,7 +1572,8 @@ public class OverlayService extends Service {
         int[] btnLoc=new int[2];
         int btnW=0, btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        for(int row=0;row<rows;row++){
+        // scan front row first (row 3) up to back row (row 0) — units are placed front-to-back
+        for(int row=rows-1;row>=0;row--){
             for(int col=0;col<cols;col++){
                 int cx=(int)((col+0.5f)*w/cols);
                 int cy=boardTop+(int)((row+0.5f)*(boardBot-boardTop)/rows);
@@ -1579,6 +1582,7 @@ public class OverlayService extends Service {
                 pts.add(new int[]{cx,cy});
             }
         }
+        autoTapBoardProbeCount=pts.size(); // bench starts here
         // bench row: 9 slots at ~77% screen height
         int benchY=h*77/100;
         int benchCols=9;
@@ -1614,6 +1618,11 @@ public class OverlayService extends Service {
     private void autoTapNextProbe(){
         if(!autoScanPending) return;
         if(autoTapIndex>=autoTapProbes.size()){ finishAutoTapScan(); return; }
+        // reset miss counter when entering bench phase
+        if(autoTapBoardProbeCount>0 && autoTapIndex==autoTapBoardProbeCount){
+            autoTapConsecutiveMisses=0;
+            addScanLog("auto-tap: bench phase");
+        }
         if(btnLabel!=null) btnLabel.setText(autoTapIndex+"/"+autoTapProbes.size());
         int[] pt=autoTapProbes.get(autoTapIndex);
         final float px=pt[0], py=pt[1];
@@ -1656,6 +1665,7 @@ public class OverlayService extends Service {
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
         if(!autoScanPending){ sourceBmp.recycle(); return; }
+        boolean inBenchPhase=(autoTapBoardProbeCount>0 && autoTapIndex>=autoTapBoardProbeCount);
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
             int stars=Math.max(1,r.detectedBoardStars);
@@ -1674,9 +1684,20 @@ public class OverlayService extends Service {
             } else { sourceBmp.recycle(); }
             addScanLog("auto-tap: +"+name+" "+stars+"★");
             if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
+            // level-based board exit: skip to bench once board is full
+            if(!inBenchPhase && autoScanResults.size()>=pool.getLevel()){
+                autoTapIndex=autoTapBoardProbeCount-1; // -1 because advanceAutoTap adds 1
+                autoTapConsecutiveMisses=0;
+                addScanLog("auto-tap: board full ("+pool.getLevel()+" units), moving to bench");
+            }
         } else {
             sourceBmp.recycle();
-            if(!autoScanResults.isEmpty()){
+            if(inBenchPhase){
+                // bench is compact — stop after 3 consecutive empty slots
+                autoTapConsecutiveMisses++;
+                if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
+            } else if(!autoScanResults.isEmpty()){
+                // board fallback: stop after 5 consecutive misses post first hit
                 autoTapConsecutiveMisses++;
                 if(autoTapConsecutiveMisses>=5){ finishAutoTapScan(); return; }
             }
