@@ -142,6 +142,13 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.17 - 2026-06-05
+- Calibrate Scan (Settings tab): nudge board top, bottom, left edge, right edge, and bench row by 1% increments until the probe dots land on your board hexes.
+- SHOW DOTS button closes the panel and draws numbered circles over TFT — red for board probes, blue for bench probes, in scan order. Fades after 5 seconds.
+- Calibration values persist across restarts. RESET returns to defaults.
+- Tabs reordered to Grid, Econ, Board, Augs, Items, Settings and labelled with words instead of symbols. Tap targets are taller.
+- My Board manual scan button removed from Grid tab (Auto Scan covers it). Opp Board promoted to a full-width button.
+
 ### v1.16 - 2026-06-05
 - Fix: Auto Scan was detecting Leona (and other 5-letter champion names) when they were not on the board. The 80% partial-match rule let a 4-letter OCR fragment like "leon" count as a match for "Leona". Short names (under 6 letters) now require a full match.
 - Debug: when the scan sees a popup but finds no champion name in it, the raw OCR text is now written to the scan log. This makes it possible to diagnose what the text reader actually saw for missed units.
