@@ -214,6 +214,15 @@ public class ScreenScanner {
                 if (s > r.detectedBoardStars) r.detectedBoardStars = s;
             }
             log("popup unit: " + r.detectedBoardUnit + (r.detectedBoardStars > 0 ? " " + r.detectedBoardStars + "★" : ""));
+        } else if (r.detectedPopupBounds != null) {
+            // popup appeared but no champion matched — log the raw text blocks to aid debugging
+            StringBuilder sb = new StringBuilder("popup no-match text:");
+            for (Text.TextBlock block : text.getTextBlocks()) {
+                android.graphics.Rect b = block.getBoundingBox();
+                if (b == null || b.centerX() < popLeft || b.height() < minH) continue;
+                sb.append(" [").append(block.getText().trim().replace('\n', '|')).append("]");
+            }
+            log(sb.toString());
         }
         return r;
     }
@@ -568,9 +577,10 @@ public class ScreenScanner {
         if (ocrNorm.length() < 4) return false;
         // Exact, or OCR wraps extra text around the full name
         if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm)) return true;
-        // Partial: OCR must cover >=80% of the target (e.g. "Lissandr" → Lissandra OK,
-        // "sandra" → Lissandra NOT OK — 6/9 = 67% < 80%)
-        if (tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
+        // Partial: OCR must cover >=80% of the target. Only applied to names 6+ chars
+        // long — for shorter names (e.g. "Leona" 5 chars) the 80% rule lets "leon"
+        // match, producing false positives.
+        if (tarNorm.length() >= 6 && tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
         String tarWords = target.replaceAll("([A-Z])", " $1").trim();
         return fuzzyMatch(ocr, tarWords);
     }
