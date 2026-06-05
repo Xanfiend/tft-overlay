@@ -46,7 +46,7 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 ## ✦ Usage
 
 - **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
-- **Auto Scan Board**: tap Auto Scan Board in the grid tab. The app dispatches taps to every board hex automatically, reads the popup after each one, and marks all found champions. Takes 30-40 seconds. Tap the sigil to stop early.
+- **Auto Scan Board**: tap Auto Scan Board in the grid tab. The app dispatches taps to all 28 board hexes and 9 bench slots, reads the popup after each one, and marks all found champions. Stops automatically once 5 empty slots are found in a row after the last champion, so it finishes as soon as all units are covered. Tap the sigil to stop early.
 - **My Board scan**: tap My Board in the grid tab, then tap each unit on your board manually. The app reads the name from the stat popup and marks it in your pool. 25 second window.
 - **Opp Board scan**: navigate to an opponent's board in TFT, tap Opp Board, then tap each of their units. Reads name and star level (shown as Jinx ★★) and increments their contest badge. 30 second window. All three scans require the Accessibility service (one-time setup in Settings).
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
@@ -104,7 +104,7 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 ## ✦ Changelog
 
 ### v1.9 - 2026-06-05
-- Auto Scan Board now taps every hex automatically. The app dispatches tap gestures to all 28 board positions, waits for the stat popup to appear, reads the champion name and star level via OCR, then moves to the next position. No templates required, no manual tapping. Takes 30-40 seconds for a full sweep. Tap the sigil to stop early. Results show in the grid with star counts. Templates are still saved during the sweep as a bonus.
+- Auto Scan Board now taps every hex automatically. The app dispatches tap gestures to all 28 board positions plus 9 bench slots, waits for the stat popup to appear, reads the champion name and star level via OCR, then moves to the next position. No templates required, no manual tapping. Scan stops as soon as 5 empty positions are found in a row after the last champion detected, so it finishes as soon as all your units are scanned rather than running through every empty hex. Tap the sigil to stop early. Results show in the grid with star counts. Templates are still saved during the sweep as a bonus.
 - Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi devices (was caused by a missing description string and accessibility flags in the service config).
 - Fix: Scan Now was scanning the overlay panel instead of TFT when the accessibility path was used. The overlay now closes and waits 350ms before taking the screenshot.
 - Fix: popup OCR now ignores the trait sidebar (left 12% of screen in landscape). Previously the Brawler/Eradicator trait list was being picked up as candidate champion names.
