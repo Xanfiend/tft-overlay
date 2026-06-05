@@ -103,7 +103,7 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
-### v1.10 - 2026-06-05
+### v1.9.1 - 2026-06-05
 - Auto Scan Board: if champion templates are saved from previous scans, the app now identifies known units from a single screenshot before tapping any hexes. Typical scan time drops to 3-8 seconds on a board with saved templates.
 - Scan timing tightened: popup wait reduced from 400ms to 250ms, gap between probes from 100ms to 50ms.
 - Memory: template bitmap is now created only when a champion is actually detected, halving allocations on empty hexes.
