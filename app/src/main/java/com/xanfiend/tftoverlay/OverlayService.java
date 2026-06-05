@@ -1584,8 +1584,8 @@ public class OverlayService extends Service {
             }
         }
         autoTapBoardProbeCount=pts.size(); // bench starts here
-        // bench row: 9 slots at ~77% screen height
-        int benchY=h*77/100;
+        // bench row: 9 slots at ~80% screen height (below the item bench which sits ~77%)
+        int benchY=h*80/100;
         int benchCols=9;
         for(int col=0;col<benchCols;col++){
             int cx=(int)((col+0.5f)*w/benchCols);
@@ -1694,12 +1694,15 @@ public class OverlayService extends Service {
             addScanLog("auto-tap: +"+name+" "+stars+"★");
             if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
         } else {
-            if(inBenchPhase){
-                // bench is compact — stop after 3 consecutive empty slots
+            if(r.detectedPopupBounds!=null){
+                // a popup appeared but wasn't a champion (item, ability, etc.) — skip, don't count as miss
+                addScanLog("auto-tap: non-champion popup at probe "+(autoTapIndex+1)+", skipping");
+            } else if(inBenchPhase){
+                // truly empty bench slot
                 autoTapConsecutiveMisses++;
                 if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
             } else if(!autoScanResults.isEmpty()){
-                // board fallback: stop after 5 consecutive misses post first hit
+                // truly empty board hex after first hit
                 autoTapConsecutiveMisses++;
                 if(autoTapConsecutiveMisses>=5){ finishAutoTapScan(); return; }
             }

@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.11");
+        ver.setText("v1.12");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,7 +255,8 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
-            {"v1.11  ·  2026-06-05","Fix: Auto Scan was detecting champions that were not on the board. Root causes: (1) the template-first pass was matching empty hex crops against saved templates at too low a similarity threshold, producing false positives; (2) the popup wait was reduced too aggressively, so OCR sometimes ran before the stat popup appeared and picked up background UI text. Template-first pass removed until a more reliable matching approach is in place. Popup wait restored to 350ms. Gap between probes reduced to 50ms and bitmap copy on empty hexes eliminated as safe speed improvements."},
+            {"v1.12  ·  2026-06-05","Fix: Auto Scan was stopping early after tapping on an item instead of a champion. The scan now distinguishes empty hexes (no popup at all) from non-champion popups (item descriptions, ability text). Only truly empty hexes count toward the miss streak that stops the scan. Item taps are skipped without penalty. Bench probe moved lower on screen to avoid the item bench row in TFT Mobile."},
+            {"v1.11  ·  2026-06-05","Fix: Auto Scan was detecting champions that were not on the board. Template-first pass removed (false positive source). Popup wait restored to 350ms."},
             {"v1.10  ·  2026-06-05","Auto Scan Board speed improvements. Popup wait reduced to 250ms, gap between probes to 50ms. Template bitmaps only created when a champion is detected. Champion list cached across OCR calls."},
             {"v1.9  ·  2026-06-05","Auto Scan Board now taps every hex automatically. Covers all 28 board positions plus 9 bench slots. Scans front row first so it finds your units sooner. Stops after 5 consecutive empty board hexes, then sweeps the bench and stops after 3 empty bench slots. Typical scan time is 8-15 seconds. Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi. Fix: Scan Now was scanning the overlay panel instead of TFT. Fix: popup OCR now ignores the trait sidebar."},
             {"v1.8  ·  2026-06-03","Auto Scan Board now uses template matching instead of OCR. When you scan your board or an opponent's board, the app saves a portrait crop of each champion it detects. After enough templates are captured, Auto Scan compares hex crops against those portraits and identifies units without you tapping each one. Template count shown on the Auto Scan button. Templates survive app restarts and can be cleared from Settings."},
