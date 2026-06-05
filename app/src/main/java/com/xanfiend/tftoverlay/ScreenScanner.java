@@ -25,6 +25,15 @@ public class ScreenScanner {
     private static void log(String m){ OverlayService.addScanLog(m); }
     private static void err(String m){ OverlayService.addScanLog("ERR " + m); }
 
+    // ML Kit's recognizer is reusable and non-trivial to construct. Building a new
+    // one for every probe (37+ per auto-scan) added avoidable latency — cache one.
+    private static TextRecognizer sharedRecognizer;
+    private static synchronized TextRecognizer recognizer(){
+        if (sharedRecognizer == null)
+            sharedRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        return sharedRecognizer;
+    }
+
     // scan mode constants
     static final int MODE_FULL  = 0; // normal scan: gold, level, augments, shop, bench
     static final int MODE_POPUP = 1; // board scan mode: read champion name from unit popup zone only
@@ -142,6 +151,73 @@ public class ScreenScanner {
         recognizeText(bmp, cb, mode);
     }
 
+    // Hot-path popup scan for the auto-tap flow. The caller passes a bitmap already
+    // cropped to the popup vertical band (full width preserved). OCR only sees the
+    // band — ~30% fewer pixels than the full screen, and no shop/bench/trait text to
+    // misread. fullW/fullH are the original screen dims (orientation + thresholds).
+    // Block coordinates are relative to the crop; the caller offsets popup bounds
+    // back to full-screen space before saving a template. Recycles the crop. Lean
+    // logging only — this runs dozens of times per scan.
+    void scanPopupZone(Bitmap crop, int fullW, int fullH, ScanCallback cb) {
+        InputImage image = InputImage.fromBitmap(crop, 0);
+        recognizer().process(image)
+                .addOnSuccessListener(text -> {
+                    ScanResult r = parsePopupZone(text, fullW, fullH);
+                    crop.recycle();
+                    cb.onResult(r);
+                })
+                .addOnFailureListener(e -> {
+                    crop.recycle();
+                    cb.onError("OCR: " + e.getMessage());
+                });
+    }
+
+    // Lean popup parser for a pre-cropped band. The entire crop is the popup zone
+    // vertically, so no cy filtering is needed — only the landscape sidebar skip and
+    // the minimum text height (both derived from the original screen size).
+    private ScanResult parsePopupZone(Text text, int fullW, int fullH) {
+        ScanResult r = new ScanResult();
+        boolean portrait = fullH > fullW;
+        int popLeft = portrait ? 0 : fullW * 12 / 100;
+        int minH = Math.max(16, fullH / 52);
+
+        List<String> allChamps = buildChampList();
+        int bestH = 0;
+        int pMinX = Integer.MAX_VALUE, pMinY = Integer.MAX_VALUE, pMaxX = 0, pMaxY = 0;
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim();
+            if (raw.isEmpty()) continue;
+            if (box.centerX() < popLeft) continue;
+            if (box.height() < minH) continue;
+            if (box.left < pMinX) pMinX = box.left;
+            if (box.top < pMinY) pMinY = box.top;
+            if (box.right > pMaxX) pMaxX = box.right;
+            if (box.bottom > pMaxY) pMaxY = box.bottom;
+            for (String name : allChamps) {
+                if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
+                    r.detectedBoardUnit = name;
+                    bestH = box.height();
+                    break;
+                }
+            }
+        }
+        // bounds set whenever any popup text appeared — lets auto-tap tell an item
+        // popup (bounds, no champion) from an empty hex (no bounds at all)
+        if (pMaxX > pMinX)
+            r.detectedPopupBounds = new android.graphics.Rect(pMinX, pMinY, pMaxX, pMaxY);
+        if (!r.detectedBoardUnit.isEmpty()) {
+            for (Text.TextBlock block : text.getTextBlocks()) {
+                if (block.getBoundingBox() == null) continue;
+                int s = countStars(block.getText());
+                if (s > r.detectedBoardStars) r.detectedBoardStars = s;
+            }
+            log("popup unit: " + r.detectedBoardUnit + (r.detectedBoardStars > 0 ? " " + r.detectedBoardStars + "★" : ""));
+        }
+        return r;
+    }
+
     private Bitmap captureFrame() throws Exception {
         DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
         int w = dm.widthPixels;
@@ -197,7 +273,7 @@ public class ScreenScanner {
     private void recognizeText(Bitmap bmp, ScanCallback cb, int mode) {
         log("OCR start mode=" + mode);
         InputImage image = InputImage.fromBitmap(bmp, 0);
-        TextRecognizer rec = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        TextRecognizer rec = recognizer();
         rec.process(image)
                 .addOnSuccessListener(text -> {
                     log("OCR blocks=" + text.getTextBlocks().size());
