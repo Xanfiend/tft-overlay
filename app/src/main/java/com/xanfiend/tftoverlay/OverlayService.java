@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.18";
+    private static final String APP_VERSION = "v1.19";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
@@ -1677,13 +1677,14 @@ public class OverlayService extends Service {
         java.util.List<int[]> pts=new java.util.ArrayList<>();
         // Use calibrated percentages (settable in Settings → Calibrate Scan)
         int top=h*pool.getBoardTopPct()/100, bot=h*pool.getBoardBotPct()/100;
-        int step=(bot-top)/3;
-        int[] rowYs={ top, top+step, top+2*step, bot };
+        // 5 rows: covers both standard PvP boards (39-65%) and Tocker's Trials (50-72%)
+        int step=(bot-top)/4;
+        int[] rowYs={ top, top+step, top+2*step, top+3*step, bot };
         int boardLeft=w*pool.getBoardLeftPct()/100, boardRight=w*pool.getBoardRightPct()/100;
         int cols=7;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        for(int row=3;row>=0;row--){
+        for(int row=4;row>=0;row--){
             int cy=rowYs[row];
             for(int col=0;col<cols;col++){
                 int cx=boardLeft+(int)((col+0.5f)*(boardRight-boardLeft)/cols);
@@ -1821,11 +1822,12 @@ public class OverlayService extends Service {
                 // board: count ALL non-hits (empty hex AND stray augment/item popups)
                 // so probes off the board don't keep the scan running indefinitely
                 autoTapConsecutiveMisses++;
-                if(autoTapConsecutiveMisses>=5){
-                    // skip straight to bench instead of stopping — board may be empty
+                if(autoTapConsecutiveMisses>=8){
+                    // skip straight to bench — threshold 8 allows one full empty row (7 cols)
+                    // before aborting, so an empty top/bottom row doesn't prematurely end the scan
                     autoTapIndex=autoTapBoardProbeCount-1; // -1 because advanceAutoTap adds 1
                     autoTapConsecutiveMisses=0;
-                    addScanLog("auto-tap: 5 board misses, jumping to bench");
+                    addScanLog("auto-tap: 8 board misses, jumping to bench");
                 }
             }
         }
