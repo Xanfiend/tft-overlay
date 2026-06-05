@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.13");
+        ver.setText("v1.14");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,6 +255,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.14  ·  2026-06-05","Fix: scan was tapping into the augment panel at the top of the screen. Board probe area raised to start lower on screen, away from the augment and HUD zone. Fix: when the board has no units, all 28 board probes were scanned before reaching the bench because the early-stop only fired after the first hit. Now any 5 consecutive board misses skip directly to the bench scan instead of stopping the scan entirely."},
             {"v1.13  ·  2026-06-05","Scan speed and accuracy pass. The text reader is now built once and reused instead of being rebuilt for every hex. Each screenshot is cropped to the unit popup band before reading, so there are fewer pixels to process and no shop, bench, or trait text to misread. Per-hex logging trimmed so the scan spends its time scanning. Tap gesture and the gap between taps shortened. Detection zone is unchanged so accuracy holds, while a full board scan finishes noticeably faster."},
             {"v1.12  ·  2026-06-05","Fix: Auto Scan was stopping early after tapping on an item instead of a champion. The scan now distinguishes empty hexes (no popup at all) from non-champion popups (item descriptions, ability text). Only truly empty hexes count toward the miss streak that stops the scan. Item taps are skipped without penalty. Bench probe moved lower on screen to avoid the item bench row in TFT Mobile."},
             {"v1.11  ·  2026-06-05","Fix: Auto Scan was detecting champions that were not on the board. Template-first pass removed (false positive source). Popup wait restored to 350ms."},
