@@ -126,7 +126,7 @@ public class Pool {
     // front row and bench are lower than originally assumed.
     public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getBoardBotPct()        { return p.getInt("cal_bot",   65); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   72); }
     public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
     public int getBoardLeftPct()       { return p.getInt("cal_left",   8); }
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
