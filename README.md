@@ -142,11 +142,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.9.2 - 2026-06-05
+- Fix: Auto Scan was detecting champions that were not on the board. The template-first pass introduced in v1.9.1 was matching empty hex crops to saved templates with a similarity threshold that was too low, producing false positives. The popup wait was also reduced too far (250ms), so OCR could fire before the stat popup had appeared and pick up background UI text as champion names. Template-first pass removed. Popup wait restored to 350ms.
+- Gap between probes kept at 50ms and the empty-hex bitmap copy eliminated from v1.9.1 as those are safe improvements.
+
 ### v1.9.1 - 2026-06-05
-- Auto Scan Board: if champion templates are saved from previous scans, the app now identifies known units from a single screenshot before tapping any hexes. Typical scan time drops to 3-8 seconds on a board with saved templates.
-- Scan timing tightened: popup wait reduced from 400ms to 250ms, gap between probes from 100ms to 50ms.
-- Memory: template bitmap is now created only when a champion is actually detected, halving allocations on empty hexes.
-- Champion list lookup cached across OCR calls instead of rebuilding each time.
+- Auto Scan Board speed improvements. Popup wait reduced to 250ms, gap between probes to 50ms. Template bitmaps only created when a champion is detected. Champion list cached across OCR calls.
 
 ### v1.9 - 2026-06-05
 - Auto Scan Board now taps every hex automatically. Scans front row first so it finds your units sooner. Stops after 5 consecutive empty board hexes, then sweeps the 9 bench slots and stops after 3 empty bench slots in a row. Typical scan time is 8-15 seconds. Tap the sigil to stop early. Results show in the grid with star counts.
