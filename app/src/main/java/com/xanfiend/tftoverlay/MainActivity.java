@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.9");
+        ver.setText("v1.10");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,7 +255,8 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
-            {"v1.9  ·  2026-06-05","Auto Scan Board now taps every hex automatically. Covers all 28 board positions plus 9 bench slots. Scans front row first since that is where units are placed first, so it finds your units sooner. Stops as soon as the number of found units matches your level setting (board full), then sweeps the bench and stops after 3 empty bench slots. Typical scan time is now 8-15 seconds. Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi. Fix: Scan Now was scanning the overlay panel instead of TFT. Fix: popup OCR now ignores the trait sidebar."},
+            {"v1.10  ·  2026-06-05","Auto Scan Board speed improvements. If champion templates are saved from previous scans, known units are now identified from a single screenshot before any tapping starts. Popup wait reduced from 400ms to 250ms, gap between probes from 100ms to 50ms. Template bitmaps are only created when a champion is actually found, cutting memory use on empty hexes. Champion list lookup cached across OCR calls."},
+            {"v1.9  ·  2026-06-05","Auto Scan Board now taps every hex automatically. Covers all 28 board positions plus 9 bench slots. Scans front row first so it finds your units sooner. Stops after 5 consecutive empty board hexes, then sweeps the bench and stops after 3 empty bench slots. Typical scan time is 8-15 seconds. Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi. Fix: Scan Now was scanning the overlay panel instead of TFT. Fix: popup OCR now ignores the trait sidebar."},
             {"v1.8  ·  2026-06-03","Auto Scan Board now uses template matching instead of OCR. When you scan your board or an opponent's board, the app saves a portrait crop of each champion it detects. After enough templates are captured, Auto Scan compares hex crops against those portraits and identifies units without you tapping each one. Template count shown on the Auto Scan button. Templates survive app restarts and can be cleared from Settings."},
             {"v1.7  ·  2026-06-02","Fix: debug scan now closes the overlay before taking the screenshot so it scans TFT instead of the app itself. After the scan completes the Settings tab reopens automatically with the log. Fix: overlay now hides automatically when you leave TFT and reappears when you come back. Requires Accessibility service."},
             {"v1.6  ·  2026-06-02","Bug fixes: board scan no longer detects ghost champions (Lissandra false positive on Redmi and similar devices). Scan zone now covers the full screen width so the popup is found whether it appears on the left or right side. Fuzzy name matching tightened to reject short OCR fragments. Overlay permission status now refreshes when you return from Android Settings. Morgana moved to 4-cost pool (was wrong since patch 17.3). Occult theme for the app UI."},
