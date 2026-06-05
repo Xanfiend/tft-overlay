@@ -103,6 +103,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.14 - 2026-06-05
+- Fix: Auto Scan was tapping into the augment panel at the top of the screen. The board probe zone now starts lower, keeping all four board rows clear of the HUD and augment area.
+- Fix: when the board had no units, all 28 board probes ran before the bench was reached because the early-stop only triggered after the first hit. Any 5 consecutive board misses now skip directly to the bench instead of stopping the whole scan.
+
 ### v1.13 - 2026-06-05
 - Scan speed and accuracy pass. The text reader is now built once and reused instead of being rebuilt on every hex. Each screenshot is cropped to the unit popup band before reading, which means fewer pixels to process and no shop, bench, or trait text in view to misread. Per-hex logging was trimmed so the scan does not spend time writing logs. The tap gesture and the gap between taps were shortened. The detection zone is unchanged, so accuracy holds while a full board scan finishes noticeably faster.
 
