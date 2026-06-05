@@ -459,12 +459,15 @@ public class ScreenScanner {
         return r;
     }
 
-    private List<String> buildChampList() {
-        List<String> list = new ArrayList<>();
-        for (String[] tier : SetData.CHAMPS) {
-            for (String name : tier) list.add(name);
+    private static List<String> champListCache = null;
+
+    private static List<String> buildChampList() {
+        if (champListCache == null) {
+            champListCache = new ArrayList<>();
+            for (String[] tier : SetData.CHAMPS)
+                for (String name : tier) champListCache.add(name);
         }
-        return list;
+        return champListCache;
     }
 
     private int countStars(String s) {
