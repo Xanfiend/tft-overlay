@@ -32,9 +32,12 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.16";
+    private static final String APP_VERSION = "v1.17";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
+    // probe dots overlay: shows all scan tap positions over TFT for calibration
+    private View probeDotsView = null;
+    private final android.os.Handler probeDotsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
     private static final int[][] ODDS = {
@@ -296,15 +299,17 @@ public class OverlayService extends Service {
         head.addView(title); head.addView(close);
         root.addView(head);
 
-        // six-way tab row: grid / board / augments / economy / items / settings
+        // tab row \u2014 ordered by in-game frequency of use
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        String[] tabNames={"\u25A6","\u2261","\u2756","\u00A7","\u229E","\u2699"};
+        int[] tabModes={0,3,1,2,4,5}; // Grid | Econ | Board | Augs | Items | Settings
+        String[] tabNames={"GRID","ECON","BOARD","AUGS","ITEMS","\u2699"};
         for(int t=0;t<6;t++){
-            final int tm=t; boolean on=mode==t;
+            final int tm=tabModes[t]; boolean on=mode==tm;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
-            tab.setTextColor(on?BONE:ASH); tab.setTextSize(11); tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,12,0,12);
-            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(3,0,3,0); tab.setLayoutParams(tl);
+            tab.setTextColor(on?BONE:ASH); tab.setTextSize(9); tab.setLetterSpacing(0.05f);
+            tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,15,0,15);
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(2,0,2,0); tab.setLayoutParams(tl);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
             tabs.addView(tab);
         }
@@ -389,18 +394,8 @@ public class OverlayService extends Service {
             root.addView(asBtn);
         }
 
-        // scan button row \u2014 board scan (own) + opp scan (side by side)
-        if(boardScanMode){
-            long rem=boardScanDeadline-System.currentTimeMillis();
-            int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
-            TextView bsActive=new TextView(this);
-            bsActive.setText("\u25C9 My board: "+remSec+"s \u00b7 tap to stop");
-            bsActive.setTextColor(GOLD); bsActive.setTextSize(12); bsActive.setGravity(Gravity.CENTER);
-            bsActive.setBackground(box(BLOOD,6,BLOODL,2)); bsActive.setPadding(0,12,0,12);
-            LinearLayout.LayoutParams bsal=new LinearLayout.LayoutParams(-1,-2); bsal.setMargins(0,0,0,6); bsActive.setLayoutParams(bsal);
-            bsActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopBoardScanMode(); }});
-            root.addView(bsActive);
-        } else if(oppScanMode){
+        // opponent board scan \u2014 tap each opponent unit to read its name + star level
+        if(oppScanMode){
             long rem=oppScanDeadline-System.currentTimeMillis();
             int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
             TextView osActive=new TextView(this);
@@ -411,50 +406,17 @@ public class OverlayService extends Service {
             osActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopOppScanMode(); }});
             root.addView(osActive);
         } else {
-            LinearLayout scanRow=new LinearLayout(this); scanRow.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams srl=new LinearLayout.LayoutParams(-1,-2); srl.setMargins(0,0,0,4); scanRow.setLayoutParams(srl);
-
-            TextView bsBtn=new TextView(this); bsBtn.setText("\u25C9 My Board");
-            bsBtn.setTextColor(accAvail?BONE:ASH); bsBtn.setTextSize(12); bsBtn.setGravity(Gravity.CENTER);
-            bsBtn.setPadding(0,10,0,10);
-            bsBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams bsl=new LinearLayout.LayoutParams(0,-2,1f); bsl.setMargins(0,0,4,0); bsBtn.setLayoutParams(bsl);
-            if(accAvail){ bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startBoardScanMode(); }}); }
-            else { bsBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
-            }}); }
-            scanRow.addView(bsBtn);
-
-            TextView osBtn=new TextView(this); osBtn.setText("\u25C9 Opp Board");
+            TextView osBtn=new TextView(this);
+            osBtn.setText(accAvail?"\u25C9 Opp Board":"\u25C9 Opp Board (enable Accessibility first)");
             osBtn.setTextColor(accAvail?BONE:ASH); osBtn.setTextSize(12); osBtn.setGravity(Gravity.CENTER);
             osBtn.setPadding(0,10,0,10);
             osBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(0,-2,1f); osBtn.setLayoutParams(osl);
-            if(accAvail){ osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startOppScanMode(); }}); }
-            else { osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
-            }}); }
-            scanRow.addView(osBtn);
-            root.addView(scanRow);
-
-            TextView bsHint=new TextView(this);
-            bsHint.setText(accAvail?"My/Opp Board: tap each unit manually. Auto Scan taps all board positions automatically.":"Enable Accessibility service for board scan (Settings tab)");
-            bsHint.setTextColor(DIM); bsHint.setTextSize(10); bsHint.setPadding(2,2,2,6); root.addView(bsHint);
-        }
-
-        // my board scan results
-        if(!boardScanResults.isEmpty()){
-            TextView bsrHdr=new TextView(this); bsrHdr.setText("\u25c7 MY BOARD");
-            bsrHdr.setTextColor(GOLD); bsrHdr.setTextSize(11); bsrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-            bsrHdr.setLetterSpacing(0.1f); bsrHdr.setPadding(2,4,0,4); root.addView(bsrHdr);
-            StringBuilder bsrSb=new StringBuilder();
-            for(String s:boardScanResults){ if(bsrSb.length()>0) bsrSb.append(" \u00b7 "); bsrSb.append(s); }
-            TextView bsrTv=new TextView(this); bsrTv.setText(bsrSb.toString());
-            bsrTv.setTextColor(BONE); bsrTv.setTextSize(12); bsrTv.setPadding(2,0,2,4); root.addView(bsrTv);
-            TextView clearBsr=new TextView(this); clearBsr.setText("clear");
-            clearBsr.setTextColor(ASH); clearBsr.setTextSize(10); clearBsr.setPadding(2,0,2,8);
-            clearBsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ boardScanResults.clear(); showPanel(); }});
-            root.addView(clearBsr);
+            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(-1,-2); osl.setMargins(0,0,0,4); osBtn.setLayoutParams(osl);
+            osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                startOppScanMode();
+            }});
+            root.addView(osBtn);
         }
 
         // auto scan results
@@ -1406,6 +1368,152 @@ public class OverlayService extends Service {
         }});
         root.addView(resetPos);
 
+        // ◇ CALIBRATE SCAN
+        TextView calDiv=new TextView(this); calDiv.setText("────────────────────");
+        calDiv.setTextColor(EDGE); calDiv.setTextSize(8);
+        LinearLayout.LayoutParams cdlp=new LinearLayout.LayoutParams(-1,-2); cdlp.setMargins(0,14,0,14); calDiv.setLayoutParams(cdlp);
+        root.addView(calDiv);
+
+        TextView calHdr=new TextView(this); calHdr.setText("◇ CALIBRATE SCAN");
+        calHdr.setTextColor(GOLD); calHdr.setTextSize(11); calHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
+
+        TextView calInfo=new TextView(this);
+        calInfo.setText("Adjust until the probe dots land on your board hexes. Tap SHOW DOTS to preview all scan positions over TFT.");
+        calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,10);
+        root.addView(calInfo);
+
+        String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row"};
+        final TextView[] calValTvs=new TextView[5];
+        for(int ci=0;ci<5;ci++){
+            final int cii=ci;
+            LinearLayout crow=new LinearLayout(this); crow.setOrientation(LinearLayout.HORIZONTAL);
+            crow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams crp=new LinearLayout.LayoutParams(-1,-2); crp.setMargins(0,0,0,5); crow.setLayoutParams(crp);
+
+            TextView clbl=new TextView(this); clbl.setText(calLabels[ci]);
+            clbl.setTextColor(ASH); clbl.setTextSize(11);
+            clbl.setLayoutParams(new LinearLayout.LayoutParams(0,-2,2.5f)); crow.addView(clbl);
+
+            TextView cMinus=new TextView(this); cMinus.setText("−");
+            cMinus.setTextColor(BONE); cMinus.setTextSize(18); cMinus.setGravity(Gravity.CENTER);
+            cMinus.setPadding(0,6,0,6); cMinus.setBackground(box(CARD,4,EDGE,1));
+            LinearLayout.LayoutParams cmp=new LinearLayout.LayoutParams(0,-2,0.8f); cmp.setMargins(0,0,4,0); cMinus.setLayoutParams(cmp);
+            crow.addView(cMinus);
+
+            TextView cValTv=new TextView(this); cValTv.setText(calGet(cii)+"%");
+            cValTv.setTextColor(GOLD); cValTv.setTextSize(13); cValTv.setGravity(Gravity.CENTER);
+            cValTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            calValTvs[ci]=cValTv; crow.addView(cValTv);
+
+            TextView cPlus=new TextView(this); cPlus.setText("+");
+            cPlus.setTextColor(BONE); cPlus.setTextSize(18); cPlus.setGravity(Gravity.CENTER);
+            cPlus.setPadding(0,6,0,6); cPlus.setBackground(box(CARD,4,EDGE,1));
+            LinearLayout.LayoutParams cpp=new LinearLayout.LayoutParams(0,-2,0.8f); cpp.setMargins(4,0,0,0); cPlus.setLayoutParams(cpp);
+            crow.addView(cPlus);
+
+            cMinus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ calSet(cii,calGet(cii)-1); calValTvs[cii].setText(calGet(cii)+"%"); }});
+            cPlus.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ calSet(cii,calGet(cii)+1); calValTvs[cii].setText(calGet(cii)+"%"); }});
+            root.addView(crow);
+        }
+
+        LinearLayout calBtnRow=new LinearLayout(this); calBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cbrp=new LinearLayout.LayoutParams(-1,-2); cbrp.setMargins(0,10,0,4); calBtnRow.setLayoutParams(cbrp);
+
+        TextView showDots=new TextView(this); showDots.setText("SHOW DOTS");
+        showDots.setTextColor(BONE); showDots.setTextSize(12); showDots.setGravity(Gravity.CENTER);
+        showDots.setPadding(0,10,0,10); showDots.setBackground(box(CARD,6,EDGE,2));
+        LinearLayout.LayoutParams sdlp=new LinearLayout.LayoutParams(0,-2,1f); sdlp.setMargins(0,0,4,0); showDots.setLayoutParams(sdlp);
+        showDots.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); showProbeDots(); }});
+        calBtnRow.addView(showDots);
+
+        TextView resetCal=new TextView(this); resetCal.setText("RESET");
+        resetCal.setTextColor(BONE); resetCal.setTextSize(12); resetCal.setGravity(Gravity.CENTER);
+        resetCal.setPadding(0,10,0,10); resetCal.setBackground(box(0xFF1A0C0E,6,BLOOD,1));
+        resetCal.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        resetCal.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.resetCalibration(); mode=5; showPanel(); }});
+        calBtnRow.addView(resetCal);
+        root.addView(calBtnRow);
+
+        TextView calHint=new TextView(this);
+        calHint.setText("Red = board probes  ·  Blue = bench  ·  dots vanish after 5s");
+        calHint.setTextColor(DIM); calHint.setTextSize(10); calHint.setPadding(2,2,0,0);
+        root.addView(calHint);
+
+    }
+
+    private int calGet(int idx){
+        switch(idx){
+            case 0: return pool.getBoardTopPct();
+            case 1: return pool.getBoardBotPct();
+            case 2: return pool.getBoardLeftPct();
+            case 3: return pool.getBoardRightPct();
+            default: return pool.getBenchYPct();
+        }
+    }
+    private void calSet(int idx, int val){
+        switch(idx){
+            case 0: pool.setBoardTopPct(val); break;
+            case 1: pool.setBoardBotPct(val); break;
+            case 2: pool.setBoardLeftPct(val); break;
+            case 3: pool.setBoardRightPct(val); break;
+            default: pool.setBenchYPct(val); break;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showProbeDots(){
+        hideProbeDots();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        final java.util.List<int[]> probes=buildProbeGrid(sw,sh);
+        final int boardCount=autoTapBoardProbeCount;
+
+        android.view.View dots=new android.view.View(this){
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                for(int i=0;i<probes.size();i++){
+                    int[] pt=probes.get(i);
+                    boolean bench=(i>=boardCount);
+                    paint.setStyle(android.graphics.Paint.Style.FILL);
+                    paint.setColor(bench?0x880044FF:0x88FF2200);
+                    canvas.drawCircle(pt[0],pt[1],28,paint);
+                    paint.setStyle(android.graphics.Paint.Style.STROKE);
+                    paint.setStrokeWidth(3);
+                    paint.setColor(0xCCFFFFFF);
+                    canvas.drawCircle(pt[0],pt[1],28,paint);
+                    paint.setStyle(android.graphics.Paint.Style.FILL);
+                    paint.setColor(0xFFFFFFFF);
+                    paint.setTextSize(20);
+                    paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+                    canvas.drawText(String.valueOf(i+1),pt[0],pt[1]+7,paint);
+                }
+            }
+        };
+        dots.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE,null);
+
+        WindowManager.LayoutParams dlp=new WindowManager.LayoutParams(
+            sw,sh,0,0,
+            Build.VERSION.SDK_INT>=26
+                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                :WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                |WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT);
+        dlp.gravity=Gravity.TOP|Gravity.LEFT;
+        probeDotsView=dots;
+        try{ wm.addView(probeDotsView,dlp); }catch(Exception e){ probeDotsView=null; return; }
+        probeDotsHandler.postDelayed(new Runnable(){ public void run(){ hideProbeDots(); }},5000);
+    }
+
+    private void hideProbeDots(){
+        probeDotsHandler.removeCallbacksAndMessages(null);
+        if(probeDotsView!=null){
+            try{ wm.removeView(probeDotsView); }catch(Exception e){}
+            probeDotsView=null;
+        }
     }
 
     // ---- screen scanning ----
@@ -1567,15 +1675,14 @@ public class OverlayService extends Service {
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
         java.util.List<int[]> pts=new java.util.ArrayList<>();
-        // Hardcoded TFT Mobile landscape row positions (researched from TFT-OCR-BOT + Alune)
-        // Row 0 = back row (furthest from player), Row 3 = front row (closest)
-        int[] rowYs={ h*39/100, h*46/100, h*53/100, h*60/100 };
-        // Board x: 28-70% of screen width — clears trait panel on left and health bar on right
-        int boardLeft=w*28/100, boardRight=w*70/100;
+        // Use calibrated percentages (settable in Settings → Calibrate Scan)
+        int top=h*pool.getBoardTopPct()/100, bot=h*pool.getBoardBotPct()/100;
+        int step=(bot-top)/3;
+        int[] rowYs={ top, top+step, top+2*step, bot };
+        int boardLeft=w*pool.getBoardLeftPct()/100, boardRight=w*pool.getBoardRightPct()/100;
         int cols=7;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        // scan front row first (row 3) up to back row (row 0)
         for(int row=3;row>=0;row--){
             int cy=rowYs[row];
             for(int col=0;col<cols;col++){
@@ -1586,8 +1693,7 @@ public class OverlayService extends Service {
             }
         }
         autoTapBoardProbeCount=pts.size();
-        // bench: y=72% confirmed TFT Mobile bench position, same x range as board
-        int benchY=h*72/100;
+        int benchY=h*pool.getBenchYPct()/100;
         int benchCols=9;
         for(int col=0;col<benchCols;col++){
             int cx=boardLeft+(int)((col+0.5f)*(boardRight-boardLeft)/benchCols);
@@ -1906,6 +2012,7 @@ public class OverlayService extends Service {
         if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         autoTapHandler.removeCallbacksAndMessages(null);
+        hideProbeDots();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         closePanel();
