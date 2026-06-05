@@ -352,9 +352,13 @@ public class ScreenScanner {
         // Skip the very top (system bar, traits panel) and very bottom (shop/bench).
         int popTop = portrait ? bmpH * 8  / 100 : bmpH * 12 / 100;
         int popBot = portrait ? bmpH * 62 / 100 : bmpH * 82 / 100;
+        // In landscape, skip the leftmost 12% — that's the trait sidebar (Brawler 6/6,
+        // Eradicator 1/1, etc.) which has tall OCR blocks that can pollute the popup scan.
+        // The stat popup always appears in the board area, never at the very left edge.
+        int popLeft = portrait ? 0 : bmpW * 12 / 100;
         // Minimum block height to skip tiny UI labels (interest brackets, gold, etc.).
         int minH = Math.max(16, bmpH / 52);
-        log("popup zone: y=" + popTop + "-" + popBot + " minH=" + minH + " bmp=" + bmpW + "x" + bmpH);
+        log("popup zone: y=" + popTop + "-" + popBot + " x>" + popLeft + " minH=" + minH + " bmp=" + bmpW + "x" + bmpH);
 
         List<String> allChamps = buildChampList();
 
@@ -365,6 +369,7 @@ public class ScreenScanner {
             String raw = block.getText().trim().replace("\n", "|");
             int cx = box.centerX(), cy = box.centerY();
             if (cy < popTop || cy > popBot) continue;
+            if (cx < popLeft) { log("skip sidebar x=" + cx + " \"" + raw + "\""); continue; }
             if (box.height() < minH) {
                 log("skip h=" + box.height() + " \"" + raw + "\"");
             } else {
@@ -380,8 +385,9 @@ public class ScreenScanner {
             if (box == null) continue;
             String raw = block.getText().trim();
             if (raw.isEmpty()) continue;
-            int cy = box.centerY();
+            int cx = box.centerX(), cy = box.centerY();
             if (cy < popTop || cy > popBot) continue;
+            if (cx < popLeft) continue;
             if (box.height() < minH) continue;
             // accumulate overall popup bounds from all qualifying blocks
             if (box.left < pMinX) pMinX = box.left;
