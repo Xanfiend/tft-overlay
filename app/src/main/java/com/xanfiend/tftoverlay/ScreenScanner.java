@@ -403,14 +403,17 @@ public class ScreenScanner {
                 }
             }
         }
+        // Always record popup bounds when any qualifying text appeared in the zone —
+        // used by auto-tap to distinguish "item popup" (bounds set, no champion) from
+        // "empty hex" (no bounds), so item taps don't count toward the miss streak.
+        if (pMaxX > pMinX) {
+            r.detectedPopupBounds = new android.graphics.Rect(pMinX, pMinY, pMaxX, pMaxY);
+            log("popup bounds: " + pMinX + "," + pMinY + "-" + pMaxX + "," + pMaxY);
+        }
         if (r.detectedBoardUnit.isEmpty()) {
-            log("popup: no champion matched");
+            log("popup: no champion matched" + (r.detectedPopupBounds != null ? " (non-champion popup)" : " (empty hex)"));
         } else {
             log("popup unit: " + r.detectedBoardUnit + " (h=" + bestH + ")");
-            if (pMaxX > pMinX) {
-                r.detectedPopupBounds = new android.graphics.Rect(pMinX, pMinY, pMaxX, pMaxY);
-                log("popup bounds: " + pMinX + "," + pMinY + "-" + pMaxX + "," + pMaxY);
-            }
         }
 
         // Star sweep — same zone and height filter
