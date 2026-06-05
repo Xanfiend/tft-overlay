@@ -1603,7 +1603,7 @@ public class OverlayService extends Service {
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
             android.accessibilityservice.GestureDescription.StrokeDescription stroke=
-                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,80);
+                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,40);
             android.accessibilityservice.GestureDescription gesture=
                 new android.accessibilityservice.GestureDescription.Builder()
                     .addStroke(stroke).build();
@@ -1640,24 +1640,30 @@ public class OverlayService extends Service {
                             @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
                                 try{
                                     android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
-                                    final Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                                    Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                                     hb.close();
-                                    Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
-                                    new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                                    final int sw=hw.getWidth(), sh=hw.getHeight();
+                                    final Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
+                                    hw.recycle();
+                                    // crop to the popup band before OCR — fewer pixels, no off-zone text
+                                    boolean portrait=sh>sw;
+                                    final int cropTop=portrait? sh*8/100 : sh*12/100;
+                                    int cropBot=portrait? sh*62/100 : sh*82/100;
+                                    Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
+                                    new ScreenScanner(OverlayService.this,null).scanPopupZone(crop,sw,sh,
                                         new ScreenScanner.ScanCallback(){
                                             public void onResult(ScreenScanner.ScanResult r){
                                                 if(r.detectedBoardUnit!=null&&!r.detectedBoardUnit.isEmpty()
                                                         &&r.detectedPopupBounds!=null){
-                                                    Bitmap tplBmp=hw.copy(Bitmap.Config.ARGB_8888,false);
-                                                    hw.recycle();
-                                                    applyAutoTapProbeResult(r,tplBmp);
+                                                    r.detectedPopupBounds.offset(0,cropTop); // crop->full coords
+                                                    applyAutoTapProbeResult(r,full);
                                                 } else {
-                                                    hw.recycle();
+                                                    full.recycle();
                                                     applyAutoTapProbeResult(r,null);
                                                 }
                                             }
-                                            public void onError(String msg){ hw.recycle(); addScanLog("auto-tap OCR err: "+msg); advanceAutoTap(); }
-                                        }, ScreenScanner.MODE_POPUP);
+                                            public void onError(String msg){ full.recycle(); addScanLog("auto-tap OCR err: "+msg); advanceAutoTap(); }
+                                        });
                                 }catch(Exception e){ addScanLog("ERR auto-tap probe: "+e.getMessage()); advanceAutoTap(); }
                             }
                             @Override public void onFailure(int errorCode){ addScanLog("ERR auto-tap shot: "+errorCode); advanceAutoTap(); }
@@ -1669,7 +1675,7 @@ public class OverlayService extends Service {
 
     private void advanceAutoTap(){
         autoTapIndex++;
-        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},50);
+        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},30);
     }
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
