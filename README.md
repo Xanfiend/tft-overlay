@@ -142,6 +142,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.12 - 2026-06-05
+- Fix: Auto Scan was stopping early after tapping on an item. The scan now distinguishes between an empty hex (no popup appeared) and a non-champion popup (item description, ability text). Only truly empty hexes count toward the miss streak that stops the scan. Tapping an item is skipped without penalty so the scan continues.
+- Bench probe row moved slightly lower on screen to avoid the item bench row in TFT Mobile.
+
 ### v1.11 - 2026-06-05
 - Fix: Auto Scan was detecting champions that were not on the board. The template-first pass introduced in v1.10 was matching empty hex crops to saved templates with a similarity threshold that was too low, producing false positives. The popup wait was also reduced too far (250ms), so OCR could fire before the stat popup had appeared and pick up background UI text as champion names. Template-first pass removed. Popup wait restored to 350ms.
 - Gap between probes kept at 50ms and the empty-hex bitmap copy eliminated from v1.10 as those are safe improvements.
