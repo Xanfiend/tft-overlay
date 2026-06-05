@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.17");
+        ver.setText("v1.18");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,6 +255,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.18  ·  2026-06-05","Fix: default scan probe grid was too narrow. Board left edge moved from 28% to 8% of screen width so the scan covers the left side of the board (units in cols 0-2 were completely missed). Board right edge moved from 70% to 88%. Front row bottom moved from 60% to 65%. Bench moved from 72% to 80%. Use Settings -> Calibrate Scan -> SHOW DOTS to fine-tune for your device."},
             {"v1.17  ·  2026-06-05","Calibrate Scan (Settings tab): nudge board top, bottom, left, right edge, and bench row by 1% at a time until the probe dots land on the correct hexes. Tap SHOW DOTS to see all scan positions drawn over TFT in red (board) and blue (bench) — numbered in scan order, fades after 5 seconds. Values persist across restarts. RESET restores defaults. Navigation: tabs reordered to Grid, Econ, Board, Augs, Items, Settings and labelled with words instead of symbols. Tap targets are taller. My Board manual scan button removed from Grid tab (Auto Scan covers it). Opp Board stays as a single full-width button."},
             {"v1.16  ·  2026-06-05","Fix: Auto Scan was detecting Leona (and other 5-letter champion names) when they were not on the board. The partial OCR match rule that allowed a 4-letter fragment like 'leon' to match 'Leona' is now restricted to champion names that are 6 or more letters long. Short names now require a full match. Debug: when the scan sees a popup but does not find a champion, it now logs what text was actually seen, making it easier to diagnose future missed detections."},
             {"v1.15  ·  2026-06-05","Fix: Auto Scan was tapping outside the board area — hitting the Buy XP button, Refresh button, and trait panel. Board and bench probe coordinates are now accurate to confirmed TFT Mobile hex positions. Board x range narrowed to 28-70% of screen width to clear the trait panel and health bar. Bench moved from 80% to 72% screen height, away from shop buttons. All four board rows now use exact y positions instead of an estimate that placed probes in empty air."},
