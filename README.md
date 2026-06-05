@@ -103,6 +103,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.16 - 2026-06-05
+- Fix: Auto Scan was detecting Leona (and other 5-letter champion names) when they were not on the board. The 80% partial-match rule let a 4-letter OCR fragment like "leon" count as a match for "Leona". Short names (under 6 letters) now require a full match.
+- Debug: when the scan sees a popup but finds no champion name in it, the raw OCR text is now written to the scan log. This makes it possible to diagnose what the text reader actually saw for missed units.
+
 ### v1.15 - 2026-06-05
 - Fix: Auto Scan was tapping outside the board area, hitting the Buy XP button, Refresh button, and the trait panel. Board and bench probe coordinates now use confirmed TFT Mobile hex positions.
 - Board x range narrowed to 28-70% of screen width to clear the trait panel on the left and the health bar on the right.
