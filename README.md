@@ -85,7 +85,7 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 ## ✦ Usage
 
 - **Tap the sigil** to open the grid. **Long-press** to open the board. **Hold 1.5s** to trigger a scan instantly.
-- **Auto Scan Board**: tap Auto Scan Board in the grid tab. The app taps all board hexes (front row first) and bench slots, reads the popup after each, and marks all found champions. Stops as soon as found units match your level (board full), then scans bench. Typical time is 8-15 seconds. Tap the sigil to stop early.
+- **Auto Scan Board**: tap Auto Scan Board in the grid tab. The app taps all board hexes (front row first) and bench slots, reads the popup after each, and marks all found champions. Stops after 5 consecutive empty board hexes, then scans the bench and stops after 3 empty bench slots. If templates are saved from previous scans, known units are identified instantly from a single screenshot before any tapping begins. Typical time is 5-15 seconds. Tap the sigil to stop early.
 - **My Board scan**: tap My Board in the grid tab, then tap each unit on your board manually. The app reads the name from the stat popup and marks it in your pool. 25 second window.
 - **Opp Board scan**: navigate to an opponent's board in TFT, tap Opp Board, then tap each of their units. Reads name and star level (shown as Jinx ★★) and increments their contest badge. 30 second window. All three scans require the Accessibility service (one-time setup in Settings).
 - **Drag the sigil** to move it. Drag it onto **✕** to close the overlay.
@@ -142,8 +142,14 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.10 - 2026-06-05
+- Auto Scan Board: if champion templates are saved from previous scans, the app now identifies known units from a single screenshot before tapping any hexes. Typical scan time drops to 3-8 seconds on a board with saved templates.
+- Scan timing tightened: popup wait reduced from 400ms to 250ms, gap between probes from 100ms to 50ms.
+- Memory: template bitmap is now created only when a champion is actually detected, halving allocations on empty hexes.
+- Champion list lookup cached across OCR calls instead of rebuilding each time.
+
 ### v1.9 - 2026-06-05
-- Auto Scan Board now taps every hex automatically. Scans front row first (where units are placed earliest in a game) so it finds your units sooner. Stops board scan as soon as found unit count matches your level setting (board full), then sweeps the 9 bench slots and stops after 3 empty bench slots in a row. Typical scan time is 8-15 seconds. Tap the sigil to stop early. Results show in the grid with star counts.
+- Auto Scan Board now taps every hex automatically. Scans front row first so it finds your units sooner. Stops after 5 consecutive empty board hexes, then sweeps the 9 bench slots and stops after 3 empty bench slots in a row. Typical scan time is 8-15 seconds. Tap the sigil to stop early. Results show in the grid with star counts.
 - Fix: accessibility service no longer shows as malfunctioning on Samsung/OnePlus/Xiaomi devices (was caused by a missing description string and accessibility flags in the service config).
 - Fix: Scan Now was scanning the overlay panel instead of TFT when the accessibility path was used. The overlay now closes and waits 350ms before taking the screenshot.
 - Fix: popup OCR now ignores the trait sidebar (left 12% of screen in landscape). Previously the Brawler/Eradicator trait list was being picked up as candidate champion names.
