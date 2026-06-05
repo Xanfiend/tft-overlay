@@ -142,6 +142,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.15 - 2026-06-05
+- Fix: Auto Scan was tapping outside the board area, hitting the Buy XP button, Refresh button, and the trait panel. Board and bench probe coordinates now use confirmed TFT Mobile hex positions.
+- Board x range narrowed to 28-70% of screen width to clear the trait panel on the left and the health bar on the right.
+- Bench probe moved from 80% to 72% screen height, placing it on the actual bench row instead of the shop button zone.
+- All four board rows now use exact y positions. The previous estimate placed back-row probes in empty air above the board.
+
 ### v1.14 - 2026-06-05
 - Fix: Auto Scan was tapping into the augment panel at the top of the screen. The board probe zone now starts lower, keeping all four board rows clear of the HUD and augment area.
 - Fix: when the board had no units, all 28 board probes ran before the bench was reached because the early-stop only triggered after the first hit. Any 5 consecutive board misses now skip directly to the bench instead of stopping the whole scan.
