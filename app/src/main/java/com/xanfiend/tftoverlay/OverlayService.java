@@ -1567,8 +1567,9 @@ public class OverlayService extends Service {
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
         java.util.List<int[]> pts=new java.util.ArrayList<>();
-        int boardTop=h*10/100;
-        int boardBot=h*68/100;
+        // boardTop raised to 16% so back-row probes clear the augment/HUD panel (~8-15%)
+        int boardTop=h*16/100;
+        int boardBot=h*63/100;
         int cols=7, rows=4;
         int[] btnLoc=new int[2];
         int btnW=0, btnH=0;
@@ -1700,17 +1701,25 @@ public class OverlayService extends Service {
             addScanLog("auto-tap: +"+name+" "+stars+"★");
             if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
         } else {
-            if(r.detectedPopupBounds!=null){
-                // a popup appeared but wasn't a champion (item, ability, etc.) — skip, don't count as miss
-                addScanLog("auto-tap: non-champion popup at probe "+(autoTapIndex+1)+", skipping");
-            } else if(inBenchPhase){
-                // truly empty bench slot
+            if(inBenchPhase){
+                if(r.detectedPopupBounds!=null){
+                    // item/ability popup on bench — skip, don't count as miss
+                    addScanLog("auto-tap: non-champion bench popup, skipping");
+                } else {
+                    // truly empty bench slot
+                    autoTapConsecutiveMisses++;
+                    if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
+                }
+            } else {
+                // board: count ALL non-hits (empty hex AND stray augment/item popups)
+                // so probes off the board don't keep the scan running indefinitely
                 autoTapConsecutiveMisses++;
-                if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
-            } else if(!autoScanResults.isEmpty()){
-                // truly empty board hex after first hit
-                autoTapConsecutiveMisses++;
-                if(autoTapConsecutiveMisses>=5){ finishAutoTapScan(); return; }
+                if(autoTapConsecutiveMisses>=5){
+                    // skip straight to bench instead of stopping — board may be empty
+                    autoTapIndex=autoTapBoardProbeCount-1; // -1 because advanceAutoTap adds 1
+                    autoTapConsecutiveMisses=0;
+                    addScanLog("auto-tap: 5 board misses, jumping to bench");
+                }
             }
         }
         advanceAutoTap();
