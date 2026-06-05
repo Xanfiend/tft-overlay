@@ -122,15 +122,17 @@ public class Pool {
     }
 
     // ---- scan calibration: probe grid percentages ----
+    // Defaults measured from TFT Mobile screenshots — board x is wide (trait panel is narrow),
+    // front row and bench are lower than originally assumed.
     public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getBoardBotPct()        { return p.getInt("cal_bot",   60); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   65); }
     public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
-    public int getBoardLeftPct()       { return p.getInt("cal_left",  28); }
+    public int getBoardLeftPct()       { return p.getInt("cal_left",   8); }
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
-    public int getBoardRightPct()      { return p.getInt("cal_right", 70); }
+    public int getBoardRightPct()      { return p.getInt("cal_right", 88); }
     public void setBoardRightPct(int v){ p.edit().putInt("cal_right", Math.max(50, Math.min(100,v))).apply(); }
-    public int getBenchYPct()          { return p.getInt("cal_bench", 72); }
+    public int getBenchYPct()          { return p.getInt("cal_bench", 80); }
     public void setBenchYPct(int v)    { p.edit().putInt("cal_bench", Math.max(50, Math.min(95,v))).apply(); }
     public void resetCalibration()     {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
