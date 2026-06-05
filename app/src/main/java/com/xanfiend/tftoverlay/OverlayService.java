@@ -1527,7 +1527,6 @@ public class OverlayService extends Service {
     }
 
     @SuppressWarnings("NewApi")
-    @SuppressWarnings("NewApi")
     private void startAutoTapScan(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
