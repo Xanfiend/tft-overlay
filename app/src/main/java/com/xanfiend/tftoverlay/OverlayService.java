@@ -1408,15 +1408,17 @@ public class OverlayService extends Service {
     // ---- screen scanning ----
 
     private void triggerScan(){
-        if(Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null){
-            triggerScanAccessibility();
-        } else {
-            closePanel();
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+        // Close panel first so TFT is visible when the screenshot runs.
+        // 350ms is enough for WindowManager to remove the view before the capture.
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
+            if(Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null){
+                triggerScanAccessibility();
+            } else {
                 Intent si=new Intent(OverlayService.this,ScanPermActivity.class);
                 si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
-            },150);
-        }
+            }
+        }}, 350);
     }
 
     @SuppressWarnings("NewApi")
