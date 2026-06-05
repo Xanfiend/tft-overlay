@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.9";
+    private static final String APP_VERSION = "v1.15";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
@@ -1567,31 +1567,32 @@ public class OverlayService extends Service {
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
         java.util.List<int[]> pts=new java.util.ArrayList<>();
-        // boardTop raised to 16% so back-row probes clear the augment/HUD panel (~8-15%)
-        int boardTop=h*16/100;
-        int boardBot=h*63/100;
-        int cols=7, rows=4;
-        int[] btnLoc=new int[2];
-        int btnW=0, btnH=0;
+        // Hardcoded TFT Mobile landscape row positions (researched from TFT-OCR-BOT + Alune)
+        // Row 0 = back row (furthest from player), Row 3 = front row (closest)
+        int[] rowYs={ h*39/100, h*46/100, h*53/100, h*60/100 };
+        // Board x: 28-70% of screen width — clears trait panel on left and health bar on right
+        int boardLeft=w*28/100, boardRight=w*70/100;
+        int cols=7;
+        int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        // scan front row first (row 3) up to back row (row 0) — units are placed front-to-back
-        for(int row=rows-1;row>=0;row--){
+        // scan front row first (row 3) up to back row (row 0)
+        for(int row=3;row>=0;row--){
+            int cy=rowYs[row];
             for(int col=0;col<cols;col++){
-                int cx=(int)((col+0.5f)*w/cols);
-                int cy=boardTop+(int)((row+0.5f)*(boardBot-boardTop)/rows);
-                if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
-                          && cy>=btnLoc[1]-30 && cy<=btnLoc[1]+btnH+30) continue;
+                int cx=boardLeft+(int)((col+0.5f)*(boardRight-boardLeft)/cols);
+                if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
+                          &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
                 pts.add(new int[]{cx,cy});
             }
         }
-        autoTapBoardProbeCount=pts.size(); // bench starts here
-        // bench row: 9 slots at ~80% screen height (below the item bench which sits ~77%)
-        int benchY=h*80/100;
+        autoTapBoardProbeCount=pts.size();
+        // bench: y=72% confirmed TFT Mobile bench position, same x range as board
+        int benchY=h*72/100;
         int benchCols=9;
         for(int col=0;col<benchCols;col++){
-            int cx=(int)((col+0.5f)*w/benchCols);
-            if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
-                      && benchY>=btnLoc[1]-30 && benchY<=btnLoc[1]+btnH+30) continue;
+            int cx=boardLeft+(int)((col+0.5f)*(boardRight-boardLeft)/benchCols);
+            if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
+                      &&benchY>=btnLoc[1]-30&&benchY<=btnLoc[1]+btnH+30) continue;
             pts.add(new int[]{cx,benchY});
         }
         return pts;
@@ -1646,10 +1647,10 @@ public class OverlayService extends Service {
                                     final int sw=hw.getWidth(), sh=hw.getHeight();
                                     final Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
                                     hw.recycle();
-                                    // crop to the popup band before OCR — fewer pixels, no off-zone text
+                                    // crop to popup band — board rows 39-60%, bench 72%, popups appear above units
                                     boolean portrait=sh>sw;
-                                    final int cropTop=portrait? sh*8/100 : sh*12/100;
-                                    int cropBot=portrait? sh*62/100 : sh*82/100;
+                                    final int cropTop=portrait? sh*8/100 : sh*15/100;
+                                    int cropBot=sh*78/100;
                                     Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
                                     new ScreenScanner(OverlayService.this,null).scanPopupZone(crop,sw,sh,
                                         new ScreenScanner.ScanCallback(){
