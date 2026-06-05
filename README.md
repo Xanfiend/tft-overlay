@@ -142,11 +142,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
-### v1.9.2 - 2026-06-05
-- Fix: Auto Scan was detecting champions that were not on the board. The template-first pass introduced in v1.9.1 was matching empty hex crops to saved templates with a similarity threshold that was too low, producing false positives. The popup wait was also reduced too far (250ms), so OCR could fire before the stat popup had appeared and pick up background UI text as champion names. Template-first pass removed. Popup wait restored to 350ms.
-- Gap between probes kept at 50ms and the empty-hex bitmap copy eliminated from v1.9.1 as those are safe improvements.
+### v1.11 - 2026-06-05
+- Fix: Auto Scan was detecting champions that were not on the board. The template-first pass introduced in v1.10 was matching empty hex crops to saved templates with a similarity threshold that was too low, producing false positives. The popup wait was also reduced too far (250ms), so OCR could fire before the stat popup had appeared and pick up background UI text as champion names. Template-first pass removed. Popup wait restored to 350ms.
+- Gap between probes kept at 50ms and the empty-hex bitmap copy eliminated from v1.10 as those are safe improvements.
 
-### v1.9.1 - 2026-06-05
+### v1.10 - 2026-06-05
 - Auto Scan Board speed improvements. Popup wait reduced to 250ms, gap between probes to 50ms. Template bitmaps only created when a champion is detected. Champion list cached across OCR calls.
 
 ### v1.9 - 2026-06-05
