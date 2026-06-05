@@ -1554,41 +1554,10 @@ public class OverlayService extends Service {
                             final int sw=hw.getWidth(), sh=hw.getHeight();
                             hb.close();
                             autoTapProbes=buildProbeGrid(sw,sh);
+                            hw.recycle();
                             addScanLog("auto-tap: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
-                            // template-first pass: identify known units from a single screenshot
-                            ChampionTemplates.load(OverlayService.this);
-                            if(ChampionTemplates.templateCount()>0){
-                                final Bitmap initBmp=hw.copy(Bitmap.Config.ARGB_8888,false);
-                                hw.recycle();
-                                new ScreenScanner(OverlayService.this,null).scanBoardVision(initBmp,OverlayService.this,
-                                    new ScreenScanner.ScanCallback(){
-                                        public void onResult(ScreenScanner.ScanResult vr){
-                                            for(ScreenScanner.BoardUnit bu:vr.boardUnits){
-                                                pool.add(bu.name,1); buzz();
-                                                autoScanResults.add(bu.name+"★");
-                                                for(int i=0;i<autoTapProbes.size();i++){
-                                                    int[]p=autoTapProbes.get(i);
-                                                    if(Math.abs(p[0]-bu.probeX)<60&&Math.abs(p[1]-bu.probeY)<60){
-                                                        if(i<autoTapBoardProbeCount) autoTapBoardProbeCount--;
-                                                        autoTapProbes.remove(i); break;
-                                                    }
-                                                }
-                                            }
-                                            addScanLog("auto-tap: vision "+vr.boardUnits.size()+" units, "+autoTapProbes.size()+" probes remain");
-                                            if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
-                                            autoTapNextProbe();
-                                        }
-                                        public void onError(String msg){
-                                            addScanLog("auto-tap: vision err="+msg);
-                                            if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
-                                            autoTapNextProbe();
-                                        }
-                                    });
-                            } else {
-                                hw.recycle();
-                                if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
-                                autoTapNextProbe();
-                            }
+                            if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
+                            autoTapNextProbe();
                         }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel(); }
                     }
                     @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
@@ -1660,7 +1629,7 @@ public class OverlayService extends Service {
         final float px=pt[0], py=pt[1];
         addScanLog("auto-tap: probe "+(autoTapIndex+1)+"/"+autoTapProbes.size()+" @"+((int)px)+","+((int)py));
         dispatchTap(px, py, new Runnable(){ public void run(){
-            // wait for popup to render, then screenshot + OCR
+            // wait for popup to render before taking screenshot
             autoTapHandler.postDelayed(new Runnable(){ public void run(){
                 if(!autoScanPending) return;
                 TFTAccessibilityService svc=TFTAccessibilityService.instance;
@@ -1694,7 +1663,7 @@ public class OverlayService extends Service {
                             @Override public void onFailure(int errorCode){ addScanLog("ERR auto-tap shot: "+errorCode); advanceAutoTap(); }
                         });
                 }catch(Exception e){ addScanLog("ERR auto-tap svc: "+e.getMessage()); advanceAutoTap(); }
-            }},250);
+            }},350);
         }});
     }
 
