@@ -142,6 +142,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.19 - 2026-06-05
+- Fix: Auto Scan was missing units in Tocker's Trials and on boards where units sit lower on screen (player board at y 50-72%).
+- Scan now uses 5 probe rows instead of 4, extending bottom coverage from 65% to 72% of screen height.
+- Early-stop threshold for consecutive board misses raised from 5 to 8. One fully empty probe row (7 columns) no longer aborts the scan before reaching the units below it.
+- Default Board bottom calibration updated from 65% to 72%.
+
 ### v1.18 - 2026-06-05
 - Fix: default probe grid was too narrow. Board left edge moved from 28% to 8% — units in the left 3 columns were never tapped. Board right extended from 70% to 88%. Front row bottom corrected from 60% to 65%. Bench moved from 72% to 80%.
 - Use Settings -> Calibrate Scan -> SHOW DOTS to fine-tune for your specific device.
