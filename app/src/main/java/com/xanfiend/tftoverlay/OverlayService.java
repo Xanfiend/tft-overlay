@@ -94,6 +94,7 @@ public class OverlayService extends Service {
     private boolean autoScanPending = false;
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoTapIndex = 0;
+    private int autoTapConsecutiveMisses = 0;
     private java.util.List<int[]> autoTapProbes = new java.util.ArrayList<>();
     private final android.os.Handler autoTapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -1535,6 +1536,7 @@ public class OverlayService extends Service {
         autoScanPending=true;
         autoScanResults=new java.util.ArrayList<>();
         autoTapIndex=0;
+        autoTapConsecutiveMisses=0;
         autoTapProbes=new java.util.ArrayList<>();
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
@@ -1572,11 +1574,19 @@ public class OverlayService extends Service {
             for(int col=0;col<cols;col++){
                 int cx=(int)((col+0.5f)*w/cols);
                 int cy=boardTop+(int)((row+0.5f)*(boardBot-boardTop)/rows);
-                // skip probe points that overlap the floating button (30px margin)
                 if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
                           && cy>=btnLoc[1]-30 && cy<=btnLoc[1]+btnH+30) continue;
                 pts.add(new int[]{cx,cy});
             }
+        }
+        // bench row: 9 slots at ~77% screen height
+        int benchY=h*77/100;
+        int benchCols=9;
+        for(int col=0;col<benchCols;col++){
+            int cx=(int)((col+0.5f)*w/benchCols);
+            if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
+                      && benchY>=btnLoc[1]-30 && benchY<=btnLoc[1]+btnH+30) continue;
+            pts.add(new int[]{cx,benchY});
         }
         return pts;
     }
@@ -1609,7 +1619,7 @@ public class OverlayService extends Service {
         final float px=pt[0], py=pt[1];
         addScanLog("auto-tap: probe "+(autoTapIndex+1)+"/"+autoTapProbes.size()+" @"+((int)px)+","+((int)py));
         dispatchTap(px, py, new Runnable(){ public void run(){
-            // wait 700ms for popup animation to complete
+            // wait for popup animation to complete
             autoTapHandler.postDelayed(new Runnable(){ public void run(){
                 if(!autoScanPending) return;
                 TFTAccessibilityService svc=TFTAccessibilityService.instance;
@@ -1635,13 +1645,13 @@ public class OverlayService extends Service {
                             @Override public void onFailure(int errorCode){ addScanLog("ERR auto-tap shot: "+errorCode); advanceAutoTap(); }
                         });
                 }catch(Exception e){ addScanLog("ERR auto-tap svc: "+e.getMessage()); advanceAutoTap(); }
-            }},700);
+            }},400);
         }});
     }
 
     private void advanceAutoTap(){
         autoTapIndex++;
-        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},250);
+        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},100);
     }
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
@@ -1654,6 +1664,7 @@ public class OverlayService extends Service {
             StringBuilder entry=new StringBuilder(name);
             for(int i=0;i<stars;i++) entry.append("★");
             autoScanResults.add(entry.toString());
+            autoTapConsecutiveMisses=0;
             if(r.detectedPopupBounds!=null){
                 final android.graphics.Rect bounds=r.detectedPopupBounds;
                 new Thread(new Runnable(){ public void run(){
@@ -1665,6 +1676,10 @@ public class OverlayService extends Service {
             if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
         } else {
             sourceBmp.recycle();
+            if(!autoScanResults.isEmpty()){
+                autoTapConsecutiveMisses++;
+                if(autoTapConsecutiveMisses>=5){ finishAutoTapScan(); return; }
+            }
         }
         advanceAutoTap();
     }
