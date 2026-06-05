@@ -5,4 +5,5 @@
     android:accessibilityFlags="flagDefault"
     android:notificationTimeout="100"
     android:description="@string/accessibility_description"
-    android:canTakeScreenshot="true" />
+    android:canTakeScreenshot="true"
+    android:canPerformGestures="true" />
