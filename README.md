@@ -36,12 +36,11 @@ A floating overlay for TFT Mobile on Android. Tracks the champion pool and rerol
 
 | Tab | What it does |
 |---|---|
-| **▦ Grid** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are going for that unit. Champions you recently marked show at the top. Tap **My Board** to auto-detect units on your board; tap **Opp Board** to scan an opponent's board with star levels. Both require the Accessibility service. |
-| **≡ Board** | Shows copies left in the pool, how contested each unit is, and your odds of hitting it per roll at your current level. Pin your carry to the top. Turn on bench-thinning to remove your bench units from the count for more accurate odds. |
-| **❖ Augments** | S/A/B/C rating for every augment and the comps it works best with. Comp priorities, conflicts, armory rules, and backup options listed below. |
-| **§ Economy** | Track your gold. Shows interest earned per round, the interest brackets (10/20/30/40/50g), win and loss streaks, and your expected income next round. Hold `+` or `-` to change gold quickly. |
-| **⊞ Items** | Tap two components to see what item they make. Full trait breakpoints listed below. |
-| **⚙ Settings** | Adjust overlay transparency (20-100%), toggle haptic feedback, choose which tab opens first, reset the button position. Tap Scan Now to auto-fill gold, level, and augments. Enable Silent Scan (Accessibility service) to scan without switching apps. |
+| **POOL** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are on that unit. Champions you recently marked show at the top. Tap **Auto Scan Board** to auto-detect all units on your board; tap **Opp Board** to scan an opponent's board with star levels. Both require Accessibility service. |
+| **ODDS** | Shows copies left in the pool, how contested each unit is, and your odds of hitting per roll at your current level. Pin your carry to the top. Junk bench-thinning adjusts odds for units you are holding to block others. |
+| **GUIDE** | Two sub-tabs: AUGMENTS (S/A/B/C tier list with comp tags, priorities, exclusions, and armory rules) and ITEMS (tap two components to see the combined item, full trait breakpoints below). |
+| **GOLD** | Track your gold with live interest calculation, the 10/20/30/40/50g bracket ladder, win/loss streak tracking with bonus scale, and expected income next round. Hold + or - to change gold quickly. |
+| **SETUP** | Accessibility service status with setup instructions. Scan Now fills gold, level, and augments. Transparency, haptic, start-tab choice, button position reset, calibration controls, and debug log. |
 
 ## ✦ Usage
 
@@ -102,6 +101,14 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.26 - 2026-06-06
+- UI redesign: 5 tabs instead of 6. GRID renamed to POOL. BOARD renamed to ODDS. AUGS and ITEMS merged into a single GUIDE tab with sub-tabs (switch between AUGMENTS and ITEMS at the top of the tab).
+- SETUP tab (was SETTINGS) now shows Accessibility permission status as the first thing, with a clear card showing enabled or disabled and step-by-step instructions if it needs to be turned on.
+- Scan buttons in POOL tab now sit side by side instead of stacked.
+- ODDS tab shows a step-by-step guide when nothing is tracked yet instead of a blank message.
+- GOLD tab shows the interest formula (1g per 10g saved, max 5g) and the streak bonus scale (2+ streak = +1g, 4+ = +2g, 6+ = +3g) inline under the relevant sections.
+- Calibration guide text corrected from "3-step" to "4-step" to match the actual calibration flow.
 
 ### v1.25 - 2026-06-06
 - Fix: probe dots were not landing on hexes across all rows because the TFT board is trapezoidal in screen space (the front row is wider than the back row). The previous grid assumed all rows had the same left and right edges, which was wrong.
