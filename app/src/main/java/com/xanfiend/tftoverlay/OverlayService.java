@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.23";
+    private static final String APP_VERSION = "v1.24";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
@@ -98,6 +98,9 @@ public class OverlayService extends Service {
     // tap-to-calibrate: multi-step overlay where user taps live board units
     private int calStep = 0; // 0=idle, 1=top-left, 2=bottom-right, 3=bench
     private View calCaptureView = null;
+    // recorded taps (screen px) drawn as crosshairs so any capture offset is visible
+    private final java.util.List<float[]> calTapMarks = new java.util.ArrayList<>();
+    private String calDebugLine = "";
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -1468,6 +1471,8 @@ public class OverlayService extends Service {
 
     private void startTapCalibration(){
         calStep=1;
+        calTapMarks.clear();
+        calDebugLine="";
         closePanel();
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
             new Runnable(){ public void run(){ showCalCaptureOverlay(); }}, 300);
@@ -1488,10 +1493,25 @@ public class OverlayService extends Service {
                 int W=getWidth(), H=getHeight();
                 bgP.setColor(0x44000000);
                 canvas.drawRect(0,0,W,H,bgP);
-                float barH=H*0.18f;
+
+                // crosshairs for every tap captured so far — confirms WHERE the tap registered
+                txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
+                for(int i=0;i<calTapMarks.size();i++){
+                    float[] m=calTapMarks.get(i);
+                    txtP.setStyle(android.graphics.Paint.Style.STROKE);
+                    txtP.setStrokeWidth(3); txtP.setColor(0xFF39FF14);
+                    canvas.drawCircle(m[0],m[1],26,txtP);
+                    canvas.drawLine(m[0]-40,m[1],m[0]+40,m[1],txtP);
+                    canvas.drawLine(m[0],m[1]-40,m[0],m[1]+40,txtP);
+                    txtP.setStyle(android.graphics.Paint.Style.FILL);
+                    txtP.setColor(0xFF39FF14); txtP.setTextSize(13*spx);
+                    canvas.drawText(String.valueOf(i+1),m[0],m[1]-32,txtP);
+                }
+
+                float barH=H*0.20f;
                 bgP.setColor(0xF00B0709);
                 canvas.drawRect(0,0,W,barH,bgP);
-                txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
+                txtP.setStyle(android.graphics.Paint.Style.FILL);
                 txtP.setTextSize(11*spx);
                 txtP.setColor(0xFF7A6B60);
                 String stepLabel, stepMsg;
@@ -1501,27 +1521,41 @@ public class OverlayService extends Service {
                     case 3: stepLabel="STEP 3 OF 3 — TAP TO CALIBRATE"; stepMsg="Tap any BENCH unit"; break;
                     default: stepLabel=""; stepMsg="";
                 }
-                canvas.drawText(stepLabel, W/2f, barH*0.38f, txtP);
+                canvas.drawText(stepLabel, W/2f, barH*0.30f, txtP);
                 txtP.setTextSize(14*spx);
                 txtP.setColor(0xFFE0D5C0);
                 txtP.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                canvas.drawText(stepMsg, W/2f, barH*0.72f, txtP);
+                canvas.drawText(stepMsg, W/2f, barH*0.58f, txtP);
                 txtP.setTypeface(android.graphics.Typeface.DEFAULT);
-                float cancelTop=H*0.87f;
+                // live debug readout: window size + last tap px/percent
+                txtP.setTextSize(9*spx);
+                txtP.setColor(0xFFC9A227);
+                String dbg="view "+W+"x"+H+(calDebugLine.isEmpty()?"":"   "+calDebugLine);
+                canvas.drawText(dbg, W/2f, barH*0.85f, txtP);
+
+                float cancelTop=H*0.88f;
                 bgP.setColor(0xF00B0709);
                 canvas.drawRect(0,cancelTop,W,H,bgP);
                 txtP.setTextSize(13*spx);
                 txtP.setColor(0xFFC1121F);
-                canvas.drawText(calStep==3?"SKIP":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
+                canvas.drawText(calStep==3?"SKIP BENCH":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
                 if(e.getAction()==android.view.MotionEvent.ACTION_UP){
-                    float ry=e.getY();
-                    if(ry>=getHeight()*0.87f){
+                    int W=getWidth(), H=getHeight();
+                    float vx=e.getX(), vy=e.getY();
+                    if(vy>=H*0.88f){
                         if(calStep==3) finishCalibration();
                         else{ calStep=0; hideCalCaptureView(); mode=5; showPanel(); }
+                    } else if(vy<=H*0.20f){
+                        // tapped inside the instruction banner — ignore
                     } else {
-                        handleCalTap(e.getRawX(), e.getRawY());
+                        // view-local coords map 1:1 to the probe-dots window (same size, same 0,0 origin)
+                        calTapMarks.add(new float[]{vx,vy});
+                        int xPct=Math.round(vx*100/W);
+                        int yPct=Math.round(vy*100/H);
+                        calDebugLine="tap "+(int)vx+","+(int)vy+" = "+xPct+"%,"+yPct+"%";
+                        handleCalTap(xPct,yPct,W>H?false:true);
                     }
                 }
                 return true;
@@ -1529,26 +1563,24 @@ public class OverlayService extends Service {
         };
         calCaptureView.setLayerType(View.LAYER_TYPE_SOFTWARE,null);
         WindowManager.LayoutParams clp=new WindowManager.LayoutParams(
-            sw,sh,0,0,wtype(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            sw,sh,0,0,
+            Build.VERSION.SDK_INT>=26
+                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                :WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT);
         clp.gravity=Gravity.TOP|Gravity.LEFT;
         try{ wm.addView(calCaptureView,clp); }catch(Exception ex){ calCaptureView=null; }
     }
 
-    @SuppressWarnings("deprecation")
-    private void handleCalTap(float rawX, float rawY){
-        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
-        wm.getDefaultDisplay().getRealMetrics(dm);
-        int sw=dm.widthPixels, sh=dm.heightPixels;
-        boolean portrait=sh>sw;
-        int xPct=(int)(rawX*100/sw);
-        int yPct=(int)(rawY*100/sh);
+    // xPct/yPct are already in the probe-dots coordinate space (0-100 of the same window)
+    private void handleCalTap(int xPct, int yPct, boolean portrait){
         if(calStep==1){
             // Store raw col0 center X as boardLeft for now (corrected in step 2 when we know span)
             if(portrait){ pool.setPortraitBoardTopPct(yPct); pool.setPortraitBoardLeftPct(xPct); }
             else{ pool.setBoardTopPct(yPct); pool.setBoardLeftPct(xPct); }
-            calStep=2; showCalCaptureOverlay();
+            calStep=2; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==2){
             // Step 2: tap = col6 center, row3 center (bottom-right of standard 4-row board)
             int col0X = portrait ? pool.getPortraitBoardLeftPct() : pool.getBoardLeftPct();
@@ -1576,7 +1608,7 @@ public class OverlayService extends Service {
                 pool.setBoardLeftPct(boardLeftPct);
                 pool.setBoardRightPct(boardRightPct);
             }
-            calStep=3; showCalCaptureOverlay();
+            calStep=3; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==3){
             if(portrait) pool.setPortraitBenchYPct(yPct);
             else pool.setBenchYPct(yPct);
