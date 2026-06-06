@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.19";
+    private static final String APP_VERSION = "v1.20";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
@@ -92,6 +92,8 @@ public class OverlayService extends Service {
 
     // debug scan: close panel, scan, reopen settings so user sees results
     private boolean debugScanPending = false;
+    // last known screen orientation — updated in showPanel() and used by calGet/calSet
+    private boolean isPortrait = false;
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -255,7 +257,12 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
     }
 
+    @SuppressWarnings("deprecation")
     private void showPanel(){
+        // detect current orientation for calibration
+        android.util.DisplayMetrics oriDm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(oriDm);
+        isPortrait = oriDm.heightPixels > oriDm.widthPixels;
         // null per-tab TV refs (they'll be reassigned by the build methods below)
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
@@ -1374,12 +1381,13 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams cdlp=new LinearLayout.LayoutParams(-1,-2); cdlp.setMargins(0,14,0,14); calDiv.setLayoutParams(cdlp);
         root.addView(calDiv);
 
-        TextView calHdr=new TextView(this); calHdr.setText("◇ CALIBRATE SCAN");
+        String calMode = isPortrait ? "PORTRAIT" : "LANDSCAPE";
+        TextView calHdr=new TextView(this); calHdr.setText("◇ CALIBRATE SCAN  (" + calMode + ")");
         calHdr.setTextColor(GOLD); calHdr.setTextSize(11); calHdr.setTypeface(null,android.graphics.Typeface.BOLD);
         calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
 
         TextView calInfo=new TextView(this);
-        calInfo.setText("Adjust until the probe dots land on your board hexes. Tap SHOW DOTS to preview all scan positions over TFT.");
+        calInfo.setText("Adjust until the probe dots land on your board hexes. Tap SHOW DOTS to preview. Values are saved separately for portrait and landscape.");
         calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,10);
         root.addView(calInfo);
 
@@ -1431,7 +1439,10 @@ public class OverlayService extends Service {
         resetCal.setTextColor(BONE); resetCal.setTextSize(12); resetCal.setGravity(Gravity.CENTER);
         resetCal.setPadding(0,10,0,10); resetCal.setBackground(box(0xFF1A0C0E,6,BLOOD,1));
         resetCal.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-        resetCal.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.resetCalibration(); mode=5; showPanel(); }});
+        resetCal.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(isPortrait) pool.resetPortraitCalibration(); else pool.resetCalibration();
+            mode=5; showPanel();
+        }});
         calBtnRow.addView(resetCal);
         root.addView(calBtnRow);
 
@@ -1443,6 +1454,13 @@ public class OverlayService extends Service {
     }
 
     private int calGet(int idx){
+        if(isPortrait) switch(idx){
+            case 0: return pool.getPortraitBoardTopPct();
+            case 1: return pool.getPortraitBoardBotPct();
+            case 2: return pool.getPortraitBoardLeftPct();
+            case 3: return pool.getPortraitBoardRightPct();
+            default: return pool.getPortraitBenchYPct();
+        }
         switch(idx){
             case 0: return pool.getBoardTopPct();
             case 1: return pool.getBoardBotPct();
@@ -1452,6 +1470,13 @@ public class OverlayService extends Service {
         }
     }
     private void calSet(int idx, int val){
+        if(isPortrait) switch(idx){
+            case 0: pool.setPortraitBoardTopPct(val); return;
+            case 1: pool.setPortraitBoardBotPct(val); return;
+            case 2: pool.setPortraitBoardLeftPct(val); return;
+            case 3: pool.setPortraitBoardRightPct(val); return;
+            default: pool.setPortraitBenchYPct(val); return;
+        }
         switch(idx){
             case 0: pool.setBoardTopPct(val); break;
             case 1: pool.setBoardBotPct(val); break;
@@ -1675,12 +1700,25 @@ public class OverlayService extends Service {
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
         java.util.List<int[]> pts=new java.util.ArrayList<>();
-        // Use calibrated percentages (settable in Settings → Calibrate Scan)
-        int top=h*pool.getBoardTopPct()/100, bot=h*pool.getBoardBotPct()/100;
-        // 5 rows: covers both standard PvP boards (39-65%) and Tocker's Trials (50-72%)
+        // Use orientation-aware calibrated percentages (settable in Settings → Calibrate Scan)
+        boolean portrait = h > w;
+        int top, bot, boardLeft, boardRight, benchY;
+        if (portrait) {
+            top       = h * pool.getPortraitBoardTopPct()   / 100;
+            bot       = h * pool.getPortraitBoardBotPct()   / 100;
+            boardLeft = w * pool.getPortraitBoardLeftPct()  / 100;
+            boardRight= w * pool.getPortraitBoardRightPct() / 100;
+            benchY    = h * pool.getPortraitBenchYPct()     / 100;
+        } else {
+            top       = h * pool.getBoardTopPct()   / 100;
+            bot       = h * pool.getBoardBotPct()   / 100;
+            boardLeft = w * pool.getBoardLeftPct()  / 100;
+            boardRight= w * pool.getBoardRightPct() / 100;
+            benchY    = h * pool.getBenchYPct()     / 100;
+        }
+        // 5 rows: covers standard PvP boards and Tocker's Trials low-board layouts
         int step=(bot-top)/4;
         int[] rowYs={ top, top+step, top+2*step, top+3*step, bot };
-        int boardLeft=w*pool.getBoardLeftPct()/100, boardRight=w*pool.getBoardRightPct()/100;
         int cols=7;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
@@ -1694,7 +1732,6 @@ public class OverlayService extends Service {
             }
         }
         autoTapBoardProbeCount=pts.size();
-        int benchY=h*pool.getBenchYPct()/100;
         int benchCols=9;
         for(int col=0;col<benchCols;col++){
             int cx=boardLeft+(int)((col+0.5f)*(boardRight-boardLeft)/benchCols);
