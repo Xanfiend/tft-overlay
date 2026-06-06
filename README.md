@@ -142,6 +142,9 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.23 - 2026-06-06
+- Setup screen now shows both permission statuses with one-tap fix buttons. After an update, open the app and both the overlay permission and Accessibility service status are immediately visible with direct buttons to restore them. Android always disables the Accessibility service on update (this is an Android security policy, not a bug) - the card explains this and shows a 30-second restore path.
+
 ### v1.22 - 2026-06-06
 - Fix: tap-to-calibrate probe dots were landing between board rows instead of on them. Column positions were calculated using hex centers instead of board edges (shifted inward). Row step used /4 instead of /3, placing rows 1 and 2 between actual hex rows. Both fixed - probe dots now land on hex centers after tap calibration.
 

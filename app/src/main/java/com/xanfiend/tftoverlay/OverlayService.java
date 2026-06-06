@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.22";
+    private static final String APP_VERSION = "v1.23";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
