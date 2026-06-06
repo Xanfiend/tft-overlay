@@ -1518,9 +1518,9 @@ public class OverlayService extends Service {
                 txtP.setColor(0xFF7A6B60);
                 String stepLabel, stepMsg;
                 switch(calStep){
-                    case 1: stepLabel="STEP 1 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the BACK-LEFT unit (top row, leftmost)"; break;
-                    case 2: stepLabel="STEP 2 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the BACK-RIGHT unit (top row, rightmost)"; break;
-                    case 3: stepLabel="STEP 3 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the FRONT-RIGHT unit (bottom row, rightmost)"; break;
+                    case 1: stepLabel="STEP 1 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the TOP-LEFT unit on your board"; break;
+                    case 2: stepLabel="STEP 2 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the TOP-RIGHT unit on your board"; break;
+                    case 3: stepLabel="STEP 3 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the BOTTOM-RIGHT unit on your board"; break;
                     case 4: stepLabel="STEP 4 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap any BENCH unit (or skip below)"; break;
                     default: stepLabel=""; stepMsg="";
                 }
@@ -1580,17 +1580,17 @@ public class OverlayService extends Service {
     // xPct/yPct are already in the probe-dots coordinate space (0-100 of the same window)
     private void handleCalTap(int xPct, int yPct, boolean portrait){
         if(calStep==1){
-            // Step 1: back-left unit — store top Y and temp top-left X center
+            // Step 1: top-left unit — store top Y and temp top-left X center
             calTmpTopY = yPct; calTmpTopLeft = xPct;
             if(portrait) pool.setPortraitBoardTopPct(yPct);
             else pool.setBoardTopPct(yPct);
             calStep=2; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==2){
-            // Step 2: back-right unit (same top row) — store temp top-right X center
+            // Step 2: top-right unit (same row) — store temp top-right X center
             calTmpTopRight = xPct;
             calStep=3; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==3){
-            // Step 3: front-right unit — we now know all 3 corners; infer front-left via symmetry.
+            // Step 3: bottom-right unit — we now know all 3 corners; infer bottom-left via symmetry.
             // The TFT board is symmetric left-to-right, so:
             //   board center X = (topLeft + topRight) / 2 = (botLeft + botRight) / 2
             //   => botLeft = topLeft + topRight - botRight
