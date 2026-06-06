@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.20";
+    private static final String APP_VERSION = "v1.21";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
@@ -94,6 +94,10 @@ public class OverlayService extends Service {
     private boolean debugScanPending = false;
     // last known screen orientation — updated in showPanel() and used by calGet/calSet
     private boolean isPortrait = false;
+
+    // tap-to-calibrate: multi-step overlay where user taps live board units
+    private int calStep = 0; // 0=idle, 1=top-left, 2=bottom-right, 3=bench
+    private View calCaptureView = null;
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -1387,9 +1391,16 @@ public class OverlayService extends Service {
         calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
 
         TextView calInfo=new TextView(this);
-        calInfo.setText("Adjust until the probe dots land on your board hexes. Tap SHOW DOTS to preview. Values are saved separately for portrait and landscape.");
-        calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,10);
+        calInfo.setText("Tap to calibrate: follow the 3-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
+        calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,8);
         root.addView(calInfo);
+
+        TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (recommended)");
+        tapCalBtn.setTextColor(BONE); tapCalBtn.setTextSize(13); tapCalBtn.setGravity(Gravity.CENTER);
+        tapCalBtn.setPadding(0,12,0,12); tapCalBtn.setBackground(box(BLOOD,6,BLOODL,2));
+        LinearLayout.LayoutParams tcbl=new LinearLayout.LayoutParams(-1,-2); tcbl.setMargins(0,0,0,12); tapCalBtn.setLayoutParams(tcbl);
+        tapCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startTapCalibration(); }});
+        root.addView(tapCalBtn);
 
         String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row"};
         final TextView[] calValTvs=new TextView[5];
@@ -1451,6 +1462,114 @@ public class OverlayService extends Service {
         calHint.setTextColor(DIM); calHint.setTextSize(10); calHint.setPadding(2,2,0,0);
         root.addView(calHint);
 
+    }
+
+    // ---- tap-to-calibrate ----
+
+    private void startTapCalibration(){
+        calStep=1;
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+            new Runnable(){ public void run(){ showCalCaptureOverlay(); }}, 300);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showCalCaptureOverlay(){
+        hideCalCaptureView();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        final float spx=getResources().getDisplayMetrics().scaledDensity;
+
+        calCaptureView=new View(OverlayService.this){
+            private final android.graphics.Paint bgP=new android.graphics.Paint();
+            private final android.graphics.Paint txtP=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                int W=getWidth(), H=getHeight();
+                bgP.setColor(0x44000000);
+                canvas.drawRect(0,0,W,H,bgP);
+                float barH=H*0.18f;
+                bgP.setColor(0xF00B0709);
+                canvas.drawRect(0,0,W,barH,bgP);
+                txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
+                txtP.setTextSize(11*spx);
+                txtP.setColor(0xFF7A6B60);
+                String stepLabel, stepMsg;
+                switch(calStep){
+                    case 1: stepLabel="STEP 1 OF 3 — TAP TO CALIBRATE"; stepMsg="Tap the TOP-LEFT unit on your board"; break;
+                    case 2: stepLabel="STEP 2 OF 3 — TAP TO CALIBRATE"; stepMsg="Tap the BOTTOM-RIGHT unit on your board"; break;
+                    case 3: stepLabel="STEP 3 OF 3 — TAP TO CALIBRATE"; stepMsg="Tap any BENCH unit"; break;
+                    default: stepLabel=""; stepMsg="";
+                }
+                canvas.drawText(stepLabel, W/2f, barH*0.38f, txtP);
+                txtP.setTextSize(14*spx);
+                txtP.setColor(0xFFE0D5C0);
+                txtP.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText(stepMsg, W/2f, barH*0.72f, txtP);
+                txtP.setTypeface(android.graphics.Typeface.DEFAULT);
+                float cancelTop=H*0.87f;
+                bgP.setColor(0xF00B0709);
+                canvas.drawRect(0,cancelTop,W,H,bgP);
+                txtP.setTextSize(13*spx);
+                txtP.setColor(0xFFC1121F);
+                canvas.drawText(calStep==3?"SKIP":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
+            }
+            @Override public boolean onTouchEvent(android.view.MotionEvent e){
+                if(e.getAction()==android.view.MotionEvent.ACTION_UP){
+                    float ry=e.getY();
+                    if(ry>=getHeight()*0.87f){
+                        if(calStep==3) finishCalibration();
+                        else{ calStep=0; hideCalCaptureView(); mode=5; showPanel(); }
+                    } else {
+                        handleCalTap(e.getRawX(), e.getRawY());
+                    }
+                }
+                return true;
+            }
+        };
+        calCaptureView.setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+        WindowManager.LayoutParams clp=new WindowManager.LayoutParams(
+            sw,sh,0,0,wtype(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT);
+        clp.gravity=Gravity.TOP|Gravity.LEFT;
+        try{ wm.addView(calCaptureView,clp); }catch(Exception ex){ calCaptureView=null; }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void handleCalTap(float rawX, float rawY){
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        int sw=dm.widthPixels, sh=dm.heightPixels;
+        boolean portrait=sh>sw;
+        int xPct=(int)(rawX*100/sw);
+        int yPct=(int)(rawY*100/sh);
+        if(calStep==1){
+            if(portrait){ pool.setPortraitBoardTopPct(yPct); pool.setPortraitBoardLeftPct(xPct); }
+            else{ pool.setBoardTopPct(yPct); pool.setBoardLeftPct(xPct); }
+            calStep=2; showCalCaptureOverlay();
+        } else if(calStep==2){
+            if(portrait){ pool.setPortraitBoardBotPct(yPct); pool.setPortraitBoardRightPct(xPct); }
+            else{ pool.setBoardBotPct(yPct); pool.setBoardRightPct(xPct); }
+            calStep=3; showCalCaptureOverlay();
+        } else if(calStep==3){
+            if(portrait) pool.setPortraitBenchYPct(yPct);
+            else pool.setBenchYPct(yPct);
+            finishCalibration();
+        }
+    }
+
+    private void finishCalibration(){
+        calStep=0;
+        hideCalCaptureView();
+        isPortrait=false; // will be recalculated in showPanel()
+        mode=5; showPanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+            new Runnable(){ public void run(){ showProbeDots(); }}, 400);
+    }
+
+    private void hideCalCaptureView(){
+        if(calCaptureView!=null){ try{ wm.removeView(calCaptureView); }catch(Exception e){} calCaptureView=null; }
     }
 
     private int calGet(int idx){
@@ -2027,6 +2146,8 @@ public class OverlayService extends Service {
 
     @Override public void onConfigurationChanged(android.content.res.Configuration newConfig){
         super.onConfigurationChanged(newConfig);
+        // if tap-calibration was active, cancel it — the overlay will be wrong size
+        if(calCaptureView!=null){ calStep=0; hideCalCaptureView(); }
         // screen rotated — rebuild panel with fresh dimensions so it fits the new orientation
         if(panel != null){
             int savedMode = mode;
@@ -2051,6 +2172,7 @@ public class OverlayService extends Service {
         if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         autoTapHandler.removeCallbacksAndMessages(null);
+        hideCalCaptureView();
         hideProbeDots();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
