@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.21");
+        ver.setText("v1.22");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,6 +255,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.22  ·  2026-06-06","Fix: tap-to-calibrate was placing probe dots between board rows instead of on them. The column probe positions were calculated from hex centers instead of board edges (shifted all 7 columns inward). The row step was dividing by 4 instead of 3, placing rows 1 and 2 between actual board rows instead of on them. Both fixed: probe dots now land on hex centers after tap calibration."},
             {"v1.21  ·  2026-06-06","Tap to calibrate: instead of adjusting sliders blind, tap 3 actual units in TFT to set all 5 calibration values at once. Tap TAP TO CALIBRATE in Settings, then tap your top-left board unit, bottom-right board unit, and any bench unit. The probe dots appear immediately after so you can confirm the positions are correct. Sliders still available for fine-tuning. Rotation during calibration cancels safely."},
             {"v1.20  ·  2026-06-06","Fix: probe dots (and Auto Scan) were completely outside the board in portrait mode. The app now uses separate scan coordinates for portrait vs landscape — in portrait the board starts around 22% of screen height, not 39%. Calibrate Scan in Settings now shows (PORTRAIT) or (LANDSCAPE) and saves values separately for each orientation. Defaults: portrait top 22%, bottom 65%, left 12%, right 88%, bench 75%."},
             {"v1.19  ·  2026-06-05","Fix: Auto Scan was missing units in Tocker's Trials and on boards where units sit lower on screen. The scan now uses 5 probe rows instead of 4, extending coverage down to 72% of screen height (was 65%). The early-stop threshold for consecutive board misses is raised from 5 to 8, so one fully empty probe row no longer aborts the scan before reaching the units below it. Default Board bottom calibration value updated from 65% to 72%."},
