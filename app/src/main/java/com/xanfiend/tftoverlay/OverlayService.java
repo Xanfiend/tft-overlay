@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.26";
+    private static final String APP_VERSION = "v1.27";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1665,9 +1665,9 @@ public class OverlayService extends Service {
             int botLeft  = col0BotCtr  - botSpan / 12;
             int botRight = col6BotCtr  + botSpan / 12;
 
-            // Y-axis: extend bot by 1 row-step so step=(bot-top)/4 equals actual row spacing.
-            int rowStep = Math.max(1, (row3Y - calTmpTopY) / 3);
-            int boardBotPct = row3Y + rowStep;
+            // bot now stores the actual FRONT-row center. buildProbeGrid lays 4
+            // perspective rows between the back row (top) and the front row (bot).
+            int boardBotPct = row3Y;
 
             if(portrait){
                 pool.setPortraitBoardBotPct(boardBotPct);
@@ -1970,19 +1970,21 @@ public class OverlayService extends Service {
             botRight = w * pool.getBoardBotRightPct() / 100;
             benchY   = h * pool.getBenchYPct()        / 100;
         }
-        // 5 rows: covers standard PvP boards and Tocker's Trials low-board layouts.
-        // Row 0 = back (top of screen), row 4 = front (bottom of screen).
-        // The TFT board is trapezoidal in screen space — front row is wider than back row —
-        // so we interpolate left/right edges per row between the calibrated top and bot corners.
-        int step=(bot-top)/4;
-        int[] rowYs={ top, top+step, top+2*step, top+3*step, bot };
+        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE: rows near the
+        // back (top of screen) are visually compressed, rows near the front (bottom)
+        // are spread apart. Even spacing put the middle dots in the gaps between
+        // hexes, so we use perspective row fractions instead. We interpolate the
+        // trapezoid left/right edges using the SAME fraction, so the columns track
+        // the board widening smoothly from back to front.
+        //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
+        // ROW_F[0]=back ... ROW_F[3]=front. Gaps grow toward the front (perspective).
+        final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
         int cols=7;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        for(int row=4;row>=0;row--){
-            int cy=rowYs[row];
-            // t=0 → top edge, t=1 → bottom edge; row 0=back, row 4=front
-            float t = row / 4.0f;
+        for(int row=3;row>=0;row--){
+            float t = ROW_F[row];
+            int cy = top + (int)(t * (bot - top));
             int rowLeft  = (int)(topLeft  + t * (botLeft  - topLeft));
             int rowRight = (int)(topRight + t * (botRight - topRight));
             for(int col=0;col<cols;col++){

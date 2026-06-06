@@ -141,6 +141,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.27 - 2026-06-06
+- Fix: probe dots still did not land on the hexes. The grid was generating 5 rows when a standard board has 4, so an extra row floated off the board and every row drifted out of place.
+- Fix: rows were spaced evenly down the screen, but the TFT board is drawn in perspective (back rows compressed, front rows spread apart), so the middle dots fell into the gaps between hexes. The grid now uses 4 rows with perspective spacing (gaps grow toward the front) and interpolates the trapezoid left and right edges with the same curve.
+- Calibration now stores the front row directly. After updating, re-run TAP TO CALIBRATE in the SETUP tab for the tightest fit.
+
 ### v1.26 - 2026-06-06
 - UI redesign: 5 tabs instead of 6. GRID renamed to POOL. BOARD renamed to ODDS. AUGS and ITEMS merged into a single GUIDE tab with sub-tabs (switch between AUGMENTS and ITEMS at the top of the tab).
 - SETUP tab (was SETTINGS) now shows Accessibility permission status as the first thing, with a clear card showing enabled or disabled and step-by-step instructions if it needs to be turned on.
