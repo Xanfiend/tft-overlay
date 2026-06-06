@@ -137,8 +137,19 @@ public class Pool {
     public void setBenchYPct(int v)    { p.edit().putInt("cal_bench", Math.max(50, Math.min(95,v))).apply(); }
     public void resetCalibration()     {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
-                .remove("cal_right").remove("cal_bench").apply();
+                .remove("cal_right").remove("cal_bench")
+                .remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br").apply();
     }
+    // Per-corner X% for trapezoidal board (front row wider than back row).
+    // Default falls back to the rectangular cal_left/cal_right so old calibrations still work.
+    public int getBoardTopLeftPct()       { return p.getInt("cal_tl", getBoardLeftPct()); }
+    public void setBoardTopLeftPct(int v) { p.edit().putInt("cal_tl", v).apply(); }
+    public int getBoardTopRightPct()      { return p.getInt("cal_tr", getBoardRightPct()); }
+    public void setBoardTopRightPct(int v){ p.edit().putInt("cal_tr", v).apply(); }
+    public int getBoardBotLeftPct()       { return p.getInt("cal_bl", getBoardLeftPct()); }
+    public void setBoardBotLeftPct(int v) { p.edit().putInt("cal_bl", v).apply(); }
+    public int getBoardBotRightPct()      { return p.getInt("cal_br", getBoardRightPct()); }
+    public void setBoardBotRightPct(int v){ p.edit().putInt("cal_br", v).apply(); }
 
     // Portrait calibration — board sits much higher on screen in portrait mode
     public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   22); }
@@ -153,8 +164,17 @@ public class Pool {
     public void setPortraitBenchYPct(int v)    { p.edit().putInt("cal_p_bench", Math.max(50, Math.min(95,v))).apply(); }
     public void resetPortraitCalibration()     {
         p.edit().remove("cal_p_top").remove("cal_p_bot").remove("cal_p_left")
-                .remove("cal_p_right").remove("cal_p_bench").apply();
+                .remove("cal_p_right").remove("cal_p_bench")
+                .remove("cal_p_tl").remove("cal_p_tr").remove("cal_p_bl").remove("cal_p_br").apply();
     }
+    public int getPortraitBoardTopLeftPct()       { return p.getInt("cal_p_tl", getPortraitBoardLeftPct()); }
+    public void setPortraitBoardTopLeftPct(int v) { p.edit().putInt("cal_p_tl", v).apply(); }
+    public int getPortraitBoardTopRightPct()      { return p.getInt("cal_p_tr", getPortraitBoardRightPct()); }
+    public void setPortraitBoardTopRightPct(int v){ p.edit().putInt("cal_p_tr", v).apply(); }
+    public int getPortraitBoardBotLeftPct()       { return p.getInt("cal_p_bl", getPortraitBoardLeftPct()); }
+    public void setPortraitBoardBotLeftPct(int v) { p.edit().putInt("cal_p_bl", v).apply(); }
+    public int getPortraitBoardBotRightPct()      { return p.getInt("cal_p_br", getPortraitBoardRightPct()); }
+    public void setPortraitBoardBotRightPct(int v){ p.edit().putInt("cal_p_br", v).apply(); }
 
     // ---- bench-thinning: junk units of a cost you're holding on your bench ----
     // These temporarily remove copies from the shared pool, nudging your odds up.
