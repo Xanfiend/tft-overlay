@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.23");
+        ver.setText("v1.24");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.24  ·  2026-06-06","Fix: tap-to-calibrate was offset to the right. The capture overlay used raw touch coordinates against full-screen metrics, but in landscape the status bar / notch inset shifted everything sideways. The capture overlay now uses the exact same full-screen window and coordinate space as the probe dots, so a tap lands precisely where the dot is drawn. Debug aid added: each tap now shows a green crosshair where it registered, plus a live readout of the tap pixel and percent values and the view size, so any future offset is visible on screen."},
             {"v1.23  ·  2026-06-06","Setup screen now shows both permission statuses with one-tap fix buttons. Overlay permission and Accessibility service each get a green or red card. Android resets the Accessibility service on every update (unavoidable) so the card shows a note and direct buttons to restore it in about 30 seconds. On Android 13+ both steps are shown side by side. Grant overlay permission button removed from the middle of the screen and moved into the status card."},
             {"v1.22  ·  2026-06-06","Fix: tap-to-calibrate was placing probe dots between board rows instead of on them. The column probe positions were calculated from hex centers instead of board edges (shifted all 7 columns inward). The row step was dividing by 4 instead of 3, placing rows 1 and 2 between actual board rows instead of on them. Both fixed: probe dots now land on hex centers after tap calibration."},
             {"v1.21  ·  2026-06-06","Tap to calibrate: instead of adjusting sliders blind, tap 3 actual units in TFT to set all 5 calibration values at once. Tap TAP TO CALIBRATE in Settings, then tap your top-left board unit, bottom-right board unit, and any bench unit. The probe dots appear immediately after so you can confirm the positions are correct. Sliders still available for fine-tuning. Rotation during calibration cancels safely."},
