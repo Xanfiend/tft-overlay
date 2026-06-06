@@ -122,12 +122,11 @@ public class Pool {
     }
 
     // ---- scan calibration: probe grid percentages ----
-    // Landscape defaults measured from TFT Mobile screenshots.
-    // Portrait defaults measured separately — 39% in portrait puts probes in mid-screen,
-    // far below the board which starts at ~22% on a portrait phone.
+    // top = BACK-row hex-center Y, bot = FRONT-row hex-center Y (the probe grid lays
+    // 4 perspective rows between them). Landscape defaults from TFT Mobile screenshots.
     public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getBoardBotPct()        { return p.getInt("cal_bot",   72); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   66); }
     public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
     public int getBoardLeftPct()       { return p.getInt("cal_left",   8); }
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
@@ -154,7 +153,7 @@ public class Pool {
     // Portrait calibration — board sits much higher on screen in portrait mode
     public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   22); }
     public void setPortraitBoardTopPct(int v)  { p.edit().putInt("cal_p_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getPortraitBoardBotPct()        { return p.getInt("cal_p_bot",   65); }
+    public int getPortraitBoardBotPct()        { return p.getInt("cal_p_bot",   58); }
     public void setPortraitBoardBotPct(int v)  { p.edit().putInt("cal_p_bot",   Math.max(20, Math.min(90,v))).apply(); }
     public int getPortraitBoardLeftPct()       { return p.getInt("cal_p_left",  12); }
     public void setPortraitBoardLeftPct(int v) { p.edit().putInt("cal_p_left",  Math.max(0,  Math.min(50,v))).apply(); }
