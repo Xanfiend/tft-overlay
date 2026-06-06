@@ -103,6 +103,13 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.21 - 2026-06-06
+- Tap to calibrate: tap TAP TO CALIBRATE in Settings, then tap 3 actual units in TFT (top-left board unit, bottom-right board unit, any bench unit) to set all 5 calibration values in one go. No more slider-guessing from wrong defaults.
+- After the 3 taps the probe dots appear automatically to confirm the positions are correct.
+- Skip button on step 3 if you want to calibrate only the board and leave the bench at its current value.
+- Screen rotation during calibration cancels safely.
+- Sliders still available for fine-tuning after tap calibration.
+
 ### v1.20 - 2026-06-06
 - Fix: probe dots and Auto Scan were completely outside the board in portrait mode. The board starts at ~22% screen height in portrait, not 39%.
 - Scan coordinates are now stored separately for portrait and landscape orientation.
