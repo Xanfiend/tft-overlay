@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.19");
+        ver.setText("v1.20");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -255,6 +255,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.20  ·  2026-06-06","Fix: probe dots (and Auto Scan) were completely outside the board in portrait mode. The app now uses separate scan coordinates for portrait vs landscape — in portrait the board starts around 22% of screen height, not 39%. Calibrate Scan in Settings now shows (PORTRAIT) or (LANDSCAPE) and saves values separately for each orientation. Defaults: portrait top 22%, bottom 65%, left 12%, right 88%, bench 75%."},
             {"v1.19  ·  2026-06-05","Fix: Auto Scan was missing units in Tocker's Trials and on boards where units sit lower on screen. The scan now uses 5 probe rows instead of 4, extending coverage down to 72% of screen height (was 65%). The early-stop threshold for consecutive board misses is raised from 5 to 8, so one fully empty probe row no longer aborts the scan before reaching the units below it. Default Board bottom calibration value updated from 65% to 72%."},
             {"v1.18  ·  2026-06-05","Fix: default scan probe grid was too narrow. Board left edge moved from 28% to 8% of screen width so the scan covers the left side of the board (units in cols 0-2 were completely missed). Board right edge moved from 70% to 88%. Front row bottom moved from 60% to 65%. Bench moved from 72% to 80%. Use Settings -> Calibrate Scan -> SHOW DOTS to fine-tune for your device."},
             {"v1.17  ·  2026-06-05","Calibrate Scan (Settings tab): nudge board top, bottom, left, right edge, and bench row by 1% at a time until the probe dots land on the correct hexes. Tap SHOW DOTS to see all scan positions drawn over TFT in red (board) and blue (bench) — numbered in scan order, fades after 5 seconds. Values persist across restarts. RESET restores defaults. Navigation: tabs reordered to Grid, Econ, Board, Augs, Items, Settings and labelled with words instead of symbols. Tap targets are taller. My Board manual scan button removed from Grid tab (Auto Scan covers it). Opp Board stays as a single full-width button."},
