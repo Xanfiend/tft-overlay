@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.22");
+        ver.setText("v1.23");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -157,29 +157,42 @@ public class MainActivity extends Activity {
 
     private void buildSetup(){
         boolean granted = canDraw();
+        boolean accEnabled = isAccessibilityEnabled();
 
-        // permission status card
-        LinearLayout statusCard = new LinearLayout(this);
-        statusCard.setOrientation(LinearLayout.VERTICAL);
-        statusCard.setBackground(shape(CARD, granted ? GREEN : EDGE, 12, granted ? 2 : 1));
-        statusCard.setPadding(20, 16, 20, 16);
-        LinearLayout.LayoutParams scl = new LinearLayout.LayoutParams(-1,-2);
-        scl.setMargins(0, 0, 0, 20);
-        statusCard.setLayoutParams(scl);
-        TextView statusLbl = new TextView(this);
-        statusLbl.setText(granted ? "✓ Overlay permission granted" : "✗ Overlay permission not granted");
-        statusLbl.setTextColor(granted ? GREEN : ASH); statusLbl.setTextSize(13);
-        statusLbl.setTypeface(null, Typeface.BOLD); statusCard.addView(statusLbl);
-        if(!granted){
-            TextView statusHint = new TextView(this);
-            statusHint.setText("Tap Grant below, then come back and tap Start.");
-            statusHint.setTextColor(ASH); statusHint.setTextSize(11);
-            LinearLayout.LayoutParams shl = new LinearLayout.LayoutParams(-1,-2);
-            shl.setMargins(0, 4, 0, 0);
-            statusHint.setLayoutParams(shl);
-            statusCard.addView(statusHint);
+        // ---- permission status cards ----
+        permCard(granted,
+            "Overlay permission",
+            granted ? "Draw over other apps is on" : "Required to show the sigil over TFT",
+            granted ? null : new View.OnClickListener(){ public void onClick(View v){
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:"+getPackageName())));
+            }},
+            granted ? null : "Grant permission");
+
+        permCard(accEnabled,
+            "Accessibility service  (Auto Scan / Board Scan)",
+            accEnabled
+                ? "Silent scan enabled — no app switch needed"
+                : "Android resets this after every update. Takes about 30 seconds to restore.",
+            accEnabled ? null : new View.OnClickListener(){ public void onClick(View v){
+                if(Build.VERSION.SDK_INT >= 33){
+                    try{
+                        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        i.setData(Uri.parse("package:"+getPackageName()));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
+                        toast("Allow restricted settings, then go to Accessibility");
+                    }catch(Exception e){ openAccessibility(); }
+                } else { openAccessibility(); }
+            }},
+            accEnabled ? null : (Build.VERSION.SDK_INT >= 33 ? "Step 1: App settings" : "Enable Accessibility"));
+
+        if(!accEnabled && Build.VERSION.SDK_INT >= 33){
+            contentArea.addView(btn("Step 2: Accessibility settings", new View.OnClickListener(){
+                public void onClick(View v){ openAccessibility(); }
+            }));
         }
-        contentArea.addView(statusCard);
+
+        contentArea.addView(divider(8, 12));
 
         // main action
         contentArea.addView(btnPrimary("⛧  Start Overlay", new View.OnClickListener(){
@@ -191,15 +204,6 @@ public class MainActivity extends Activity {
             }
         }));
 
-        if(!granted){
-            contentArea.addView(btn("Grant overlay permission", new View.OnClickListener(){
-                public void onClick(View v){
-                    startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:"+getPackageName())));
-                }
-            }));
-        }
-
         contentArea.addView(btnDestructive("☠  Stop overlay + reset pool", new View.OnClickListener(){
             public void onClick(View v){
                 stopService(new Intent(MainActivity.this, OverlayService.class));
@@ -208,7 +212,7 @@ public class MainActivity extends Activity {
             }
         }));
 
-        contentArea.addView(divider(22, 16));
+        contentArea.addView(divider(14, 16));
 
         // tips section header
         TextView tipsHdr = new TextView(this);
@@ -253,8 +257,54 @@ public class MainActivity extends Activity {
         contentArea.addView(footer);
     }
 
+    private void permCard(boolean ok, String title, String body, View.OnClickListener btnAction, String btnLabel){
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(shape(CARD, ok ? GREEN : BLOOD, 12, ok ? 2 : 1));
+        card.setPadding(20, 16, 20, 16);
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1,-2);
+        cl.setMargins(0, 0, 0, 10);
+        card.setLayoutParams(cl);
+        TextView lbl = new TextView(this);
+        lbl.setText((ok ? "✓  " : "✗  ") + title);
+        lbl.setTextColor(ok ? GREEN : BLOODL); lbl.setTextSize(13);
+        lbl.setTypeface(null, Typeface.BOLD); card.addView(lbl);
+        TextView sub = new TextView(this); sub.setText(body);
+        sub.setTextColor(ASH); sub.setTextSize(11);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1,-2);
+        sl.setMargins(0, 4, 0, 0); sub.setLayoutParams(sl);
+        card.addView(sub);
+        if(btnAction != null && btnLabel != null){
+            TextView actionBtn = new TextView(this); actionBtn.setText(btnLabel);
+            actionBtn.setTextColor(BONE); actionBtn.setTextSize(12); actionBtn.setGravity(Gravity.CENTER);
+            actionBtn.setPadding(0, 14, 0, 14);
+            actionBtn.setBackground(shape(BLOOD, BLOODL, 8, 2));
+            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1,-2);
+            al.setMargins(0, 10, 0, 0); actionBtn.setLayoutParams(al);
+            actionBtn.setOnClickListener(btnAction);
+            card.addView(actionBtn);
+        }
+        contentArea.addView(card);
+    }
+
+    private void openAccessibility(){
+        try{
+            Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
+        }catch(Exception e){}
+    }
+
+    private boolean isAccessibilityEnabled(){
+        if(Build.VERSION.SDK_INT < 31) return false;
+        String flat = android.provider.Settings.Secure.getString(
+            getContentResolver(),
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return flat != null && flat.toLowerCase().contains(getPackageName().toLowerCase());
+    }
+
     private void buildChangelog(){
         String[][] cl={
+            {"v1.23  ·  2026-06-06","Setup screen now shows both permission statuses with one-tap fix buttons. Overlay permission and Accessibility service each get a green or red card. Android resets the Accessibility service on every update (unavoidable) so the card shows a note and direct buttons to restore it in about 30 seconds. On Android 13+ both steps are shown side by side. Grant overlay permission button removed from the middle of the screen and moved into the status card."},
             {"v1.22  ·  2026-06-06","Fix: tap-to-calibrate was placing probe dots between board rows instead of on them. The column probe positions were calculated from hex centers instead of board edges (shifted all 7 columns inward). The row step was dividing by 4 instead of 3, placing rows 1 and 2 between actual board rows instead of on them. Both fixed: probe dots now land on hex centers after tap calibration."},
             {"v1.21  ·  2026-06-06","Tap to calibrate: instead of adjusting sliders blind, tap 3 actual units in TFT to set all 5 calibration values at once. Tap TAP TO CALIBRATE in Settings, then tap your top-left board unit, bottom-right board unit, and any bench unit. The probe dots appear immediately after so you can confirm the positions are correct. Sliders still available for fine-tuning. Rotation during calibration cancels safely."},
             {"v1.20  ·  2026-06-06","Fix: probe dots (and Auto Scan) were completely outside the board in portrait mode. The app now uses separate scan coordinates for portrait vs landscape — in portrait the board starts around 22% of screen height, not 39%. Calibrate Scan in Settings now shows (PORTRAIT) or (LANDSCAPE) and saves values separately for each orientation. Defaults: portrait top 22%, bottom 65%, left 12%, right 88%, bench 75%."},
