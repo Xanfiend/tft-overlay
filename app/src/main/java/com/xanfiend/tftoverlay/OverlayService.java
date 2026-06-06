@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.21";
+    private static final String APP_VERSION = "v1.22";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
@@ -1545,12 +1545,37 @@ public class OverlayService extends Service {
         int xPct=(int)(rawX*100/sw);
         int yPct=(int)(rawY*100/sh);
         if(calStep==1){
+            // Store raw col0 center X as boardLeft for now (corrected in step 2 when we know span)
             if(portrait){ pool.setPortraitBoardTopPct(yPct); pool.setPortraitBoardLeftPct(xPct); }
             else{ pool.setBoardTopPct(yPct); pool.setBoardLeftPct(xPct); }
             calStep=2; showCalCaptureOverlay();
         } else if(calStep==2){
-            if(portrait){ pool.setPortraitBoardBotPct(yPct); pool.setPortraitBoardRightPct(xPct); }
-            else{ pool.setBoardBotPct(yPct); pool.setBoardRightPct(xPct); }
+            // Step 2: tap = col6 center, row3 center (bottom-right of standard 4-row board)
+            int col0X = portrait ? pool.getPortraitBoardLeftPct() : pool.getBoardLeftPct();
+            int row0Y = portrait ? pool.getPortraitBoardTopPct() : pool.getBoardTopPct();
+            int col6X = xPct;
+            int row3Y = yPct;
+            // X-axis: user tapped hex CENTERS; buildProbeGrid expects board EDGES.
+            // With 7 cols: colWidth = colSpan/6, so edge offset = colWidth/2 = colSpan/12
+            int colSpan = col6X - col0X;
+            int boardLeftPct  = col0X - colSpan/12;
+            int boardRightPct = col6X + colSpan/12;
+            // Y-axis: buildProbeGrid uses step=(bot-top)/4, placing 5 probes evenly.
+            // For a standard 4-row board the tapped row3Y IS the bottom row center, so
+            // probe[3] at top+3*step should equal row3Y. To achieve that while still
+            // covering a Tocker's 5th row, we store boardBot = row3Y + 1 row-step,
+            // making step=(boardBot-row0Y)/4 = (row3Y-row0Y)/3 = actual row spacing.
+            int rowStep = Math.max(1, (row3Y - row0Y)/3);
+            int boardBotPct = row3Y + rowStep;
+            if(portrait){
+                pool.setPortraitBoardBotPct(boardBotPct);
+                pool.setPortraitBoardLeftPct(boardLeftPct);
+                pool.setPortraitBoardRightPct(boardRightPct);
+            } else {
+                pool.setBoardBotPct(boardBotPct);
+                pool.setBoardLeftPct(boardLeftPct);
+                pool.setBoardRightPct(boardRightPct);
+            }
             calStep=3; showCalCaptureOverlay();
         } else if(calStep==3){
             if(portrait) pool.setPortraitBenchYPct(yPct);
