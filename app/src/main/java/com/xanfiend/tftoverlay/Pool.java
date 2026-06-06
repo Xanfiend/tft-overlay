@@ -122,8 +122,9 @@ public class Pool {
     }
 
     // ---- scan calibration: probe grid percentages ----
-    // Defaults measured from TFT Mobile screenshots — board x is wide (trait panel is narrow),
-    // front row and bench are lower than originally assumed.
+    // Landscape defaults measured from TFT Mobile screenshots.
+    // Portrait defaults measured separately — 39% in portrait puts probes in mid-screen,
+    // far below the board which starts at ~22% on a portrait phone.
     public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
     public int getBoardBotPct()        { return p.getInt("cal_bot",   72); }
@@ -137,6 +138,22 @@ public class Pool {
     public void resetCalibration()     {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
                 .remove("cal_right").remove("cal_bench").apply();
+    }
+
+    // Portrait calibration — board sits much higher on screen in portrait mode
+    public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   22); }
+    public void setPortraitBoardTopPct(int v)  { p.edit().putInt("cal_p_top",   Math.max(5,  Math.min(60,v))).apply(); }
+    public int getPortraitBoardBotPct()        { return p.getInt("cal_p_bot",   65); }
+    public void setPortraitBoardBotPct(int v)  { p.edit().putInt("cal_p_bot",   Math.max(20, Math.min(90,v))).apply(); }
+    public int getPortraitBoardLeftPct()       { return p.getInt("cal_p_left",  12); }
+    public void setPortraitBoardLeftPct(int v) { p.edit().putInt("cal_p_left",  Math.max(0,  Math.min(50,v))).apply(); }
+    public int getPortraitBoardRightPct()      { return p.getInt("cal_p_right", 88); }
+    public void setPortraitBoardRightPct(int v){ p.edit().putInt("cal_p_right", Math.max(50, Math.min(100,v))).apply(); }
+    public int getPortraitBenchYPct()          { return p.getInt("cal_p_bench", 75); }
+    public void setPortraitBenchYPct(int v)    { p.edit().putInt("cal_p_bench", Math.max(50, Math.min(95,v))).apply(); }
+    public void resetPortraitCalibration()     {
+        p.edit().remove("cal_p_top").remove("cal_p_bot").remove("cal_p_left")
+                .remove("cal_p_right").remove("cal_p_bench").apply();
     }
 
     // ---- bench-thinning: junk units of a cost you're holding on your bench ----

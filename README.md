@@ -142,6 +142,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.20 - 2026-06-06
+- Fix: probe dots and Auto Scan were completely outside the board in portrait mode. The board starts at ~22% screen height in portrait, not 39%.
+- Scan coordinates are now stored separately for portrait and landscape orientation.
+- Calibrate Scan in Settings now labels which orientation is being adjusted (PORTRAIT or LANDSCAPE) and RESET only resets the current orientation.
+- Portrait defaults: board top 22%, bottom 65%, left 12%, right 88%, bench 75%.
+
 ### v1.19 - 2026-06-05
 - Fix: Auto Scan was missing units in Tocker's Trials and on boards where units sit lower on screen (player board at y 50-72%).
 - Scan now uses 5 probe rows instead of 4, extending bottom coverage from 65% to 72% of screen height.
