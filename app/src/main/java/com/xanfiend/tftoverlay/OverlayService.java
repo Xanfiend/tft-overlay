@@ -32,9 +32,11 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.25";
+    private static final String APP_VERSION = "v1.26";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
+    // guide tab sub-selection: 0 = augments, 1 = items
+    private int guideTab = 0;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
     private View probeDotsView = null;
     private final android.os.Handler probeDotsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -141,7 +143,7 @@ public class OverlayService extends Service {
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
             s.lastScanStatus="✗ "+msg;
             android.widget.Toast.makeText(s,"✗ "+msg,android.widget.Toast.LENGTH_SHORT).show();
-            s.mode=5; s.showPanel();
+            s.mode=4; s.showPanel();
         });
     }
 
@@ -305,7 +307,7 @@ public class OverlayService extends Service {
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(this);
-        title.setText(mode==5?"\u2699 SETTINGS":mode==4?"\u229e ITEMS":mode==3?"\u00a7 ECONOMY":mode==2?"\u2738 AUGMENTS":mode==1?"\u2738 CONTEST BOARD":"\u2738 MARK CONTESTED");
+        title.setText(mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
@@ -317,9 +319,9 @@ public class OverlayService extends Service {
 
         // tab row \u2014 ordered by in-game frequency of use
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        int[] tabModes={0,3,1,2,4,5}; // Grid | Econ | Board | Augs | Items | Settings
-        String[] tabNames={"GRID","ECON","BOARD","AUGS","ITEMS","\u2699"};
-        for(int t=0;t<6;t++){
+        int[] tabModes={0,1,2,3,4}; // Pool | Odds | Guide | Gold | Setup
+        String[] tabNames={"POOL","ODDS","GUIDE","GOLD","\u2699 SETUP"};
+        for(int t=0;t<5;t++){
             final int tm=tabModes[t]; boolean on=mode==tm;
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(9); tab.setLetterSpacing(0.05f);
@@ -337,7 +339,7 @@ public class OverlayService extends Service {
         div.setTextColor(EDGE); div.setTextSize(9); div.setGravity(Gravity.CENTER); div.setPadding(0,8,0,2);
         root.addView(div);
 
-        // level row (4-10) -- only relevant for grid/board tabs
+        // level row (4-10) -- only relevant for pool/odds tabs
         if(mode<=1){
         LinearLayout lvl=new LinearLayout(this); lvl.setPadding(0,12,0,12);
         TextView ll=new TextView(this); ll.setText("LVL"); ll.setTextColor(ASH); ll.setTextSize(10); ll.setGravity(Gravity.CENTER); ll.setPadding(0,0,8,0);
@@ -356,10 +358,9 @@ public class OverlayService extends Service {
         root.addView(lvl);
         }
 
-        if(mode==5) buildSettings(root);
-        else if(mode==4) buildItems(root);
+        if(mode==4) buildSettings(root);
         else if(mode==3) buildEconomy(root);
-        else if(mode==2) buildAugments(root);
+        else if(mode==2) buildGuide(root);
         else if(mode==1) buildSummary(root);
         else buildGrid(root);
 
@@ -386,32 +387,21 @@ public class OverlayService extends Service {
         chipNames=new String[totalChamps];
         int idx=0;
 
-        // auto scan: one-tap full-screen champion detection, no tapping required
+        // \u25c7 SCAN section
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
+        TextView scanSecHdr=new TextView(this); scanSecHdr.setText("\u25c7 SCAN");
+        scanSecHdr.setTextColor(GOLD); scanSecHdr.setTextSize(11); scanSecHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        scanSecHdr.setLetterSpacing(0.1f); scanSecHdr.setPadding(2,4,0,6); root.addView(scanSecHdr);
+
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
             String prog=total>0?(done+"/"+total+" hexes"):"starting...";
-            TextView asActive=new TextView(this); asActive.setText("\u25c9 Auto Scan: "+prog+" \u00b7 tap sigil to stop");
+            TextView asActive=new TextView(this); asActive.setText("\u29bf Auto Scan: "+prog+" \u00b7 tap sigil to stop");
             asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
             asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
             root.addView(asActive);
-        } else {
-            String asLabel=accAvail?"\u29bf Auto Scan Board":"\u29bf Auto Scan (enable Accessibility first)";
-            TextView asBtn=new TextView(this); asBtn.setText(asLabel);
-            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(12); asBtn.setGravity(Gravity.CENTER);
-            asBtn.setPadding(0,12,0,12);
-            asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(-1,-2); asl.setMargins(0,0,0,4); asBtn.setLayoutParams(asl);
-            asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
-                startAutoTapScan();
-            }});
-            root.addView(asBtn);
-        }
-
-        // opponent board scan \u2014 tap each opponent unit to read its name + star level
-        if(oppScanMode){
+        } else if(oppScanMode){
             long rem=oppScanDeadline-System.currentTimeMillis();
             int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
             TextView osActive=new TextView(this);
@@ -422,17 +412,36 @@ public class OverlayService extends Service {
             osActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopOppScanMode(); }});
             root.addView(osActive);
         } else {
-            TextView osBtn=new TextView(this);
-            osBtn.setText(accAvail?"\u25C9 Opp Board":"\u25C9 Opp Board (enable Accessibility first)");
-            osBtn.setTextColor(accAvail?BONE:ASH); osBtn.setTextSize(12); osBtn.setGravity(Gravity.CENTER);
-            osBtn.setPadding(0,10,0,10);
+            // two scan buttons side by side
+            LinearLayout scanBtnRow=new LinearLayout(this); scanBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams sbrp=new LinearLayout.LayoutParams(-1,-2); sbrp.setMargins(0,0,0,6); scanBtnRow.setLayoutParams(sbrp);
+
+            TextView asBtn=new TextView(this); asBtn.setText(accAvail?"\u29bf Auto Scan Board":"\u29bf Auto Scan");
+            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(11); asBtn.setGravity(Gravity.CENTER);
+            asBtn.setPadding(8,12,8,12);
+            asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
+            asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                startAutoTapScan();
+            }});
+
+            TextView osBtn=new TextView(this); osBtn.setText(accAvail?"\u25C9 Opp Board":"\u25C9 Opp Board");
+            osBtn.setTextColor(accAvail?BONE:ASH); osBtn.setTextSize(11); osBtn.setGravity(Gravity.CENTER);
+            osBtn.setPadding(8,12,8,12);
             osBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(-1,-2); osl.setMargins(0,0,0,4); osBtn.setLayoutParams(osl);
+            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(0,-2,1f); osl.setMargins(3,0,0,0); osBtn.setLayoutParams(osl);
             osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startOppScanMode();
             }});
-            root.addView(osBtn);
+
+            scanBtnRow.addView(asBtn); scanBtnRow.addView(osBtn);
+            root.addView(scanBtnRow);
+            if(!accAvail){
+                TextView accHint=new TextView(this); accHint.setText("Enable Accessibility in SETUP tab to use scan features");
+                accHint.setTextColor(DIM); accHint.setTextSize(10); accHint.setPadding(2,0,2,4); root.addView(accHint);
+            }
         }
 
         // auto scan results
@@ -469,10 +478,16 @@ public class OverlayService extends Service {
             root.addView(clearOsr);
         }
 
-        TextView tipv=new TextView(this);
-        tipv.setText("Tap a name = +1 copy \u00b7 tap the count = \u22121 \u00b7 tap \u25C9 = +1 player");
-        tipv.setTextColor(DIM); tipv.setTextSize(10); tipv.setPadding(0,0,0,8);
-        root.addView(tipv);
+        // how-to card
+        LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
+        howCard.setBackground(box(CARD,6,EDGE,1)); howCard.setPadding(12,10,12,10);
+        LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
+        String[] howItems={"Tap name = +1 copy seen","Tap count badge = \u22121 copy","Tap \u25C9 badge = +1 player contesting"};
+        for(String h:howItems){
+            TextView hv=new TextView(this); hv.setText(h);
+            hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,1,0,1); howCard.addView(hv);
+        }
+        root.addView(howCard);
 
         // RECENT: the champs you've tapped this game, for instant re-tapping
         java.util.List<String> rec = pool.recentList();
@@ -739,9 +754,24 @@ public class OverlayService extends Service {
 
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
-            TextView e=new TextView(this);
-            e.setText("\n\u29BF  The board is silent.\n\nIn the grid, mark the champions you're contesting or chasing. Scryer reveals how hard each is contested and whether the roll still favors you.");
-            e.setTextColor(ASH); e.setTextSize(13); e.setLineSpacing(6,1f); root.addView(e); return;
+            LinearLayout emptyCard=new LinearLayout(this); emptyCard.setOrientation(LinearLayout.VERTICAL);
+            emptyCard.setBackground(box(CARD,6,EDGE,1)); emptyCard.setPadding(16,14,16,14);
+            LinearLayout.LayoutParams ecl=new LinearLayout.LayoutParams(-1,-2); ecl.setMargins(0,4,0,0); emptyCard.setLayoutParams(ecl);
+            TextView emptyTitle=new TextView(this); emptyTitle.setText("\u29BF  Nothing tracked yet");
+            emptyTitle.setTextColor(BONE); emptyTitle.setTextSize(14); emptyTitle.setTypeface(null,android.graphics.Typeface.BOLD);
+            emptyTitle.setPadding(0,0,0,10); emptyCard.addView(emptyTitle);
+            String[] steps={
+                "1. Go to the POOL tab",
+                "2. Tap each champion you are playing or chasing",
+                "3. Come back here for roll odds and contest pressure"
+            };
+            for(String s:steps){
+                TextView sv=new TextView(this); sv.setText(s);
+                sv.setTextColor(ASH); sv.setTextSize(12); sv.setLineSpacing(3,1f); sv.setPadding(0,3,0,3);
+                emptyCard.addView(sv);
+            }
+            root.addView(emptyCard);
+            return;
         }
         List<String> names=pool.seenSorted();
         String pin=pool.getPinned();
@@ -937,6 +967,8 @@ public class OverlayService extends Service {
         econInterestTv.setTextColor(BONE); econInterestTv.setTextSize(17); econInterestTv.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(econInterestTv);
         econBracketTv=new TextView(this); econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
         econBracketTv.setTextColor(gold>=50?GOLD:ASH); econBracketTv.setTextSize(11); iRow.addView(econBracketTv);
+        TextView intrExplain=new TextView(this); intrExplain.setText("1g interest per 10g saved  ·  max 5g per round");
+        intrExplain.setTextColor(DIM); intrExplain.setTextSize(10); intrExplain.setPadding(0,4,0,0); iRow.addView(intrExplain);
         // interest ladder dots: 10 / 20 / 30 / 40 / 50
         LinearLayout ladder=new LinearLayout(this); ladder.setPadding(0,8,0,0);
         int[] brackets={10,20,30,40,50};
@@ -981,6 +1013,8 @@ public class OverlayService extends Service {
         if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
         else { econBonusTv.setVisibility(View.GONE); }
         root.addView(econBonusTv);
+        TextView streakScale=new TextView(this); streakScale.setText("2+ streak = +1g  ·  4+ = +2g  ·  6+ = +3g");
+        streakScale.setTextColor(DIM); streakScale.setTextSize(10); streakScale.setPadding(2,2,2,0); root.addView(streakScale);
 
         // expected income card
         LinearLayout incCard=new LinearLayout(this); incCard.setOrientation(LinearLayout.VERTICAL);
@@ -1129,9 +1163,81 @@ public class OverlayService extends Service {
         }
     }
 
+    // ---- GUIDE TAB: sub-tabs for Augments and Items reference ----
+    private void buildGuide(LinearLayout root){
+        // sub-tab row
+        LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
+        String[] gtNames={"AUGMENTS","ITEMS"};
+        for(int i=0;i<2;i++){
+            final int gi=i; boolean on=guideTab==gi;
+            TextView gt=new TextView(this); gt.setText(gtNames[i]); gt.setGravity(Gravity.CENTER);
+            gt.setTextColor(on?BONE:ASH); gt.setTextSize(10); gt.setLetterSpacing(0.05f);
+            gt.setTypeface(null,on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            gt.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); gt.setPadding(0,12,0,12);
+            LinearLayout.LayoutParams gtl=new LinearLayout.LayoutParams(0,-2,1f); gtl.setMargins(2,0,2,0); gt.setLayoutParams(gtl);
+            gt.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ guideTab=gi; showPanel(); }});
+            gtRow.addView(gt);
+        }
+        root.addView(gtRow);
+        if(guideTab==0) buildAugments(root);
+        else buildItems(root);
+    }
+
     private void buildSettings(LinearLayout root){
-        // ◇ AUTO-DETECT
-        TextView scanHdr=new TextView(this); scanHdr.setText("◇ AUTO-DETECT");
+        boolean accEnabled = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
+
+        // ◇ PERMISSIONS
+        TextView permHdr=new TextView(this); permHdr.setText("◇ PERMISSIONS");
+        permHdr.setTextColor(GOLD); permHdr.setTextSize(11); permHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        permHdr.setLetterSpacing(0.1f); permHdr.setPadding(2,4,0,6); root.addView(permHdr);
+
+        LinearLayout accCard=new LinearLayout(this); accCard.setOrientation(LinearLayout.VERTICAL);
+        accCard.setBackground(box(CARD,6,accEnabled?GREEN:EDGE,accEnabled?2:1)); accCard.setPadding(12,10,12,10);
+        LinearLayout.LayoutParams acardl=new LinearLayout.LayoutParams(-1,-2); acardl.setMargins(0,0,0,8); accCard.setLayoutParams(acardl);
+        TextView accLabel=new TextView(this); accLabel.setText("Accessibility (silent scan)");
+        accLabel.setTextColor(ASH); accLabel.setTextSize(10); accLabel.setLetterSpacing(0.05f); accCard.addView(accLabel);
+        TextView accStatus=new TextView(this);
+        accStatus.setText(accEnabled ? "Enabled — scan works silently, no app switch" : "Disabled — scan buttons will not work");
+        accStatus.setTextColor(accEnabled?GREEN:BLOODL);
+        accStatus.setTextSize(13); accStatus.setTypeface(null,android.graphics.Typeface.BOLD); accCard.addView(accStatus);
+        if(!accEnabled){
+            String steps = Build.VERSION.SDK_INT >= 33
+                ? "1. App settings below → Allow restricted settings\n2. Accessibility → TFT Scryer → On"
+                : "Accessibility → TFT Scryer → On";
+            TextView accInstr=new TextView(this); accInstr.setText(steps);
+            accInstr.setTextColor(ASH); accInstr.setTextSize(11); accInstr.setPadding(0,4,0,0); accCard.addView(accInstr);
+        }
+        root.addView(accCard);
+
+        if(!accEnabled){
+            LinearLayout accBtnRow=new LinearLayout(this); accBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams abrp=new LinearLayout.LayoutParams(-1,-2); abrp.setMargins(0,0,0,12); accBtnRow.setLayoutParams(abrp);
+            if(Build.VERSION.SDK_INT >= 33){
+                TextView appInfoBtn=new TextView(this); appInfoBtn.setText("App settings");
+                appInfoBtn.setTextColor(BONE); appInfoBtn.setTextSize(12); appInfoBtn.setGravity(Gravity.CENTER);
+                appInfoBtn.setPadding(0,10,0,10); appInfoBtn.setBackground(box(CARD,6,EDGE,1));
+                LinearLayout.LayoutParams aibl=new LinearLayout.LayoutParams(0,-2,1f); aibl.setMargins(0,0,4,0); appInfoBtn.setLayoutParams(aibl);
+                appInfoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    try{ Intent i=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        i.setData(android.net.Uri.parse("package:"+getPackageName()));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+                }});
+                accBtnRow.addView(appInfoBtn);
+            }
+            TextView accBtn=new TextView(this); accBtn.setText("Accessibility settings");
+            accBtn.setTextColor(BONE); accBtn.setTextSize(12); accBtn.setGravity(Gravity.CENTER);
+            accBtn.setPadding(0,10,0,10); accBtn.setBackground(box(CARD,6,EDGE,1));
+            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(0,-2,1f); accBtn.setLayoutParams(abl);
+            accBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+            }});
+            accBtnRow.addView(accBtn);
+            root.addView(accBtnRow);
+        }
+
+        // ◇ SCAN
+        TextView scanHdr=new TextView(this); scanHdr.setText("◇ SCAN");
         scanHdr.setTextColor(GOLD); scanHdr.setTextSize(11); scanHdr.setTypeface(null,android.graphics.Typeface.BOLD);
         scanHdr.setLetterSpacing(0.1f); scanHdr.setPadding(2,4,0,6); root.addView(scanHdr);
 
@@ -1140,57 +1246,7 @@ public class OverlayService extends Service {
         scanStatusTv.setTextColor(lastScanStatus.startsWith("✓")?GREEN:(lastScanStatus.startsWith("✗")?BLOODL:ASH));
         scanStatusTv.setTextSize(11); scanStatusTv.setPadding(2,0,0,8); root.addView(scanStatusTv);
 
-        // accessibility scan status
-        boolean accEnabled = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
-        TextView accStatus=new TextView(this);
-        accStatus.setText(accEnabled
-            ? "Silent scan: enabled — no app switch"
-            : "Silent scan: disabled");
-        accStatus.setTextColor(accEnabled ? GREEN : ASH);
-        accStatus.setTextSize(11); accStatus.setPadding(2,0,0,4); root.addView(accStatus);
-        if(!accEnabled){
-            // Step-by-step setup instructions
-            TextView accInstr=new TextView(this);
-            String steps = Build.VERSION.SDK_INT >= 33
-                ? "To enable silent scan:\n1. App settings → Allow restricted settings\n2. Accessibility → TFT Scryer → On"
-                : "To enable silent scan:\nAccessibility → TFT Scryer → On";
-            accInstr.setText(steps);
-            accInstr.setTextColor(ASH); accInstr.setTextSize(11); accInstr.setPadding(2,0,0,8);
-            root.addView(accInstr);
-
-            LinearLayout accBtnRow=new LinearLayout(this); accBtnRow.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams abrp=new LinearLayout.LayoutParams(-1,-2); abrp.setMargins(0,0,0,8); accBtnRow.setLayoutParams(abrp);
-
-            if(Build.VERSION.SDK_INT >= 33){
-                TextView appInfoBtn=new TextView(this); appInfoBtn.setText("App settings");
-                appInfoBtn.setTextColor(BONE); appInfoBtn.setTextSize(12); appInfoBtn.setGravity(Gravity.CENTER);
-                appInfoBtn.setPadding(0,10,0,10); appInfoBtn.setBackground(box(CARD,6,EDGE,1));
-                LinearLayout.LayoutParams aibl=new LinearLayout.LayoutParams(0,-2,1f); aibl.setMargins(0,0,4,0); appInfoBtn.setLayoutParams(aibl);
-                appInfoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                    try{
-                        Intent i=new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        i.setData(android.net.Uri.parse("package:"+getPackageName()));
-                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
-                    }catch(Exception e){}
-                }});
-                accBtnRow.addView(appInfoBtn);
-            }
-
-            TextView accBtn=new TextView(this); accBtn.setText("Accessibility settings");
-            accBtn.setTextColor(BONE); accBtn.setTextSize(12); accBtn.setGravity(Gravity.CENTER);
-            accBtn.setPadding(0,10,0,10); accBtn.setBackground(box(CARD,6,EDGE,1));
-            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(0,-2,1f); accBtn.setLayoutParams(abl);
-            accBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                try{
-                    Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
-                }catch(Exception e){}
-            }});
-            accBtnRow.addView(accBtn);
-            root.addView(accBtnRow);
-        }
-
-        TextView scanBtn=new TextView(this); scanBtn.setText("📷 Scan now");
+        TextView scanBtn=new TextView(this); scanBtn.setText("Scan now");
         scanBtn.setTextColor(BONE); scanBtn.setTextSize(13); scanBtn.setGravity(Gravity.CENTER);
         scanBtn.setPadding(0,12,0,12); scanBtn.setBackground(box(BLOOD,6,BLOODL,2));
         LinearLayout.LayoutParams sbl=new LinearLayout.LayoutParams(-1,-2); sbl.setMargins(0,0,0,4); scanBtn.setLayoutParams(sbl);
@@ -1198,7 +1254,7 @@ public class OverlayService extends Service {
         root.addView(scanBtn);
 
         TextView scanHint=new TextView(this);
-        scanHint.setText("Tap Scan while TFT is running. Grant the permission — the overlay steps aside and scans the game automatically.");
+        scanHint.setText("Reads gold, level & augments from TFT. Enable Accessibility above for silent scan with no app switch.");
         scanHint.setTextColor(DIM); scanHint.setTextSize(10); scanHint.setPadding(2,4,0,0); root.addView(scanHint);
 
         // ◇ DEBUG LOG
@@ -1224,7 +1280,7 @@ public class OverlayService extends Service {
         clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10);
         clearLogBtn.setPadding(6,4,4,4);
         clearLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            clearScanLog(); mode=5; showPanel();
+            clearScanLog(); mode=4; showPanel();
         }});
         logHdrRow.addView(clearLogBtn);
         root.addView(logHdrRow);
@@ -1283,7 +1339,7 @@ public class OverlayService extends Service {
             clearTpl.setPadding(0,10,0,10); clearTpl.setBackground(box(0xFF1A0C0E,6,BLOOD,2));
             LinearLayout.LayoutParams ctll=new LinearLayout.LayoutParams(-1,-2); ctll.setMargins(0,0,0,6); clearTpl.setLayoutParams(ctll);
             clearTpl.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                ChampionTemplates.clearAll(OverlayService.this); mode=5; showPanel();
+                ChampionTemplates.clearAll(OverlayService.this); mode=4; showPanel();
             }});
             root.addView(clearTpl);
         }
@@ -1352,7 +1408,7 @@ public class OverlayService extends Service {
         hdr3.setLetterSpacing(0.1f); hdr3.setPadding(2,18,0,6); root.addView(hdr3);
 
         int curStart=pool.getStartTab();
-        String[] stLabels={"smart","always grid"}; int[] stVals={0,1};
+        String[] stLabels={"smart","always pool"}; int[] stVals={0,1};
         LinearLayout stRow=new LinearLayout(this); stRow.setGravity(Gravity.CENTER_VERTICAL);
         for(int i=0;i<2;i++){
             final int sv=stVals[i];
@@ -1396,7 +1452,7 @@ public class OverlayService extends Service {
         calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
 
         TextView calInfo=new TextView(this);
-        calInfo.setText("Tap to calibrate: follow the 3-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
+        calInfo.setText("Tap to calibrate: follow the 4-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
         calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,8);
         root.addView(calInfo);
 
@@ -1457,7 +1513,7 @@ public class OverlayService extends Service {
         resetCal.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         resetCal.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             if(isPortrait) pool.resetPortraitCalibration(); else pool.resetCalibration();
-            mode=5; showPanel();
+            mode=4; showPanel();
         }});
         calBtnRow.addView(resetCal);
         root.addView(calBtnRow);
@@ -1549,7 +1605,7 @@ public class OverlayService extends Service {
                     float vx=e.getX(), vy=e.getY();
                     if(vy>=H*0.88f){
                         if(calStep==4) finishCalibration();
-                        else{ calStep=0; hideCalCaptureView(); mode=5; showPanel(); }
+                        else{ calStep=0; hideCalCaptureView(); mode=4; showPanel(); }
                     } else if(vy<=H*0.20f){
                         // tapped inside the instruction banner — ignore
                     } else {
@@ -1639,7 +1695,7 @@ public class OverlayService extends Service {
         calStep=0;
         hideCalCaptureView();
         isPortrait=false; // will be recalculated in showPanel()
-        mode=5; showPanel();
+        mode=4; showPanel();
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
             new Runnable(){ public void run(){ showProbeDots(); }}, 400);
     }
@@ -1780,20 +1836,20 @@ public class OverlayService extends Service {
                                 public void onError(String msg){
                                     lastScanStatus="✗ "+msg;
                                     android.widget.Toast.makeText(OverlayService.this,"✗ "+msg,android.widget.Toast.LENGTH_SHORT).show();
-                                    mode=5; showPanel();
+                                    mode=4; showPanel();
                                 }
                             });
                     } catch(Exception e){
                         addScanLog("ERR accessibility scan: "+e.getMessage());
                         lastScanStatus="✗ "+e.getMessage();
-                        mode=5; showPanel();
+                        mode=4; showPanel();
                     }
                 }
                 @Override public void onFailure(int errorCode){
                     addScanLog("ERR screenshot failed: "+errorCode);
                     lastScanStatus="✗ screenshot failed ("+errorCode+")";
                     android.widget.Toast.makeText(OverlayService.this,"✗ screenshot failed",android.widget.Toast.LENGTH_SHORT).show();
-                    mode=5; showPanel();
+                    mode=4; showPanel();
                 }
             });
     }
@@ -1813,7 +1869,7 @@ public class OverlayService extends Service {
         }
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
-        mode=5; showPanel();
+        mode=4; showPanel();
     }
 
     // ---- board scan mode ----
@@ -2109,7 +2165,7 @@ public class OverlayService extends Service {
                                         else { bmpForTemplate.recycle(); if(debugScanPending){
                                             debugScanPending=false;
                                             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
-                                                mode=5; showPanel();
+                                                mode=4; showPanel();
                                             }}, 500);
                                         }}
                                     }
