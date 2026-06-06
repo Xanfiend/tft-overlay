@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.25");
+        ver.setText("v1.26");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.26  ·  2026-06-06","UI redesign: 5 tabs instead of 6. GRID renamed to POOL. BOARD renamed to ODDS. AUGS and ITEMS merged into a single GUIDE tab with sub-tabs (tap AUGMENTS or ITEMS at the top). SETTINGS renamed to SETUP and now shows Accessibility permission status as the first thing, with a clear card showing if it is on or off and step-by-step instructions if not. Scan buttons in the POOL tab are now side by side. ODDS tab has a clearer empty state with step-by-step instructions. GOLD tab shows interest and streak bonus scale inline. Calibration guide text corrected to say 4-step (was 3-step)."},
             {"v1.25  ·  2026-06-06","Fix: probe dots were not forming a rectangle over the board because the TFT board is trapezoidal in screen space (front row wider than back row). Calibration now asks for 4 points: tap the back-left unit, back-right unit, front-right unit, then bench. The probe grid now interpolates left and right edges per row so dots land on hexes from top to bottom. The front-left corner is inferred from board symmetry so you only need 3 board taps."},
             {"v1.24  ·  2026-06-06","Fix: tap-to-calibrate was offset to the right. The capture overlay used raw touch coordinates against full-screen metrics, but in landscape the status bar / notch inset shifted everything sideways. The capture overlay now uses the exact same full-screen window and coordinate space as the probe dots, so a tap lands precisely where the dot is drawn. Debug aid added: each tap now shows a green crosshair where it registered, plus a live readout of the tap pixel and percent values and the view size, so any future offset is visible on screen."},
             {"v1.23  ·  2026-06-06","Setup screen now shows both permission statuses with one-tap fix buttons. Overlay permission and Accessibility service each get a green or red card. Android resets the Accessibility service on every update (unavoidable) so the card shows a note and direct buttons to restore it in about 30 seconds. On Android 13+ both steps are shown side by side. Grant overlay permission button removed from the middle of the screen and moved into the status card."},
