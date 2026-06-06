@@ -142,6 +142,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.25 - 2026-06-06
+- Fix: probe dots were not landing on hexes across all rows because the TFT board is trapezoidal in screen space (the front row is wider than the back row). The previous grid assumed all rows had the same left and right edges, which was wrong.
+- Calibration now collects 4 points: back-left unit (top row), back-right unit (top row), front-right unit (bottom row), then bench. The probe grid interpolates left and right edges per row between the calibrated corners so dots land on hexes from top to bottom. The front-left corner is inferred from board symmetry, so you only tap 3 board points.
+- After calibrating, the settings screen shows the computed corner percentages so you can verify the values are reasonable.
+
 ### v1.24 - 2026-06-06
 - Fix: tap-to-calibrate was offset to the right. The capture overlay used raw touch coordinates against full-screen metrics, but in landscape the status bar / notch inset shifted everything sideways. The capture overlay now shares the exact same full-screen window and coordinate space as the probe dots, so a tap maps 1:1 to where the dot is drawn.
 - Debug aid: during tap calibration each tap draws a green crosshair where it registered, with a live readout showing the tap pixel position, the percent values, and the view size. This makes any coordinate offset immediately visible on screen.
