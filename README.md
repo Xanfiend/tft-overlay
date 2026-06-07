@@ -141,6 +141,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.30 - 2026-06-07
+- Fix: the probe dots were landing in the right place all along, the dots themselves were just drawn too big to tell. The TFT board is shown at an angle, so the back rows sit closer together on screen than the front rows. The dots had a fixed size that did not shrink for the back rows, so neighbouring dots overlapped into what looked like a tangled mesh, even though their centers were correctly placed in a clean grid.
+- Dots now shrink to fit the actual gap between neighbouring points, so the back rows look as clean as the front rows, and nothing overlaps.
+- This was the real cause of the crisscross look reported after both v1.28 and v1.29. The placement math in those versions was already fine, which is why changing it did not fix the look of the dots.
+
 ### v1.29 - 2026-06-07
 - Fix: the v1.28 sideways stagger correction made probe dots worse on TFT Mobile, not better. It worked out a sideways shift from real measured PC board coordinates and applied it to alternating rows, but on phones that shift came out too large and turned the dots into a dense crisscross mesh instead of clean rows lined up on the hexes.
 - Removed that correction and went back to plain smooth interpolation between the four corners measured during calibration. Users confirmed this lines up well.
