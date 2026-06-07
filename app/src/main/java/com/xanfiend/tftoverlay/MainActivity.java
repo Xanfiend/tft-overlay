@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.27");
+        ver.setText("v1.28");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.28  ·  2026-06-07","Fix: probe dots were still landing slightly off to the side on alternating rows. Researched real measured TFT board coordinates and found the board uses a staggered hex grid (pointy-top hexes), where every other row is shifted sideways by about half a hex width, on top of the front-to-back perspective. The old calibration also guessed the front-left corner using left-right symmetry, which does not hold on a staggered board. Calibration is now a 5-step guide that taps all four board corners directly (back-left, back-right, front-left, front-right, then bench), and the probe grid now works out the sideways stagger from those four points and applies it to each row. Re-run TAP TO CALIBRATE in SETUP after updating."},
             {"v1.27  ·  2026-06-06","Fix: probe dots still did not sit on the hexes. Two causes. First, the grid generated 5 rows but a standard board has 4, so an extra row floated off the board and every row drifted. Second, the rows were spaced evenly, but the TFT board is drawn in perspective: the back rows are compressed and the front rows are spread apart, so even spacing dropped the middle dots into the gaps between hexes. The grid now lays exactly 4 rows using perspective spacing (gaps grow toward the front) and interpolates the trapezoid edges with the same curve. Calibration now stores the front row directly, so re-run TAP TO CALIBRATE in SETUP after updating for the tightest fit."},
             {"v1.26  ·  2026-06-06","UI redesign: 5 tabs instead of 6. GRID renamed to POOL. BOARD renamed to ODDS. AUGS and ITEMS merged into a single GUIDE tab with sub-tabs (tap AUGMENTS or ITEMS at the top). SETTINGS renamed to SETUP and now shows Accessibility permission status as the first thing, with a clear card showing if it is on or off and step-by-step instructions if not. Scan buttons in the POOL tab are now side by side. ODDS tab has a clearer empty state with step-by-step instructions. GOLD tab shows interest and streak bonus scale inline. Calibration guide text corrected to say 4-step (was 3-step)."},
             {"v1.25  ·  2026-06-06","Fix: probe dots were not forming a rectangle over the board because the TFT board is trapezoidal in screen space (front row wider than back row). Calibration now asks for 4 points: tap the back-left unit, back-right unit, front-right unit, then bench. The probe grid now interpolates left and right edges per row so dots land on hexes from top to bottom. The front-left corner is inferred from board symmetry so you only need 3 board taps."},
