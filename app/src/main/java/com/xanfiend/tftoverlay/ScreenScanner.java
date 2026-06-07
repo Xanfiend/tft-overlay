@@ -158,15 +158,31 @@ public class ScreenScanner {
     // Block coordinates are relative to the crop; the caller offsets popup bounds
     // back to full-screen space before saving a template. Recycles the crop. Lean
     // logging only — this runs dozens of times per scan.
+    // Downscale factor applied to the popup band before OCR. ML Kit latency scales with
+    // pixel count; the champion name in the popup is large enough to survive a moderate
+    // shrink, so this cuts OCR time roughly in half with no loss in name detection. Block
+    // coordinates come back in scaled space and are mapped back in parsePopupZone.
+    private static final float POPUP_OCR_SCALE = 0.7f;
+
     void scanPopupZone(Bitmap crop, int fullW, int fullH, ScanCallback cb) {
-        InputImage image = InputImage.fromBitmap(crop, 0);
+        final Bitmap ocrBmp;
+        if (POPUP_OCR_SCALE < 0.99f) {
+            int sw = Math.max(1, Math.round(crop.getWidth()  * POPUP_OCR_SCALE));
+            int sh = Math.max(1, Math.round(crop.getHeight() * POPUP_OCR_SCALE));
+            ocrBmp = Bitmap.createScaledBitmap(crop, sw, sh, true);
+        } else {
+            ocrBmp = crop;
+        }
+        InputImage image = InputImage.fromBitmap(ocrBmp, 0);
         recognizer().process(image)
                 .addOnSuccessListener(text -> {
-                    ScanResult r = parsePopupZone(text, fullW, fullH);
+                    ScanResult r = parsePopupZone(text, fullW, fullH, POPUP_OCR_SCALE);
+                    if (ocrBmp != crop) ocrBmp.recycle();
                     crop.recycle();
                     cb.onResult(r);
                 })
                 .addOnFailureListener(e -> {
+                    if (ocrBmp != crop) ocrBmp.recycle();
                     crop.recycle();
                     cb.onError("OCR: " + e.getMessage());
                 });
@@ -175,13 +191,15 @@ public class ScreenScanner {
     // Lean popup parser for a pre-cropped band. The entire crop is the popup zone
     // vertically, so no cy filtering is needed — only the landscape sidebar skip and
     // the minimum text height (both derived from the original screen size).
-    private ScanResult parsePopupZone(Text text, int fullW, int fullH) {
+    private ScanResult parsePopupZone(Text text, int fullW, int fullH, float scale) {
         ScanResult r = new ScanResult();
         boolean portrait = fullH > fullW;
-        int popLeft = portrait ? 0 : fullW * 12 / 100;
-        int minH = Math.max(16, fullH / 52);
+        // Thresholds are derived in full-screen pixels, then scaled to match the
+        // downscaled OCR coordinate space the blocks come back in.
+        int popLeft = (int) ((portrait ? 0 : fullW * 12 / 100) * scale);
+        int minH = (int) (Math.max(16, fullH / 52) * scale);
 
-        List<String> allChamps = buildChampList();
+        ensureChampArrays();
         int bestH = 0;
         int pMinX = Integer.MAX_VALUE, pMinY = Integer.MAX_VALUE, pMaxX = 0, pMaxY = 0;
         for (Text.TextBlock block : text.getTextBlocks()) {
@@ -195,18 +213,24 @@ public class ScreenScanner {
             if (box.top < pMinY) pMinY = box.top;
             if (box.right > pMaxX) pMaxX = box.right;
             if (box.bottom > pMaxY) pMaxY = box.bottom;
-            for (String name : allChamps) {
-                if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
-                    r.detectedBoardUnit = name;
+            String ocrNorm = norm(raw);
+            for (int i = 0; i < champNames.length; i++) {
+                if (box.height() > bestH && matchChampNorm(ocrNorm, raw, champNames[i], champNorms[i])) {
+                    r.detectedBoardUnit = champNames[i];
                     bestH = box.height();
                     break;
                 }
             }
         }
         // bounds set whenever any popup text appeared — lets auto-tap tell an item
-        // popup (bounds, no champion) from an empty hex (no bounds at all)
-        if (pMaxX > pMinX)
-            r.detectedPopupBounds = new android.graphics.Rect(pMinX, pMinY, pMaxX, pMaxY);
+        // popup (bounds, no champion) from an empty hex (no bounds at all). Map back
+        // from scaled OCR space to full-crop pixels so template cropping stays correct.
+        if (pMaxX > pMinX) {
+            float inv = 1f / scale;
+            r.detectedPopupBounds = new android.graphics.Rect(
+                    (int) (pMinX * inv), (int) (pMinY * inv),
+                    (int) (pMaxX * inv), (int) (pMaxY * inv));
+        }
         if (!r.detectedBoardUnit.isEmpty()) {
             for (Text.TextBlock block : text.getTextBlocks()) {
                 if (block.getBoundingBox() == null) continue;
@@ -548,6 +572,11 @@ public class ScreenScanner {
     }
 
     private static List<String> champListCache = null;
+    // Parallel arrays for the hot path: name + its normalized form (lowercase a-z only).
+    // Built once. Avoids recompiling regex and re-normalizing every champion for every
+    // OCR block on every probe (37+ probes per auto-scan).
+    private static String[] champNames = null;
+    private static String[] champNorms = null;
 
     private static List<String> buildChampList() {
         if (champListCache == null) {
@@ -558,6 +587,27 @@ public class ScreenScanner {
         return champListCache;
     }
 
+    private static synchronized void ensureChampArrays() {
+        if (champNames != null) return;
+        List<String> list = buildChampList();
+        champNames = list.toArray(new String[0]);
+        champNorms = new String[champNames.length];
+        for (int i = 0; i < champNames.length; i++) champNorms[i] = norm(champNames[i]);
+    }
+
+    // Lowercase, strip everything but a-z. Allocation-light replacement for
+    // toLowerCase().replaceAll("[^a-z]","") — no Pattern compile per call.
+    private static String norm(String s) {
+        StringBuilder b = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 'A' && c <= 'Z') c += 32;
+            if (c >= 'a' && c <= 'z') b.append(c);
+        }
+        return b.toString();
+    }
+
+
     private int countStars(String s) {
         int n = 0;
         for (int i = 0; i < s.length(); i++) {
@@ -567,9 +617,15 @@ public class ScreenScanner {
         return n;
     }
 
+    // Thin wrapper kept for the cold paths (manual full scan). Normalizes on each call.
     private boolean fuzzyMatchChamp(String ocr, String target) {
-        String ocrNorm = ocr.toLowerCase().replaceAll("[^a-z]", "");
-        String tarNorm = target.toLowerCase().replaceAll("[^a-z]", "");
+        return matchChampNorm(norm(ocr), ocr, target, norm(target));
+    }
+
+    // Hot-path matcher: caller passes the already-normalized OCR string (computed once
+    // per block) and the cached target norm (computed once at startup). Identical logic
+    // to fuzzyMatchChamp, just without re-normalizing per champion.
+    private boolean matchChampNorm(String ocrNorm, String ocrRaw, String target, String tarNorm) {
         // Short champion names (Zoe, Vex, Jhin, Fizz, Nami, Ornn…) — exact match only.
         // Fuzzy matching on 3-4 char strings causes too many false positives.
         if (tarNorm.length() <= 4) return ocrNorm.equals(tarNorm);
@@ -582,7 +638,7 @@ public class ScreenScanner {
         // match, producing false positives.
         if (tarNorm.length() >= 6 && tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
         String tarWords = target.replaceAll("([A-Z])", " $1").trim();
-        return fuzzyMatch(ocr, tarWords);
+        return fuzzyMatch(ocrRaw, tarWords);
     }
 
     private boolean fuzzyMatch(String ocr, String target) {
