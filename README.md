@@ -141,6 +141,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.29 - 2026-06-07
+- Fix: the v1.28 sideways stagger correction made probe dots worse on TFT Mobile, not better. It worked out a sideways shift from real measured PC board coordinates and applied it to alternating rows, but on phones that shift came out too large and turned the dots into a dense crisscross mesh instead of clean rows lined up on the hexes.
+- Removed that correction and went back to plain smooth interpolation between the four corners measured during calibration. Users confirmed this lines up well.
+- The 5-step calibration guide from v1.28 stays, since measuring the front-left corner directly is still more accurate than guessing it from symmetry. Only the math that places the dots between the four corners changed.
+- If your dots still look slightly off, re-run TAP TO CALIBRATE in the SETUP tab and try to tap as close to the exact center of each unit as you can — small taps on the wrong spot get stretched across the whole grid.
+
 ### v1.28 - 2026-06-07
 - Fix: probe dots were still landing slightly off to the side on every other row. We dug into real measured TFT board coordinates and found the board uses a staggered hex grid (the hexes are pointy-top, and every other row is shifted sideways by about half a hex width), stacked on top of the front-to-back perspective that v1.27 already handled.
 - The old calibration also worked out the front-left corner using left-right symmetry, which does not hold once you account for the stagger, so that corner could be off.
