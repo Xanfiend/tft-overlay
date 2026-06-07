@@ -138,15 +138,22 @@ public class ChampionTemplates {
 
     static float[] sig(Bitmap bmp){
         int w = bmp.getWidth(), h = bmp.getHeight();
+        // One batched read instead of SIG_GRID*SIG_GRID*cell getPixel() calls — getPixel
+        // has heavy per-call overhead, getPixels copies the whole buffer once.
+        int[] pixels = new int[w * h];
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h);
         float[] out = new float[SIG_GRID * SIG_GRID * 3];
         int idx = 0;
         for(int gy=0;gy<SIG_GRID;gy++) for(int gx=0;gx<SIG_GRID;gx++){
             int x0=gx*w/SIG_GRID, x1=(gx+1)*w/SIG_GRID;
             int y0=gy*h/SIG_GRID, y1=(gy+1)*h/SIG_GRID;
             long r=0,g=0,b=0,n=0;
-            for(int py=y0;py<y1;py++) for(int px=x0;px<x1;px++){
-                int c=bmp.getPixel(px,py);
-                r+=(c>>16)&0xFF; g+=(c>>8)&0xFF; b+=c&0xFF; n++;
+            for(int py=y0;py<y1;py++){
+                int rowBase=py*w;
+                for(int px=x0;px<x1;px++){
+                    int c=pixels[rowBase+px];
+                    r+=(c>>16)&0xFF; g+=(c>>8)&0xFF; b+=c&0xFF; n++;
+                }
             }
             if(n>0){ out[idx]=(float)r/n/255f; out[idx+1]=(float)g/n/255f; out[idx+2]=(float)b/n/255f; }
             idx+=3;
