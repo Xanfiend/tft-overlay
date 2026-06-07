@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.29";
+    private static final String APP_VERSION = "v1.30";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1742,6 +1742,29 @@ public class OverlayService extends Service {
         final java.util.List<int[]> probes=buildProbeGrid(sw,sh);
         final int boardCount=autoTapBoardProbeCount;
 
+        // The board is drawn in perspective — back rows sit closer together than front rows.
+        // A fixed dot radius overlaps in the back rows, looking like a tangled mesh even though
+        // the centers themselves form a clean trapezoid. Size the dots to the tightest gap
+        // between any two neighboring probe points so they never overlap, capped at 28px.
+        final int cols=7;
+        float minGap=Float.MAX_VALUE;
+        for(int i=0;i<boardCount;i++){
+            int[] p=probes.get(i);
+            int row=i/cols, col=i%cols;
+            if(col<cols-1){
+                int[] q=probes.get(i+1);
+                float d=(float)Math.hypot(q[0]-p[0],q[1]-p[1]);
+                if(d<minGap) minGap=d;
+            }
+            if(row<(boardCount/cols)-1){
+                int[] q=probes.get(i+cols);
+                float d=(float)Math.hypot(q[0]-p[0],q[1]-p[1]);
+                if(d<minGap) minGap=d;
+            }
+        }
+        final float dotR = (minGap==Float.MAX_VALUE) ? 28f : Math.max(10f, Math.min(28f, minGap*0.42f));
+        final float txtSize = Math.max(11f, dotR*0.72f);
+
         android.view.View dots=new android.view.View(this){
             @Override protected void onDraw(android.graphics.Canvas canvas){
                 android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -1750,16 +1773,16 @@ public class OverlayService extends Service {
                     boolean bench=(i>=boardCount);
                     paint.setStyle(android.graphics.Paint.Style.FILL);
                     paint.setColor(bench?0x880044FF:0x88FF2200);
-                    canvas.drawCircle(pt[0],pt[1],28,paint);
+                    canvas.drawCircle(pt[0],pt[1],dotR,paint);
                     paint.setStyle(android.graphics.Paint.Style.STROKE);
                     paint.setStrokeWidth(3);
                     paint.setColor(0xCCFFFFFF);
-                    canvas.drawCircle(pt[0],pt[1],28,paint);
+                    canvas.drawCircle(pt[0],pt[1],dotR,paint);
                     paint.setStyle(android.graphics.Paint.Style.FILL);
                     paint.setColor(0xFFFFFFFF);
-                    paint.setTextSize(20);
+                    paint.setTextSize(txtSize);
                     paint.setTextAlign(android.graphics.Paint.Align.CENTER);
-                    canvas.drawText(String.valueOf(i+1),pt[0],pt[1]+7,paint);
+                    canvas.drawText(String.valueOf(i+1),pt[0],pt[1]+txtSize*0.35f,paint);
                 }
             }
         };
