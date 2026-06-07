@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.28";
+    private static final String APP_VERSION = "v1.29";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1966,44 +1966,27 @@ public class OverlayService extends Service {
             botRight = w * pool.getBoardBotRightPct() / 100;
             benchY   = h * pool.getBenchYPct()        / 100;
         }
-        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE (back rows visually
-        // compressed, front rows spread apart) AND with ROW STAGGER — it's a grid of
-        // pointy-top hexes, so alternating rows are shifted sideways from each other by
-        // roughly half a hex width. Real measured board coordinates confirm this: rows
-        // alternate between two distinct average X-centers rather than sliding smoothly.
-        //
-        // topLeft/topRight = measured centers of column 0 / column 6 in the BACK row.
-        // botLeft/botRight = measured centers of column 0 / column 6 in the FRONT row.
-        // Because these are 3 rows apart (an odd distance), they sit on OPPOSITE stagger
-        // phases — which is exactly what we need to measure the stagger:
-        //   neutralCenter = the row center with no stagger applied (~constant across rows,
-        //                   since perspective widens rows symmetrically about the center)
-        //   leanAmt       = how far each phase sits from that neutral center
-        // Solving backCenter = neutral - lean and frontCenter = neutral + lean gives:
-        //   neutral = (backCenter + frontCenter) / 2
-        //   lean    = (frontCenter - backCenter) / 2
-        // Rows alternate phase by parity, so row 3 & row 1 share one phase (lean the same
-        // way as the measured back row) and row 2 & row 0 share the other (like the front row).
+        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE: back rows are
+        // visually compressed, front rows are spread apart. We tried adding an extra
+        // alternating row-stagger correction (derived from real measured PC coordinates)
+        // in v1.28, but on TFT Mobile it overcorrected — small differences between the
+        // two measured corner rows get amplified into a big alternating swing, producing
+        // a dense crisscross mesh instead of clean rows. Reverted to plain smooth
+        // interpolation between the four measured corners, which users reported as close.
+        //   topLeft/topRight  = measured centers of column 0 / column 6, BACK row
+        //   botLeft/botRight  = measured centers of column 0 / column 6, FRONT row
         //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
         // ROW_F[0]=back ... ROW_F[3]=front. Gaps grow toward the front (perspective).
         final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
         int cols=7;
-        int backWidth   = topRight - topLeft;
-        int frontWidth  = botRight - botLeft;
-        int backCenter  = (topLeft + topRight) / 2;
-        int frontCenter = (botLeft + botRight) / 2;
-        int neutralCenter = (backCenter + frontCenter) / 2;
-        int leanAmt       = (frontCenter - backCenter) / 2;
+        int frontWidth = botRight - botLeft;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
         for(int row=3;row>=0;row--){
             float t = ROW_F[row];
             int cy = top + (int)(t * (bot - top));
-            int rowWidth  = (int)(backWidth + t * (frontWidth - backWidth));
-            // odd rows (3,1) share the back row's phase; even rows (2,0) share the front row's
-            int rowCenter = neutralCenter + ((row % 2 == 0) ? leanAmt : -leanAmt);
-            int rowLeft  = rowCenter - rowWidth/2;
-            int rowRight = rowCenter + rowWidth/2;
+            int rowLeft  = (int)(topLeft  + t * (botLeft  - topLeft));
+            int rowRight = (int)(topRight + t * (botRight - topRight));
             for(int col=0;col<cols;col++){
                 int cx=rowLeft+col*(rowRight-rowLeft)/(cols-1);
                 if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
