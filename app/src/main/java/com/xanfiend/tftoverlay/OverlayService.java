@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.30";
+    private static final String APP_VERSION = "v1.31";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -115,6 +115,12 @@ public class OverlayService extends Service {
     private int autoTapBoardProbeCount = 0; // index where bench probes start
     private java.util.List<int[]> autoTapProbes = new java.util.ArrayList<>();
     private final android.os.Handler autoTapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    // Per-probe timing. These three delays run once per probe (37+ per scan), so they
+    // dominate the total scan time. Tuned for speed while leaving the popup enough time
+    // to animate in before the screenshot.
+    private static final int TAP_STROKE_MS   = 25;  // gesture press duration
+    private static final int POPUP_WAIT_MS   = 260; // wait for the unit popup to render after the tap
+    private static final int PROBE_GAP_MS    = 12;  // gap before moving to the next probe
 
     // in-app debug log — last 80 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
@@ -2041,7 +2047,7 @@ public class OverlayService extends Service {
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
             android.accessibilityservice.GestureDescription.StrokeDescription stroke=
-                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,40);
+                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,TAP_STROKE_MS);
             android.accessibilityservice.GestureDescription gesture=
                 new android.accessibilityservice.GestureDescription.Builder()
                     .addStroke(stroke).build();
@@ -2107,13 +2113,13 @@ public class OverlayService extends Service {
                             @Override public void onFailure(int errorCode){ addScanLog("ERR auto-tap shot: "+errorCode); advanceAutoTap(); }
                         });
                 }catch(Exception e){ addScanLog("ERR auto-tap svc: "+e.getMessage()); advanceAutoTap(); }
-            }},350);
+            }},POPUP_WAIT_MS);
         }});
     }
 
     private void advanceAutoTap(){
         autoTapIndex++;
-        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},30);
+        autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},PROBE_GAP_MS);
     }
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){

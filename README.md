@@ -141,6 +141,13 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.31 - 2026-06-07
+- Speed: Auto Scan is noticeably faster. The board scan taps each hex, waits for the unit popup, screenshots, and reads the name dozens of times in a row, so every small delay adds up across the whole board.
+- Trimmed the per-tap timing: shorter tap, shorter wait for the popup to show up, and a shorter gap before the next tap.
+- The screenshot is now shrunk down before the text reader looks at it, so there are far fewer pixels to process per unit. The champion name stays just as readable, so detection accuracy does not change.
+- Removed repeated text cleanup that was running on every single name comparison, and made the visual board matching read pixels in one batch instead of one at a time.
+- If you ever notice a unit getting missed, it likely means a popup did not finish appearing in time. The timing values are now in one place in the code and easy to nudge back up.
+
 ### v1.30 - 2026-06-07
 - Fix: the probe dots were landing in the right place all along, the dots themselves were just drawn too big to tell. The TFT board is shown at an angle, so the back rows sit closer together on screen than the front rows. The dots had a fixed size that did not shrink for the back rows, so neighbouring dots overlapped into what looked like a tangled mesh, even though their centers were correctly placed in a clean grid.
 - Dots now shrink to fit the actual gap between neighbouring points, so the back rows look as clean as the front rows, and nothing overlaps.
