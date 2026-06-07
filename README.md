@@ -102,6 +102,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.28 - 2026-06-07
+- Fix: probe dots were still landing slightly off to the side on every other row. We dug into real measured TFT board coordinates and found the board uses a staggered hex grid (the hexes are pointy-top, and every other row is shifted sideways by about half a hex width), stacked on top of the front-to-back perspective that v1.27 already handled.
+- The old calibration also worked out the front-left corner using left-right symmetry, which does not hold once you account for the stagger, so that corner could be off.
+- Calibration is now a 5-step guide that taps all four board corners directly: back row left, back row right, front row left, front row right, then bench. The probe grid works out the sideways stagger from those four points and applies it to each row, on top of the existing perspective spacing.
+- After updating, re-run TAP TO CALIBRATE in the SETUP tab so the new 5-step guide can take real measurements of your screen.
+
 ### v1.27 - 2026-06-06
 - Fix: probe dots still did not land on the hexes. The grid was generating 5 rows when a standard board has 4, so an extra row floated off the board and every row drifted out of place.
 - Fix: rows were spaced evenly down the screen, but the TFT board is drawn in perspective (back rows compressed, front rows spread apart), so the middle dots fell into the gaps between hexes. The grid now uses 4 rows with perspective spacing (gaps grow toward the front) and interpolates the trapezoid left and right edges with the same curve.
