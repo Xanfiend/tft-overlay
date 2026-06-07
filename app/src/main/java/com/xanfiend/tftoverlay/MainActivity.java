@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.29");
+        ver.setText("v1.30");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.30  ·  2026-06-07","Fix: the probe dots really were landing on the right spots after all, the dots themselves were just drawn too big. The board is shown at an angle, so the back rows sit closer together on screen than the front rows. The dots had a fixed size that did not shrink for the back rows, so next to each other they overlapped into what looked like a tangled mesh, even though their centers were correctly placed in a clean grid. Dots now shrink to fit the gap between them, so the back rows look as clean as the front rows. This was the real cause of the crisscross look reported after v1.28 and v1.29, not the placement math, which is why changing that math did not help."},
             {"v1.29  ·  2026-06-07","Fix: the v1.28 stagger correction made probe dots worse, not better, on TFT Mobile. It computed a sideways shift from real measured PC board coordinates and applied it to alternating rows, but on phones that shift came out too large and turned the dots into a dense crisscross mesh instead of clean rows. Removed the stagger correction and went back to the plain smooth interpolation between the four measured corners from the 5-step calibration, which lined up much better. The 5-step calibration guide stays (it measures the front-left corner directly instead of guessing it), only the math that places the dots between the corners changed."},
             {"v1.28  ·  2026-06-07","Fix: probe dots were still landing slightly off to the side on alternating rows. Researched real measured TFT board coordinates and found the board uses a staggered hex grid (pointy-top hexes), where every other row is shifted sideways by about half a hex width, on top of the front-to-back perspective. The old calibration also guessed the front-left corner using left-right symmetry, which does not hold on a staggered board. Calibration is now a 5-step guide that taps all four board corners directly (back-left, back-right, front-left, front-right, then bench), and the probe grid now works out the sideways stagger from those four points and applies it to each row. Re-run TAP TO CALIBRATE in SETUP after updating."},
             {"v1.27  ·  2026-06-06","Fix: probe dots still did not sit on the hexes. Two causes. First, the grid generated 5 rows but a standard board has 4, so an extra row floated off the board and every row drifted. Second, the rows were spaced evenly, but the TFT board is drawn in perspective: the back rows are compressed and the front rows are spread apart, so even spacing dropped the middle dots into the gaps between hexes. The grid now lays exactly 4 rows using perspective spacing (gaps grow toward the front) and interpolates the trapezoid edges with the same curve. Calibration now stores the front row directly, so re-run TAP TO CALIBRATE in SETUP after updating for the tightest fit."},
