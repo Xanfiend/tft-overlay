@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.27";
+    private static final String APP_VERSION = "v1.28";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -98,13 +98,14 @@ public class OverlayService extends Service {
     private boolean isPortrait = false;
 
     // tap-to-calibrate: multi-step overlay where user taps live board units
-    private int calStep = 0; // 0=idle, 1=top-left, 2=top-right, 3=bottom-right, 4=bench
+    private int calStep = 0; // 0=idle, 1=back-left, 2=back-right, 3=front-left, 4=front-right, 5=bench
     private View calCaptureView = null;
     // recorded taps (screen px) drawn as crosshairs so any capture offset is visible
     private final java.util.List<float[]> calTapMarks = new java.util.ArrayList<>();
     private String calDebugLine = "";
-    // temporary storage for steps 1-2 (committed to Pool in step 3 after all corners known)
+    // temporary storage for steps 1-4 (committed to Pool once all 4 corners are measured)
     private int calTmpTopY = 0, calTmpTopLeft = 0, calTmpTopRight = 0;
+    private int calTmpBotY = 0, calTmpBotLeft = 0;
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -1452,7 +1453,7 @@ public class OverlayService extends Service {
         calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
 
         TextView calInfo=new TextView(this);
-        calInfo.setText("Tap to calibrate: follow the 4-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
+        calInfo.setText("Tap to calibrate: follow the 5-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
         calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,8);
         root.addView(calInfo);
 
@@ -1574,10 +1575,11 @@ public class OverlayService extends Service {
                 txtP.setColor(0xFF7A6B60);
                 String stepLabel, stepMsg;
                 switch(calStep){
-                    case 1: stepLabel="STEP 1 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the TOP-LEFT unit on your board"; break;
-                    case 2: stepLabel="STEP 2 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the TOP-RIGHT unit on your board"; break;
-                    case 3: stepLabel="STEP 3 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap the BOTTOM-RIGHT unit on your board"; break;
-                    case 4: stepLabel="STEP 4 OF 4 — TAP TO CALIBRATE"; stepMsg="Tap any BENCH unit (or skip below)"; break;
+                    case 1: stepLabel="STEP 1 OF 5 — TAP TO CALIBRATE"; stepMsg="Tap the BACK row, LEFT-most unit"; break;
+                    case 2: stepLabel="STEP 2 OF 5 — TAP TO CALIBRATE"; stepMsg="Tap the BACK row, RIGHT-most unit"; break;
+                    case 3: stepLabel="STEP 3 OF 5 — TAP TO CALIBRATE"; stepMsg="Tap the FRONT row, LEFT-most unit"; break;
+                    case 4: stepLabel="STEP 4 OF 5 — TAP TO CALIBRATE"; stepMsg="Tap the FRONT row, RIGHT-most unit"; break;
+                    case 5: stepLabel="STEP 5 OF 5 — TAP TO CALIBRATE"; stepMsg="Tap any BENCH unit (or skip below)"; break;
                     default: stepLabel=""; stepMsg="";
                 }
                 canvas.drawText(stepLabel, W/2f, barH*0.30f, txtP);
@@ -1597,14 +1599,14 @@ public class OverlayService extends Service {
                 canvas.drawRect(0,cancelTop,W,H,bgP);
                 txtP.setTextSize(13*spx);
                 txtP.setColor(0xFFC1121F);
-                canvas.drawText(calStep==4?"SKIP BENCH":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
+                canvas.drawText(calStep==5?"SKIP BENCH":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
                 if(e.getAction()==android.view.MotionEvent.ACTION_UP){
                     int W=getWidth(), H=getHeight();
                     float vx=e.getX(), vy=e.getY();
                     if(vy>=H*0.88f){
-                        if(calStep==4) finishCalibration();
+                        if(calStep==5) finishCalibration();
                         else{ calStep=0; hideCalCaptureView(); mode=4; showPanel(); }
                     } else if(vy<=H*0.20f){
                         // tapped inside the instruction banner — ignore
@@ -1636,38 +1638,32 @@ public class OverlayService extends Service {
     // xPct/yPct are already in the probe-dots coordinate space (0-100 of the same window)
     private void handleCalTap(int xPct, int yPct, boolean portrait){
         if(calStep==1){
-            // Step 1: top-left unit — store top Y and temp top-left X center
+            // Step 1: back-row, leftmost unit (column 0) — store its center directly
             calTmpTopY = yPct; calTmpTopLeft = xPct;
             if(portrait) pool.setPortraitBoardTopPct(yPct);
             else pool.setBoardTopPct(yPct);
             calStep=2; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==2){
-            // Step 2: top-right unit (same row) — store temp top-right X center
+            // Step 2: back-row, rightmost unit (column 6, same row) — store its center directly
             calTmpTopRight = xPct;
             calStep=3; if(calCaptureView!=null) calCaptureView.invalidate();
         } else if(calStep==3){
-            // Step 3: bottom-right unit — we now know all 3 corners; infer bottom-left via symmetry.
-            // The TFT board is symmetric left-to-right, so:
-            //   board center X = (topLeft + topRight) / 2 = (botLeft + botRight) / 2
-            //   => botLeft = topLeft + topRight - botRight
-            int col0TopCtr  = calTmpTopLeft;
-            int col6TopCtr  = calTmpTopRight;
-            int col6BotCtr  = xPct;
-            int col0BotCtr  = col0TopCtr + col6TopCtr - col6BotCtr;  // symmetric inference
-            int row3Y = yPct;
-
-            // Convert hex centers to board EDGES.
-            // 7 columns => 6 gaps between outer centers; half-gap = colSpan/12 = edge offset.
-            int topSpan = col6TopCtr - col0TopCtr;
-            int topLeft  = col0TopCtr  - topSpan / 12;
-            int topRight = col6TopCtr  + topSpan / 12;
-            int botSpan  = col6BotCtr  - col0BotCtr;
-            int botLeft  = col0BotCtr  - botSpan / 12;
-            int botRight = col6BotCtr  + botSpan / 12;
-
-            // bot now stores the actual FRONT-row center. buildProbeGrid lays 4
-            // perspective rows between the back row (top) and the front row (bot).
-            int boardBotPct = row3Y;
+            // Step 3: front-row, leftmost unit (column 0) — measured directly.
+            // TFT's hex grid staggers alternating rows sideways (pointy-top hexes), so the
+            // old approach of inferring this corner via left-right symmetry was wrong —
+            // the board is NOT a simple symmetric trapezoid. Tap it for real instead.
+            calTmpBotY = yPct; calTmpBotLeft = xPct;
+            calStep=4; if(calCaptureView!=null) calCaptureView.invalidate();
+        } else if(calStep==4){
+            // Step 4: front-row, rightmost unit (column 6) — all 4 corners now measured directly.
+            // We store the raw column-0 / column-6 hex CENTERS for the back and front rows
+            // (not edges — buildProbeGrid interpolates column centers directly between them,
+            // and also derives the row-stagger amount from how these centers differ).
+            int topLeft  = calTmpTopLeft;
+            int topRight = calTmpTopRight;
+            int botLeft  = calTmpBotLeft;
+            int botRight = xPct;
+            int boardBotPct = calTmpBotY;
 
             if(portrait){
                 pool.setPortraitBoardBotPct(boardBotPct);
@@ -1683,8 +1679,8 @@ public class OverlayService extends Service {
                 pool.setBoardRightPct((topRight+botRight)/2);
             }
             calDebugLine = "tL:"+topLeft+"% tR:"+topRight+"% bL:"+botLeft+"% bR:"+botRight+"%";
-            calStep=4; if(calCaptureView!=null) calCaptureView.invalidate();
-        } else if(calStep==4){
+            calStep=5; if(calCaptureView!=null) calCaptureView.invalidate();
+        } else if(calStep==5){
             if(portrait) pool.setPortraitBenchYPct(yPct);
             else pool.setBenchYPct(yPct);
             finishCalibration();
@@ -1970,25 +1966,46 @@ public class OverlayService extends Service {
             botRight = w * pool.getBoardBotRightPct() / 100;
             benchY   = h * pool.getBenchYPct()        / 100;
         }
-        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE: rows near the
-        // back (top of screen) are visually compressed, rows near the front (bottom)
-        // are spread apart. Even spacing put the middle dots in the gaps between
-        // hexes, so we use perspective row fractions instead. We interpolate the
-        // trapezoid left/right edges using the SAME fraction, so the columns track
-        // the board widening smoothly from back to front.
+        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE (back rows visually
+        // compressed, front rows spread apart) AND with ROW STAGGER — it's a grid of
+        // pointy-top hexes, so alternating rows are shifted sideways from each other by
+        // roughly half a hex width. Real measured board coordinates confirm this: rows
+        // alternate between two distinct average X-centers rather than sliding smoothly.
+        //
+        // topLeft/topRight = measured centers of column 0 / column 6 in the BACK row.
+        // botLeft/botRight = measured centers of column 0 / column 6 in the FRONT row.
+        // Because these are 3 rows apart (an odd distance), they sit on OPPOSITE stagger
+        // phases — which is exactly what we need to measure the stagger:
+        //   neutralCenter = the row center with no stagger applied (~constant across rows,
+        //                   since perspective widens rows symmetrically about the center)
+        //   leanAmt       = how far each phase sits from that neutral center
+        // Solving backCenter = neutral - lean and frontCenter = neutral + lean gives:
+        //   neutral = (backCenter + frontCenter) / 2
+        //   lean    = (frontCenter - backCenter) / 2
+        // Rows alternate phase by parity, so row 3 & row 1 share one phase (lean the same
+        // way as the measured back row) and row 2 & row 0 share the other (like the front row).
         //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
         // ROW_F[0]=back ... ROW_F[3]=front. Gaps grow toward the front (perspective).
         final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
         int cols=7;
+        int backWidth   = topRight - topLeft;
+        int frontWidth  = botRight - botLeft;
+        int backCenter  = (topLeft + topRight) / 2;
+        int frontCenter = (botLeft + botRight) / 2;
+        int neutralCenter = (backCenter + frontCenter) / 2;
+        int leanAmt       = (frontCenter - backCenter) / 2;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
         for(int row=3;row>=0;row--){
             float t = ROW_F[row];
             int cy = top + (int)(t * (bot - top));
-            int rowLeft  = (int)(topLeft  + t * (botLeft  - topLeft));
-            int rowRight = (int)(topRight + t * (botRight - topRight));
+            int rowWidth  = (int)(backWidth + t * (frontWidth - backWidth));
+            // odd rows (3,1) share the back row's phase; even rows (2,0) share the front row's
+            int rowCenter = neutralCenter + ((row % 2 == 0) ? leanAmt : -leanAmt);
+            int rowLeft  = rowCenter - rowWidth/2;
+            int rowRight = rowCenter + rowWidth/2;
             for(int col=0;col<cols;col++){
-                int cx=rowLeft+(int)((col+0.5f)*(rowRight-rowLeft)/cols);
+                int cx=rowLeft+col*(rowRight-rowLeft)/(cols-1);
                 if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
                           &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
                 pts.add(new int[]{cx,cy});
@@ -1996,9 +2013,14 @@ public class OverlayService extends Service {
         }
         autoTapBoardProbeCount=pts.size();
         int benchCols=9;
-        // Bench is below the board — use the bottom row bounds for bench X distribution
+        // Bench is below the board and physically wider (9 slots vs 7 hexes). botLeft/botRight
+        // are the measured CENTERS of the front row's outer hexes, so nudge outward by half a
+        // hex-gap on each side to approximate the bench's true span before spreading 9 slots.
+        int benchHalfGap = frontWidth / 12;
+        int benchLeft  = botLeft  - benchHalfGap;
+        int benchRight = botRight + benchHalfGap;
         for(int col=0;col<benchCols;col++){
-            int cx=botLeft+(int)((col+0.5f)*(botRight-botLeft)/benchCols);
+            int cx=benchLeft+(int)((col+0.5f)*(benchRight-benchLeft)/benchCols);
             if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
                       &&benchY>=btnLoc[1]-30&&benchY<=btnLoc[1]+btnH+30) continue;
             pts.add(new int[]{cx,benchY});
