@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.31";
+    private static final String APP_VERSION = "v1.32";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -110,6 +110,8 @@ public class OverlayService extends Service {
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
+    private int autoScanGold = -1;
+    private int autoScanLevel = -1;
     private int autoTapIndex = 0;
     private int autoTapConsecutiveMisses = 0;
     private int autoTapBoardProbeCount = 0; // index where bench probes start
@@ -456,6 +458,14 @@ public class OverlayService extends Service {
             TextView asrHdr=new TextView(this); asrHdr.setText("◇ AUTO SCAN");
             asrHdr.setTextColor(GOLD); asrHdr.setTextSize(11); asrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
             asrHdr.setLetterSpacing(0.1f); asrHdr.setPadding(2,4,0,4); root.addView(asrHdr);
+            if(autoScanGold>=0||autoScanLevel>=0){
+                StringBuilder glSb=new StringBuilder();
+                if(autoScanLevel>=0) glSb.append("Lv ").append(autoScanLevel);
+                if(autoScanGold>=0){ if(glSb.length()>0) glSb.append("  ·  "); glSb.append(autoScanGold).append("g"); }
+                TextView glTv=new TextView(this); glTv.setText(glSb.toString());
+                glTv.setTextColor(BONE); glTv.setTextSize(12); glTv.setTypeface(null,android.graphics.Typeface.BOLD);
+                glTv.setPadding(2,0,2,4); root.addView(glTv);
+            }
             StringBuilder asrSb=new StringBuilder();
             for(String s:autoScanResults){ if(asrSb.length()>0) asrSb.append(" · "); asrSb.append(s); }
             TextView asrTv=new TextView(this); asrTv.setText(asrSb.toString());
@@ -1945,6 +1955,8 @@ public class OverlayService extends Service {
         }
         autoScanPending=true;
         autoScanResults=new java.util.ArrayList<>();
+        autoScanGold=-1;
+        autoScanLevel=-1;
         autoTapIndex=0;
         autoTapConsecutiveMisses=0;
         autoTapBoardProbeCount=0;
@@ -1961,12 +1973,28 @@ public class OverlayService extends Service {
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                             Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                             final int sw=hw.getWidth(), sh=hw.getHeight();
+                            final Bitmap goldLvlBmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hb.close();
                             autoTapProbes=buildProbeGrid(sw,sh);
                             hw.recycle();
                             addScanLog("auto-tap: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
-                            autoTapNextProbe();
+                            // one-time full-screen OCR pass to grab gold + level before the
+                            // tapping starts — these corners are only readable on the board
+                            // view (not in the per-probe popup crop), so capture them up front
+                            new ScreenScanner(OverlayService.this,null).scanBitmap(goldLvlBmp,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){
+                                        autoScanGold=r.gold;
+                                        autoScanLevel=r.level;
+                                        addScanLog("auto-tap: gold="+r.gold+" level="+r.level);
+                                        autoTapNextProbe();
+                                    }
+                                    public void onError(String msg){
+                                        addScanLog("auto-tap gold/level OCR err: "+msg);
+                                        autoTapNextProbe();
+                                    }
+                                }, ScreenScanner.MODE_FULL);
                         }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel(); }
                     }
                     @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
@@ -2173,7 +2201,10 @@ public class OverlayService extends Service {
         autoScanPending=false;
         autoTapHandler.removeCallbacksAndMessages(null);
         if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("auto-tap: done, "+autoScanResults.size()+" hits / "+autoTapProbes.size()+" probes");
+        if(autoScanGold>=0) pool.setGold(autoScanGold);
+        if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
+        addScanLog("auto-tap: done, "+autoScanResults.size()+" hits / "+autoTapProbes.size()+" probes"
+                +" · gold="+autoScanGold+" level="+autoScanLevel);
         mode=0; showPanel();
     }
 
