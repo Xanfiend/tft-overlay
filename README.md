@@ -102,6 +102,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.32 - 2026-06-08
+- Auto Scan now reads your gold and level too, not just champions. Right before it starts tapping hexes, it takes one extra screenshot of the board and reads the gold count and level number out of the corners, the same way the regular Scan Now button does.
+- Those numbers are saved straight into your gold tracker and level, and shown at the top of the auto scan results once the scan finishes, so you do not have to type them in by hand.
+
 ### v1.31 - 2026-06-07
 - Speed: Auto Scan is noticeably faster. The board scan taps each hex, waits for the unit popup, screenshots, and reads the name dozens of times in a row, so every small delay adds up across the whole board.
 - Trimmed the per-tap timing: shorter tap, shorter wait for the popup to show up, and a shorter gap before the next tap.
