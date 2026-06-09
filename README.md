@@ -141,6 +141,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.35 - 2026-06-09
+- Fix: bench probe row was landing a little too far to the right. The default now shifts the bench 4% left to align with where the TFT Mobile bench slots actually sit. You can fine tune it using the new Bench L/R shift slider in SETUP under calibration (negative = left, positive = right).
+- Auto Scan now also skips empty bench slots by analysing the board screenshot it already takes at the start, the same way it skips empty board hexes. No more tapping through the empty slots at the end of your bench.
+
 ### v1.34 - 2026-06-09
 - Speed: Auto Scan no longer taps empty hexes. Since Android caps screenshots at one per second, the slow part of the scan was visiting all the empty board space.
 - The scan now reads the one board screenshot it already takes at the start, works out which hexes actually have a unit on them (a champion sprite has a health bar and lots of detail, an empty hex is flat ground), and only taps those. On a normal board that is about the number of units you have instead of all twenty eight hexes, so it finishes much faster.
