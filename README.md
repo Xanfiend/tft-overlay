@@ -10,7 +10,7 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-[![Version](https://img.shields.io/badge/version-1.40-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.41-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -140,6 +140,12 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.41 - 2026-06-09
+- Tap anywhere outside the panel to close it. No need to reach for the X or DONE button.
+- The floating button now slides to the nearest screen edge after you drag it, so it stays out of the way of the board, and it comes back on screen if dropped half off the edge.
+- A finished Auto Scan gives a double vibration so you can feel it complete without watching the screen.
+- Faster panel rendering: champion cost lookups are now cached instead of scanning the full name list every time, which makes tab switching snappier on slower phones. Champion name matching during scans also got faster.
 
 ### v1.40 - 2026-06-09
 - Fix: Smart Scan was detecting a false unit on an empty board and missing real units when champions were present. The health bar colour filter was too loose, picking up green arena elements like grass and bamboo instead of just health bars.
