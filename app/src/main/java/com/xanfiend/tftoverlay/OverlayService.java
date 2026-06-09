@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.40";
+    private static final String APP_VERSION = "v1.41";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -135,10 +135,10 @@ public class OverlayService extends Service {
     private int  autoTapShotRetry = 0;    // retries for the current probe when rate-limited
 
     // in-app debug log — last 80 lines, shown in Settings
-    private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
+    private static final java.util.ArrayDeque<String> scanLog = new java.util.ArrayDeque<>();
     static void addScanLog(String msg){
         android.util.Log.d("TFTScryer", msg);
-        synchronized(scanLog){ scanLog.add(msg); if(scanLog.size()>80) scanLog.remove(0); }
+        synchronized(scanLog){ scanLog.addLast(msg); if(scanLog.size()>80) scanLog.removeFirst(); }
     }
     static void clearScanLog(){ synchronized(scanLog){ scanLog.clear(); } }
 
@@ -187,6 +187,13 @@ public class OverlayService extends Service {
         if(sw>0) g.setStroke(sw,sc); return g;
     }
     private void buzz(){ try{ if(pool.getHaptic() && vib!=null) vib.vibrate(18); }catch(Exception e){} }
+    // distinct double pulse so a finished scan can be felt without looking at the screen
+    @SuppressWarnings("deprecation")
+    private void buzzDone(){
+        try{
+            if(pool.getHaptic() && vib!=null) vib.vibrate(new long[]{0,35,110,35},-1);
+        }catch(Exception e){}
+    }
 
     private void addButton(){
         LinearLayout c = new LinearLayout(this);
@@ -220,6 +227,7 @@ public class OverlayService extends Service {
                         return true;
                     }
                     showCloseTarget(false);
+                    if(moved){ snapButtonToEdge(); return true; }
                     if(!moved){
                         if(oppScanMode){ stopOppScanMode(); return true; }
                         if(boardScanMode){ stopBoardScanMode(); return true; }
@@ -239,6 +247,33 @@ public class OverlayService extends Service {
             }
         });
         wm.addView(button, btnLp);
+    }
+
+    // After a drag, glide the floating button to the nearest screen edge so it
+    // never settles over the middle of the board, and clamp it back on screen if
+    // it was dropped partly off. Same behavior as chat-head style overlays.
+    @SuppressWarnings("deprecation")
+    private void snapButtonToEdge(){
+        try{
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+            wm.getDefaultDisplay().getRealMetrics(dm);
+            int bw=button.getWidth(), bh=button.getHeight();
+            final int sx=btnLp.x, sy=btnLp.y;
+            final int tx=(sx+bw/2 <= dm.widthPixels/2) ? 12 : dm.widthPixels-bw-12;
+            final int ty=Math.max(12, Math.min(sy, dm.heightPixels-bh-12));
+            if(tx==sx && ty==sy) return;
+            android.animation.ValueAnimator va=android.animation.ValueAnimator.ofFloat(0f,1f);
+            va.setDuration(150);
+            va.setInterpolator(new android.view.animation.DecelerateInterpolator());
+            va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener(){
+                public void onAnimationUpdate(android.animation.ValueAnimator a){
+                    float f=(Float)a.getAnimatedValue();
+                    btnLp.x=sx+(int)((tx-sx)*f); btnLp.y=sy+(int)((ty-sy)*f);
+                    try{ wm.updateViewLayout(button,btnLp); }catch(Exception ex){}
+                }
+            });
+            va.start();
+        }catch(Exception e){}
     }
 
     // ---- drag-to-close X target ----
@@ -312,8 +347,18 @@ public class OverlayService extends Service {
             panelLp=new WindowManager.LayoutParams(
                 (int)(getResources().getDisplayMetrics().widthPixels*0.96),
                 (int)(getResources().getDisplayMetrics().heightPixels*0.86),
-                wtype(), WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
+                wtype(),
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                PixelFormat.TRANSLUCENT);
             panelLp.gravity=Gravity.CENTER;
+            // tap anywhere outside the panel (on the game) to dismiss it
+            panel.setOnTouchListener(new View.OnTouchListener(){
+                public boolean onTouch(View v, MotionEvent e){
+                    if(e.getAction()==MotionEvent.ACTION_OUTSIDE){ itemA=-1; itemB=-1; closePanel(); return true; }
+                    return false;
+                }
+            });
             wm.addView(panel,panelLp);
             panel.setAlpha(pool.getAlpha());
         } else {
@@ -2732,6 +2777,7 @@ public class OverlayService extends Service {
                 +(autoOppMode?oppScanResults.size():autoScanResults.size())
                 +" hits / "+autoTapProbes.size()+" probes");
         autoOppMode=false;
+        buzzDone();
         mode=0; showPanel();
     }
 

@@ -25,10 +25,20 @@ public class Pool {
     public static final String[][] CHAMPS = SetData.CHAMPS;
     public static final String SET_NAME = SetData.SET_NAME;
 
+    // costOf is called from nested loops when painting the grid and odds tabs
+    // (every card recomputes its tier total, and each remaining() call needs the
+    // cost). A linear scan over every champion name per call turned that into
+    // tens of thousands of string compares per panel open — cache the lookup.
+    private static volatile Map<String,Integer> costLookup;
     public static int costOf(String name){
-        for(int c=1;c<=5;c++) for(int i=0;i<CHAMPS[c].length;i++)
-            if(CHAMPS[c][i].equals(name)) return c;
-        return 0;
+        Map<String,Integer> m = costLookup;
+        if(m == null){
+            m = new HashMap<>();
+            for(int c=1;c<=5;c++) for(String n : CHAMPS[c]) m.put(n, c);
+            costLookup = m;
+        }
+        Integer c = m.get(name);
+        return c == null ? 0 : c;
     }
 
     private final SharedPreferences p;
@@ -193,7 +203,11 @@ public class Pool {
         int v = Math.max(0, getJunk(cost)+n);
         p.edit().putInt("junk"+cost, v).apply();
     }
-    public void clearJunk(){ for(int c=1;c<=5;c++) p.edit().remove("junk"+c).apply(); }
+    public void clearJunk(){
+        SharedPreferences.Editor e = p.edit();
+        for(int c=1;c<=5;c++) e.remove("junk"+c);
+        e.apply();
+    }
 
     // union of any champ that has either a copy or an opponent tracked,
     // sorted by opponents first (contest pressure), then copies
