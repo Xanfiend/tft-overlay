@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.34");
+        ver.setText("v1.35");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.35  ·  2026-06-09","Fix: bench probe row was landing a little too far to the right. The default now shifts the bench 4% left to match where the actual TFT Mobile bench slots sit. You can fine tune it yourself using the new Bench L/R shift slider in the SETUP tab under calibration. Also, Auto Scan now skips empty bench slots by analysing the board screenshot it already takes at the start, the same way it skips empty board hexes. This means it no longer taps through the empty slots at the right end of your bench."},
             {"v1.34  ·  2026-06-09","Speed: Auto Scan no longer taps empty hexes. Because Android caps screenshots at one per second, the slow part of the scan was visiting all of the empty board space. The scan now looks at the one board screenshot it already takes at the start, works out which hexes actually have a unit on them (a champion sprite has a health bar and lots of detail, an empty hex is flat ground), and only taps those. On a normal board that is roughly the number of units you have instead of all twenty eight hexes, so the scan finishes much faster. It is deliberately cautious: if a hex is even a little ambiguous it still taps it, and if the detection looks off it falls back to tapping everything like before, so it should not miss units. If you ever see a unit get skipped, the in app debug log shows what it decided. Your bench is always fully scanned."},
             {"v1.33  ·  2026-06-09","Fix: Auto Scan was missing most units after the v1.31 speed update. Android only lets an accessibility service take one screenshot per second, and the speed update made the scan tap and shoot faster than that, so the system was quietly rejecting most of the screenshots and those units never got read. The scan now spaces its screenshots out to stay under that one-per-second limit, and if a screenshot still gets rejected it waits and retries the same hex instead of skipping it. This means the scan is reliable again. The tradeoff is that the screenshot limit sets a hard floor of about one second per unit, so a full board takes a bit longer, but it actually reads every unit now."},
             {"v1.32  ·  2026-06-08","Auto Scan now also reads your gold and level. Right before it starts tapping hexes, it takes one extra screenshot of the board and reads the gold count and level number from the corners, the same way the regular Scan Now does. Those numbers get saved straight into your gold tracker and level so you do not have to enter them by hand. They also show up at the top of the auto scan results once the scan finishes."},
