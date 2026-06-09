@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.38";
+    private static final String APP_VERSION = "v1.39";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1839,28 +1839,42 @@ public class OverlayService extends Service {
                                     bench=filterByDetail(bmp,bench);
                                     out=new java.util.ArrayList<>(detected); out.addAll(bench); bc=detected.size();
                                     addScanLog("show dots: "+detected.size()+" units detected by health bar");
-                                } else { out=grid; bc=gridBoardCount; addScanLog("show dots: using grid (no detection)"); }
+                                    renderProbeDots(out, bc, bw, bh, sw, sh,
+                                        "SMART SCAN · "+detected.size()+" units found by health bar");
+                                } else { out=grid; bc=gridBoardCount; addScanLog("show dots: using grid (no detection)");
+                                    renderProbeDots(out, bc, bw, bh, sw, sh,
+                                        "GRID FALLBACK · no health bars detected"); }
                                 bmp.recycle();
-                                renderProbeDots(out, bc, bw, bh, sw, sh);
                             }catch(Exception e){ addScanLog("show dots err: "+e.getMessage());
-                                renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh); }
+                                renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh,
+                                    "GRID FALLBACK · preview error"); }
                         }
                         @Override public void onFailure(int errorCode){
-                            renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh);
+                            renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh,
+                                "GRID FALLBACK · screenshot failed ("+errorCode+")");
                         }
                     }), 300);
                 return;
             }catch(Exception e){ /* fall through to grid */ }
         }
-        renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh);
+        renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh,
+            pool.getSmartScan() ? "GRID · Smart Scan needs Accessibility" : "GRID · Smart Scan is OFF");
     }
 
     // Draws probe markers over the screen. Board points are red, bench points blue.
-    // (bmpW/bmpH are the coordinate space the points were computed in; sw/sh is the
-    // overlay window size — they match in practice, passed separately for clarity.)
+    // A status banner at the top shows whether these are Smart-Scan-detected units or
+    // the calibrated grid fallback, plus a count — so a screenshot of SHOW DOTS tells
+    // us exactly what the scan sees. (bmpW/bmpH are the coordinate space the points
+    // were computed in; sw/sh is the overlay window size — they match in practice.)
     @SuppressWarnings("deprecation")
     private void renderProbeDots(final java.util.List<int[]> probes, final int boardCount,
                                  final int bmpW, final int bmpH, final int sw, final int sh){
+        renderProbeDots(probes, boardCount, bmpW, bmpH, sw, sh, "");
+    }
+    @SuppressWarnings("deprecation")
+    private void renderProbeDots(final java.util.List<int[]> probes, final int boardCount,
+                                 final int bmpW, final int bmpH, final int sw, final int sh,
+                                 final String status){
         // Size the dots to the closest pair of board points so neighbours never overlap,
         // capped at 28px. Works for both the perspective grid and irregular detected
         // unit positions: a plain nearest-neighbour scan over the board points.
@@ -1894,6 +1908,16 @@ public class OverlayService extends Service {
                     paint.setTextSize(txtSize);
                     paint.setTextAlign(android.graphics.Paint.Align.CENTER);
                     canvas.drawText(String.valueOf(i+1),pt[0],pt[1]+txtSize*0.35f,paint);
+                }
+                if(status!=null && !status.isEmpty()){
+                    paint.setStyle(android.graphics.Paint.Style.FILL);
+                    paint.setColor(0xCC000000);
+                    float bh2=Math.max(48f, sh*0.06f);
+                    canvas.drawRect(0,0,sw,bh2,paint);
+                    paint.setColor(0xFFFFD24A);
+                    paint.setTextSize(Math.max(22f, sh*0.028f));
+                    paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+                    canvas.drawText(status, sw/2f, bh2*0.62f, paint);
                 }
             }
         };

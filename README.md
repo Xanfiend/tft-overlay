@@ -141,6 +141,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.39 - 2026-06-09
+- SHOW DOTS now shows a status banner: SMART SCAN with a unit count means the markers are real units found by their health bars (calibration irrelevant), GRID FALLBACK means detection found nothing and it used the calibrated grid (the one that can look crowded toward the front).
+- Diagnostic aid: a screenshot of SHOW DOTS over your board now shows whether health bar detection is working on your device.
+
 ### v1.38 - 2026-06-09
 - Smart Scan no longer needs calibration. It searches a fixed region of the screen for unit health bars (lower-centre for your board, upper half for the enemy in combat) instead of using calibrated probe positions, so it finds and taps the actual units even if calibration is untouched or a little off.
 - Calibration is now only a fallback grid for the rare case health bar detection finds nothing. SHOW DOTS, with Smart Scan on, takes a real screenshot and draws a marker on every detected unit so you can see exactly what the scan sees.
