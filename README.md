@@ -10,7 +10,7 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-[![Version](https://img.shields.io/badge/version-1.34-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.40-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -140,6 +140,11 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.40 - 2026-06-09
+- Fix: Smart Scan was detecting a false unit on an empty board and missing real units when champions were present. The health bar colour filter was too loose, picking up green arena elements like grass and bamboo instead of just health bars.
+- The filter now requires a much brighter, more saturated green with very low red, matching actual TFT unit health bars and rejecting background colour. The enemy red bar filter got the same pass.
+- The debug log now shows the exact RGB colour values of every bar detected, so if detection drifts you can share the log and the numbers can be tuned precisely.
 
 ### v1.39 - 2026-06-09
 - SHOW DOTS now shows a status banner: SMART SCAN with a unit count means the markers are real units found by their health bars (calibration irrelevant), GRID FALLBACK means detection found nothing and it used the calibrated grid (the one that can look crowded toward the front).

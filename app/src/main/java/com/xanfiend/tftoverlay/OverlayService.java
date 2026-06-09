@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.39";
+    private static final String APP_VERSION = "v1.40";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2461,8 +2461,8 @@ public class OverlayService extends Service {
                     int c=px[base+rx];
                     int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
                     boolean m = opp
-                        ? (r>140 && r-g>55 && r-b>55)             // enemy red bar
-                        : (g>125 && g-r>40 && g-b>45 && r<190);   // ally green bar
+                        ? (r>150 && r-g>65 && r-b>60 && g<130)    // enemy red bar
+                        : (g>165 && g-r>80 && g-b>70 && r<100);   // ally green bar (bright saturated only)
                     if(m){ if(runStart<0) runStart=rx; }
                     else { if(runStart>=0){ addBarSeg(segs,runStart,rx-1,ry,minLen,maxLen,leftExtreme,zoneTop,btnLoc,btnW,btnH); runStart=-1; } }
                 }
@@ -2509,7 +2509,19 @@ public class OverlayService extends Service {
                 return null;
             }
             // scan order: back-to-front (top y first), then left-to-right
-            java.util.Collections.sort(units,(a,b)-> a[1]!=b[1] ? a[1]-b[1] : a[0]-b[0]);
+            java.util.Collections.sort(units,(a,b2)-> a[1]!=b2[1] ? a[1]-b2[1] : a[0]-b2[0]);
+            // log bar colors for each detected unit to help tune thresholds
+            StringBuilder clrLog=new StringBuilder("smart bar colors:");
+            int bodyDropLog=Math.max(8, h*3/100);
+            for(int[] u : units){
+                int barYrel=u[1]-bodyDropLog-zoneTop;
+                int barXrel=u[0]-leftExtreme;
+                if(barXrel>=0 && barXrel<zw && barYrel>=0 && barYrel<zh){
+                    int pc=px[barYrel*zw+barXrel];
+                    clrLog.append(" (").append((pc>>16)&0xFF).append(",").append((pc>>8)&0xFF).append(",").append(pc&0xFF).append(")");
+                }
+            }
+            addScanLog(clrLog.toString());
             addScanLog("smart: detected "+units.size()+" units by health bar");
             return units;
         }catch(Exception e){
