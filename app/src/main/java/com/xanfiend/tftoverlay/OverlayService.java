@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.37";
+    private static final String APP_VERSION = "v1.38";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1521,7 +1521,7 @@ public class OverlayService extends Service {
         calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
 
         TextView calInfo=new TextView(this);
-        calInfo.setText("Tap to calibrate: follow the 5-step guide to set probe positions by tapping real units in TFT. Or fine-tune manually with the sliders below.");
+        calInfo.setText("Optional when Smart Scan is on — Auto Scan finds units by their health bars and does not use these positions. Calibration only sets the grid used as a fallback. Tap SHOW DOTS to see what Smart Scan actually detects.");
         calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,8);
         root.addView(calInfo);
 
@@ -1805,33 +1805,72 @@ public class OverlayService extends Service {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation","NewApi"})
     private void showProbeDots(){
         hideProbeDots();
         android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(dm);
         final int sw=dm.widthPixels, sh=dm.heightPixels;
-        final java.util.List<int[]> probes=buildProbeGrid(sw,sh);
-        final int boardCount=autoTapBoardProbeCount;
+        // With Smart Scan on, SHOW DOTS previews what the scan ACTUALLY sees: take one
+        // screenshot, detect units by their health bars, and draw a marker on each
+        // real unit. This proves the scan finds your champs with no calibration. If
+        // detection is unavailable or inconclusive, fall back to the calibrated grid.
+        if(pool.getSmartScan() && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
+            final TFTAccessibilityService svc=TFTAccessibilityService.instance;
+            try{
+                // small delay so the just-closed panel is gone from the capture
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->
+                svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                    new AccessibilityService.TakeScreenshotCallback(){
+                        @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                            try{
+                                android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                                Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                                Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                                hb.close(); hw.recycle();
+                                final int bw=bmp.getWidth(), bh=bmp.getHeight();
+                                java.util.List<int[]> grid=buildProbeGrid(bw,bh);
+                                int gridBoardCount=autoTapBoardProbeCount;
+                                java.util.List<int[]> detected=detectHealthBarUnits(bmp,false);
+                                java.util.List<int[]> out; int bc;
+                                if(detected!=null){
+                                    java.util.List<int[]> bench=new java.util.ArrayList<>(
+                                            grid.subList(gridBoardCount, grid.size()));
+                                    bench=filterByDetail(bmp,bench);
+                                    out=new java.util.ArrayList<>(detected); out.addAll(bench); bc=detected.size();
+                                    addScanLog("show dots: "+detected.size()+" units detected by health bar");
+                                } else { out=grid; bc=gridBoardCount; addScanLog("show dots: using grid (no detection)"); }
+                                bmp.recycle();
+                                renderProbeDots(out, bc, bw, bh, sw, sh);
+                            }catch(Exception e){ addScanLog("show dots err: "+e.getMessage());
+                                renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh); }
+                        }
+                        @Override public void onFailure(int errorCode){
+                            renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh);
+                        }
+                    }), 300);
+                return;
+            }catch(Exception e){ /* fall through to grid */ }
+        }
+        renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh);
+    }
 
-        // The board is drawn in perspective — back rows sit closer together than front rows.
-        // A fixed dot radius overlaps in the back rows, looking like a tangled mesh even though
-        // the centers themselves form a clean trapezoid. Size the dots to the tightest gap
-        // between any two neighboring probe points so they never overlap, capped at 28px.
-        final int cols=7;
+    // Draws probe markers over the screen. Board points are red, bench points blue.
+    // (bmpW/bmpH are the coordinate space the points were computed in; sw/sh is the
+    // overlay window size — they match in practice, passed separately for clarity.)
+    @SuppressWarnings("deprecation")
+    private void renderProbeDots(final java.util.List<int[]> probes, final int boardCount,
+                                 final int bmpW, final int bmpH, final int sw, final int sh){
+        // Size the dots to the closest pair of board points so neighbours never overlap,
+        // capped at 28px. Works for both the perspective grid and irregular detected
+        // unit positions: a plain nearest-neighbour scan over the board points.
         float minGap=Float.MAX_VALUE;
         for(int i=0;i<boardCount;i++){
             int[] p=probes.get(i);
-            int row=i/cols, col=i%cols;
-            if(col<cols-1){
-                int[] q=probes.get(i+1);
+            for(int j=i+1;j<boardCount;j++){
+                int[] q=probes.get(j);
                 float d=(float)Math.hypot(q[0]-p[0],q[1]-p[1]);
-                if(d<minGap) minGap=d;
-            }
-            if(row<(boardCount/cols)-1){
-                int[] q=probes.get(i+cols);
-                float d=(float)Math.hypot(q[0]-p[0],q[1]-p[1]);
-                if(d<minGap) minGap=d;
+                if(d>1 && d<minGap) minGap=d;
             }
         }
         final float dotR = (minGap==Float.MAX_VALUE) ? 28f : Math.max(10f, Math.min(28f, minGap*0.42f));
@@ -2336,39 +2375,44 @@ public class OverlayService extends Service {
     //
     // Every unit on the board carries a health bar above it: a bright green
     // horizontal bar for your own units, a red one for an enemy's during combat.
-    // Empty hexes and the board floor have no such bar. We scan the board zone of
-    // one clean screenshot for those bars, cluster the matching pixels into units,
-    // and return the exact tap point under each bar. This needs no precise
-    // calibration for positioning — the calibrated zone is only used as a coarse
-    // bound so we don't read the HUD, shop, or trait panel. Returns null when the
-    // result looks implausible so the caller falls back to the calibrated grid.
+    // Empty hexes and the board floor have no such bar. We scan a FIXED board
+    // region of one clean screenshot for those bars, cluster the matching pixels
+    // into units, and return the exact tap point under each bar. No calibration is
+    // used at all — the region bounds below are fixed percentages of the screen.
+    // Returns null when the result looks implausible so the caller can fall back
+    // to the calibrated grid.
     private java.util.List<int[]> detectHealthBarUnits(Bitmap bmp, boolean opp){
         try{
             int w=bmp.getWidth(), h=bmp.getHeight();
             boolean portrait = h > w;
-            int topPct = portrait ? pool.getPortraitBoardTopPct() : pool.getBoardTopPct();
-            int botPct = portrait ? pool.getPortraitBoardBotPct() : pool.getBoardBotPct();
-            int tlPct  = portrait ? pool.getPortraitBoardTopLeftPct()  : pool.getBoardTopLeftPct();
-            int trPct  = portrait ? pool.getPortraitBoardTopRightPct() : pool.getBoardTopRightPct();
-            int blPct  = portrait ? pool.getPortraitBoardBotLeftPct()  : pool.getBoardBotLeftPct();
-            int brPct  = portrait ? pool.getPortraitBoardBotRightPct() : pool.getBoardBotRightPct();
-
-            int zoneTop, zoneBot;
+            // FIXED board-region bounds — no calibration needed. The TFT Mobile board
+            // is a 4x7 hex grid drawn in perspective in the lower-centre of the screen
+            // (your own units) or the upper half during combat (the enemy). These
+            // generous percentage bounds cover the whole play area across phone aspect
+            // ratios, while excluding the top augment/HUD bar and the bottom shop bar
+            // so we don't read their text/icons as health bars. Detection finds the
+            // actual units inside this region, so exact placement never matters.
+            int zoneTop, zoneBot, leftExtreme, rightExtreme;
             if(opp){
-                int frontY = h * (100 - botPct) / 100; // nearest player (lower on screen)
-                int backY  = h * (100 - topPct) / 100; // opponent back row (higher)
-                int span = frontY - backY;
-                zoneTop = backY  - (int)(span*0.15);
-                zoneBot = frontY + (int)(span*0.25);
+                // enemy team fights from the TOP half during combat; red bars float
+                // above their units, from the back row (~14%) to the front (~58%).
+                zoneTop      = h * 11 / 100;
+                zoneBot      = h * 60 / 100;
+                leftExtreme  = w *  5 / 100;
+                rightExtreme = w * 93 / 100;
+            } else if(portrait){
+                // portrait: the board sits higher and is taller on screen
+                zoneTop      = h * 18 / 100;
+                zoneBot      = h * 68 / 100;
+                leftExtreme  = w *  3 / 100;
+                rightExtreme = w * 97 / 100;
             } else {
-                int top = h * topPct / 100, bot = h * botPct / 100;
-                int span = bot - top;
-                // health bars float ABOVE the hex centre, so reach above the top row
-                zoneTop = top - (int)(span*0.40);
-                zoneBot = bot + (int)(span*0.15);
+                // landscape own board: back-row bars ~33%, front units ~70%
+                zoneTop      = h * 27 / 100;
+                zoneBot      = h * 76 / 100;
+                leftExtreme  = w *  5 / 100;
+                rightExtreme = w * 93 / 100;
             }
-            int leftExtreme  = w * Math.min(tlPct, blPct) / 100 - w*2/100;
-            int rightExtreme = w * Math.max(trPct, brPct) / 100 + w*2/100;
             zoneTop = Math.max(0, zoneTop);
             zoneBot = Math.min(h, zoneBot);
             leftExtreme  = Math.max(0, leftExtreme);
