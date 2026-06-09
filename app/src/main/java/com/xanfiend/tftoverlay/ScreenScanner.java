@@ -215,7 +215,7 @@ public class ScreenScanner {
             if (box.bottom > pMaxY) pMaxY = box.bottom;
             String ocrNorm = norm(raw);
             for (int i = 0; i < champNames.length; i++) {
-                if (box.height() > bestH && matchChampNorm(ocrNorm, raw, champNames[i], champNorms[i])) {
+                if (box.height() > bestH && matchChampNorm(ocrNorm, raw, champNorms[i], champWords[i])) {
                     r.detectedBoardUnit = champNames[i];
                     bestH = box.height();
                     break;
@@ -354,7 +354,7 @@ public class ScreenScanner {
                 + " benchTop=" + benchTop + " benchBot=" + benchBot);
         int goldBoxH = 0;
 
-        List<String> allChamps = buildChampList();
+        ensureChampArrays();
 
         // Log every block for debugging
         for (Text.TextBlock block : text.getTextBlocks()) {
@@ -396,8 +396,10 @@ public class ScreenScanner {
 
             // shop champions: text in the shop bar zone
             if (cy >= shopTop && cy <= shopBot) {
-                for (String name : allChamps) {
-                    if (!r.shopChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+                String rawNorm = norm(raw);
+                for (int i = 0; i < champNames.length; i++) {
+                    String name = champNames[i];
+                    if (!r.shopChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
                         r.shopChampions.add(name);
                         log("shop champ: " + name + " from \"" + raw + "\"");
                         break;
@@ -407,8 +409,10 @@ public class ScreenScanner {
 
             // bench champions: text in the bench zone (units waiting below the board)
             if (cy >= benchTop && cy <= benchBot) {
-                for (String name : allChamps) {
-                    if (!r.benchChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+                String rawNorm = norm(raw);
+                for (int i = 0; i < champNames.length; i++) {
+                    String name = champNames[i];
+                    if (!r.benchChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
                         r.benchChampions.add(name);
                         log("bench champ: " + name + " from \"" + raw + "\"");
                         break;
@@ -469,7 +473,7 @@ public class ScreenScanner {
         int minH = Math.max(16, bmpH / 52);
         log("popup zone: y=" + popTop + "-" + popBot + " x>" + popLeft + " minH=" + minH + " bmp=" + bmpW + "x" + bmpH);
 
-        List<String> allChamps = buildChampList();
+        ensureChampArrays();
 
         // Log every block in the vertical zone — show rejections so debug log is useful
         for (Text.TextBlock block : text.getTextBlocks()) {
@@ -503,11 +507,12 @@ public class ScreenScanner {
             if (box.top < pMinY) pMinY = box.top;
             if (box.right > pMaxX) pMaxX = box.right;
             if (box.bottom > pMaxY) pMaxY = box.bottom;
-            for (String name : allChamps) {
-                if (fuzzyMatchChamp(raw, name) && box.height() > bestH) {
-                    r.detectedBoardUnit = name;
+            String rawNorm = norm(raw);
+            for (int i = 0; i < champNames.length; i++) {
+                if (box.height() > bestH && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                    r.detectedBoardUnit = champNames[i];
                     bestH = box.height();
-                    log("match: " + name + " h=" + box.height() + " from \"" + raw + "\"");
+                    log("match: " + champNames[i] + " h=" + box.height() + " from \"" + raw + "\"");
                     break;
                 }
             }
@@ -547,7 +552,7 @@ public class ScreenScanner {
     private ScanResult parseBoard(Text text, int bmpW, int bmpH) {
         ScanResult r = new ScanResult();
         int minH = 8;
-        List<String> allChamps = buildChampList();
+        ensureChampArrays();
         log("auto-scan: full screen minH=" + minH + " bmp=" + bmpW + "x" + bmpH + " blocks=" + text.getTextBlocks().size());
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
@@ -560,8 +565,10 @@ public class ScreenScanner {
                 continue;
             }
             log("cand h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
-            for (String name : allChamps) {
-                if (!r.autoChampions.contains(name) && fuzzyMatchChamp(raw, name)) {
+            String rawNorm = norm(raw);
+            for (int i = 0; i < champNames.length; i++) {
+                String name = champNames[i];
+                if (!r.autoChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
                     r.autoChampions.add(name);
                     log("auto match: " + name + " from \"" + rawLog + "\"");
                     break;
@@ -572,11 +579,13 @@ public class ScreenScanner {
     }
 
     private static List<String> champListCache = null;
-    // Parallel arrays for the hot path: name + its normalized form (lowercase a-z only).
-    // Built once. Avoids recompiling regex and re-normalizing every champion for every
-    // OCR block on every probe (37+ probes per auto-scan).
+    // Parallel arrays for the hot path: name, its normalized form (lowercase a-z only),
+    // and its space-split word form ("TwistedFate" -> "Twisted Fate"). Built once.
+    // Avoids recompiling regex and re-normalizing every champion for every OCR block
+    // on every probe (37+ probes per auto-scan, ~60 champions per block).
     private static String[] champNames = null;
     private static String[] champNorms = null;
+    private static String[] champWords = null;
 
     private static List<String> buildChampList() {
         if (champListCache == null) {
@@ -590,9 +599,15 @@ public class ScreenScanner {
     private static synchronized void ensureChampArrays() {
         if (champNames != null) return;
         List<String> list = buildChampList();
-        champNames = list.toArray(new String[0]);
-        champNorms = new String[champNames.length];
-        for (int i = 0; i < champNames.length; i++) champNorms[i] = norm(champNames[i]);
+        String[] names = list.toArray(new String[0]);
+        String[] norms = new String[names.length];
+        String[] words = new String[names.length];
+        for (int i = 0; i < names.length; i++) {
+            norms[i] = norm(names[i]);
+            words[i] = names[i].replaceAll("([A-Z])", " $1").trim();
+        }
+        champNorms = norms; champWords = words;
+        champNames = names; // assign last: readers gate on champNames != null
     }
 
     // Lowercase, strip everything but a-z. Allocation-light replacement for
@@ -617,15 +632,16 @@ public class ScreenScanner {
         return n;
     }
 
-    // Thin wrapper kept for the cold paths (manual full scan). Normalizes on each call.
+    // Thin wrapper for callers that match against an arbitrary name (e.g. the star
+    // pass re-checking already-detected shop champions). Normalizes on each call.
     private boolean fuzzyMatchChamp(String ocr, String target) {
-        return matchChampNorm(norm(ocr), ocr, target, norm(target));
+        return matchChampNorm(norm(ocr), ocr, norm(target),
+                target.replaceAll("([A-Z])", " $1").trim());
     }
 
     // Hot-path matcher: caller passes the already-normalized OCR string (computed once
-    // per block) and the cached target norm (computed once at startup). Identical logic
-    // to fuzzyMatchChamp, just without re-normalizing per champion.
-    private boolean matchChampNorm(String ocrNorm, String ocrRaw, String target, String tarNorm) {
+    // per block) plus the cached norm and word forms (computed once at startup).
+    private boolean matchChampNorm(String ocrNorm, String ocrRaw, String tarNorm, String tarWords) {
         // Short champion names (Zoe, Vex, Jhin, Fizz, Nami, Ornn…) — exact match only.
         // Fuzzy matching on 3-4 char strings causes too many false positives.
         if (tarNorm.length() <= 4) return ocrNorm.equals(tarNorm);
@@ -637,7 +653,6 @@ public class ScreenScanner {
         // long — for shorter names (e.g. "Leona" 5 chars) the 80% rule lets "leon"
         // match, producing false positives.
         if (tarNorm.length() >= 6 && tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
-        String tarWords = target.replaceAll("([A-Z])", " $1").trim();
         return fuzzyMatch(ocrRaw, tarWords);
     }
 
