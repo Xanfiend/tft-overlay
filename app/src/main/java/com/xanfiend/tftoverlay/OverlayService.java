@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.33";
+    private static final String APP_VERSION = "v1.34";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1988,6 +1988,11 @@ public class OverlayService extends Service {
                             autoTapProbes=buildProbeGrid(sw,sh);
                             hw.recycle();
                             addScanLog("auto-tap: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
+                            // Skip empty board hexes: analyse this clean board screenshot and
+                            // only keep hexes that actually have a unit on them. Synchronous,
+                            // runs before scanBitmap touches goldLvlBmp. Saves screenshots (and
+                            // with the 1/sec limit, real time) by not tapping empty space.
+                            autoTapProbes=filterOccupiedProbes(goldLvlBmp,autoTapProbes,autoTapBoardProbeCount);
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
                             // one-time full-screen OCR pass to grab gold + level before the
                             // tapping starts — these corners are only readable on the board
@@ -2076,6 +2081,69 @@ public class OverlayService extends Service {
             pts.add(new int[]{cx,benchY});
         }
         return pts;
+    }
+
+    // Decide which board hexes actually have a unit on them, from one clean board
+    // screenshot, so the auto-tap only visits occupied hexes. A champion sprite has
+    // a health bar and lots of detail, so the brightness varies a lot across the
+    // sample box; an empty hex is comparatively flat ground. We score each board hex
+    // by that variation and keep the ones clearly above the empty baseline.
+    //
+    // Bias is deliberately toward KEEPING hexes: a false keep just wastes ~1 second,
+    // but a false skip would miss a real unit. If the result looks implausible (kept
+    // nothing, or nearly everything), the detector is treated as inconclusive and we
+    // fall back to tapping every board hex, i.e. the old thorough behaviour.
+    // Bench probes are never filtered out.
+    private java.util.List<int[]> filterOccupiedProbes(Bitmap bmp, java.util.List<int[]> probes, int boardCount){
+        try{
+            if(boardCount<=0 || probes.size()<boardCount) return probes;
+            int w=bmp.getWidth(), h=bmp.getHeight();
+            int boxR=Math.max(10, Math.min(w,h)/45);
+            float[] metric=new float[boardCount];
+            for(int i=0;i<boardCount;i++){
+                int[] p=probes.get(i);
+                metric[i]=hexDetail(bmp,p[0],p[1],boxR,w,h);
+            }
+            float[] sorted=metric.clone();
+            java.util.Arrays.sort(sorted);
+            float median=sorted[boardCount/2];           // most hexes are empty -> median ~ empty baseline
+            float thresh=median*1.12f+1f;                // keep hexes clearly above empty, biased low
+            java.util.List<int[]> out=new java.util.ArrayList<>();
+            int kept=0;
+            for(int i=0;i<boardCount;i++){
+                if(metric[i]>=thresh){ out.add(probes.get(i)); kept++; }
+            }
+            if(kept==0 || kept>boardCount*4/5){
+                addScanLog("occupancy: inconclusive (kept "+kept+"/"+boardCount+"), tapping all board hexes");
+                return probes; // fall back to the full grid unchanged
+            }
+            addScanLog("occupancy: "+kept+"/"+boardCount+" board hexes occupied, skipping "+(boardCount-kept)+" empties");
+            for(int i=boardCount;i<probes.size();i++) out.add(probes.get(i)); // keep all bench probes
+            autoTapBoardProbeCount=kept;
+            return out;
+        }catch(Exception e){
+            addScanLog("occupancy err: "+e.getMessage()+", tapping all");
+            return probes;
+        }
+    }
+
+    // Standard deviation of luminance in a box around (cx,cy) — a cheap "how much detail
+    // is here" score. High for champion sprites, low for empty hex ground.
+    private float hexDetail(Bitmap bmp, int cx, int cy, int r, int w, int h){
+        int x0=Math.max(0,cx-r), x1=Math.min(w,cx+r);
+        int y0=Math.max(0,cy-r), y1=Math.min(h,cy+r);
+        if(x1<=x0 || y1<=y0) return 0f;
+        int bw=x1-x0, bh=y1-y0;
+        int[] px=new int[bw*bh];
+        bmp.getPixels(px,0,bw,x0,y0,bw,bh);
+        double sum=0,sumSq=0; int n=px.length;
+        for(int c:px){
+            int lum=((c>>16&0xFF)*30+(c>>8&0xFF)*59+(c&0xFF)*11)/100;
+            sum+=lum; sumSq+=(double)lum*lum;
+        }
+        double mean=sum/n;
+        double var=sumSq/n-mean*mean;
+        return (float)Math.sqrt(Math.max(0,var));
     }
 
     private void dispatchTap(float x, float y, final Runnable onDone){
