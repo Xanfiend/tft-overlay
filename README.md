@@ -3,11 +3,18 @@
 # ⦿ TFT SCRYER
 
 ### ✦ Champion pool & reroll-odds overlay for Teamfight Tactics ✦
-#### Android / mobile only
+
+*A floating overlay for TFT Mobile. Track the champion pool, reroll odds, gold, and your opponents without ever leaving the game.*
+
+<br>
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-![Platform](https://img.shields.io/badge/platform-Android-1A1A1A?style=flat-square)
+[![Version](https://img.shields.io/badge/version-1.34-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
+[![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
+[![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
+[![Set](https://img.shields.io/badge/Set%2017-Space%20Gods-C9A227?style=flat-square)](#)
 
 </div>
 
@@ -17,9 +24,41 @@
 
 </div>
 
-A floating overlay for TFT Mobile on Android. Tracks the champion pool and reroll odds so you always know whether to roll or save, without switching apps.
+## ✦ Screenshots
+
+<div align="center">
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="docs/screenshots/setup.jpg" alt="Setup screen" width="300"><br>
+<sub><b>Setup</b> · permissions, Start Overlay, and the how-to guide</sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/screenshots/gold-tab.jpg" alt="Gold tab" width="420"><br>
+<sub><b>Gold tab</b> · live interest, bracket ladder, and streak tracking, shown right over the game</sub>
+</td>
+</tr>
+</table>
+</div>
+
+<div align="center">
+
+`❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
+
+</div>
 
 > **Note:** Android only. Not for PC.
+
+## ✦ What you get
+
+- **◇ Pool tracking** · tap a champion to mark a copy seen, watch how many copies are left and how contested each unit is.
+- **◇ Reroll odds** · your real hit chance per roll at your current level, with your carry pinned to the top.
+- **◇ Auto Scan** · taps your board for you and reads every unit, star level, gold, and level straight off the screen. No typing.
+- **◇ Opponent scan** · tap through an enemy board to log their units and star levels, then see who you are contesting.
+- **◇ Gold planner** · live interest, the 10 to 50 gold bracket ladder, and win or loss streak income, all over the game.
+- **◇ Augment and item guide** · S to C tier ratings, comp tags, the full component build chart, and trait breakpoints.
+
+Everything runs on your phone. No internet permission, no accounts, no data leaves the device.
 
 ## ✦ Install
 
