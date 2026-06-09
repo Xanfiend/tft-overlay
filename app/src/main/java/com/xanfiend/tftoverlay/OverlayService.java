@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.36";
+    private static final String APP_VERSION = "v1.37";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1483,6 +1483,32 @@ public class OverlayService extends Service {
         }});
         root.addView(resetPos);
 
+        TextView hdr5=new TextView(this); hdr5.setText("◇ SMART SCAN");
+        hdr5.setTextColor(GOLD); hdr5.setTextSize(11); hdr5.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdr5.setLetterSpacing(0.1f); hdr5.setPadding(2,18,0,6); root.addView(hdr5);
+
+        TextView ssInfo=new TextView(this);
+        ssInfo.setText("Auto Scan finds units by their health bar and taps the exact spot, so calibration barely matters. Turn off to tap the calibrated grid instead.");
+        ssInfo.setTextColor(ASH); ssInfo.setTextSize(10); ssInfo.setPadding(2,0,0,6); root.addView(ssInfo);
+
+        boolean curSmart=pool.getSmartScan();
+        LinearLayout ssRow=new LinearLayout(this); ssRow.setGravity(Gravity.CENTER_VERTICAL);
+        String[] ssLabels={"ON","OFF"}; boolean[] ssVals={true,false};
+        for(int i=0;i<2;i++){
+            final boolean sv=ssVals[i];
+            TextView btn=new TextView(this); btn.setText(ssLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curSmart==sv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setSmartScan(sv); showPanel();
+            }});
+            ssRow.addView(btn);
+        }
+        root.addView(ssRow);
+
         // ◇ CALIBRATE SCAN
         TextView calDiv=new TextView(this); calDiv.setText("────────────────────");
         calDiv.setTextColor(EDGE); calDiv.setTextSize(8);
@@ -2007,14 +2033,28 @@ public class OverlayService extends Service {
                             final int sw=hw.getWidth(), sh=hw.getHeight();
                             final Bitmap goldLvlBmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hb.close();
-                            autoTapProbes=buildProbeGrid(sw,sh);
+                            java.util.List<int[]> grid=buildProbeGrid(sw,sh);
                             hw.recycle();
-                            addScanLog("auto-tap: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
-                            // Skip empty board hexes: analyse this clean board screenshot and
-                            // only keep hexes that actually have a unit on them. Synchronous,
-                            // runs before scanBitmap touches goldLvlBmp. Saves screenshots (and
-                            // with the 1/sec limit, real time) by not tapping empty space.
-                            autoTapProbes=filterOccupiedProbes(goldLvlBmp,autoTapProbes,autoTapBoardProbeCount);
+                            int gridBoardCount=autoTapBoardProbeCount;
+                            // Smart Scan: find units by their health bars and tap the exact
+                            // unit position. The calibrated grid is the fallback if detection
+                            // is inconclusive. The bench keeps the grid (bench units have no
+                            // health bar to detect) and is filtered for occupancy.
+                            java.util.List<int[]> detected = pool.getSmartScan()
+                                    ? detectHealthBarUnits(goldLvlBmp,false) : null;
+                            if(detected!=null){
+                                java.util.List<int[]> bench=new java.util.ArrayList<>(
+                                        grid.subList(gridBoardCount, grid.size()));
+                                bench=filterByDetail(goldLvlBmp,bench);
+                                autoTapProbes=new java.util.ArrayList<>(detected);
+                                autoTapProbes.addAll(bench);
+                                autoTapBoardProbeCount=detected.size();
+                                addScanLog("auto-tap: "+detected.size()+" units (health bar) + "
+                                        +bench.size()+" bench "+sw+"x"+sh);
+                            } else {
+                                autoTapProbes=filterOccupiedProbes(goldLvlBmp,grid,gridBoardCount);
+                                addScanLog("auto-tap: "+autoTapProbes.size()+" grid probes "+sw+"x"+sh);
+                            }
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
                             // one-time full-screen OCR pass to grab gold + level before the
                             // tapping starts — these corners are only readable on the board
@@ -2067,9 +2107,21 @@ public class OverlayService extends Service {
                             final int sw=hw.getWidth(), sh=hw.getHeight();
                             final Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hb.close(); hw.recycle();
-                            autoTapProbes=buildOppProbeGrid(sw,sh);
-                            autoTapProbes=filterOccupiedProbes(bmp,autoTapProbes,autoTapBoardProbeCount);
-                            addScanLog("auto-opp: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
+                            java.util.List<int[]> oppGrid=buildOppProbeGrid(sw,sh);
+                            int oppGridCount=autoTapBoardProbeCount;
+                            // Smart Scan for the opponent: enemy units in combat show RED
+                            // health bars. Detect those for exact positions; fall back to the
+                            // mirrored grid if inconclusive.
+                            java.util.List<int[]> oppDetected = pool.getSmartScan()
+                                    ? detectHealthBarUnits(bmp,true) : null;
+                            if(oppDetected!=null){
+                                autoTapProbes=new java.util.ArrayList<>(oppDetected);
+                                autoTapBoardProbeCount=oppDetected.size();
+                                addScanLog("auto-opp: "+oppDetected.size()+" enemy units (health bar) "+sw+"x"+sh);
+                            } else {
+                                autoTapProbes=filterOccupiedProbes(bmp,oppGrid,oppGridCount);
+                                addScanLog("auto-opp: "+autoTapProbes.size()+" grid probes "+sw+"x"+sh);
+                            }
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
                             new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
                                 new ScreenScanner.ScanCallback(){
@@ -2278,6 +2330,153 @@ public class OverlayService extends Service {
         double mean=sum/n;
         double var=sumSq/n-mean*mean;
         return (float)Math.sqrt(Math.max(0,var));
+    }
+
+    // ---- Smart Scan: find units directly from their health bars ----
+    //
+    // Every unit on the board carries a health bar above it: a bright green
+    // horizontal bar for your own units, a red one for an enemy's during combat.
+    // Empty hexes and the board floor have no such bar. We scan the board zone of
+    // one clean screenshot for those bars, cluster the matching pixels into units,
+    // and return the exact tap point under each bar. This needs no precise
+    // calibration for positioning — the calibrated zone is only used as a coarse
+    // bound so we don't read the HUD, shop, or trait panel. Returns null when the
+    // result looks implausible so the caller falls back to the calibrated grid.
+    private java.util.List<int[]> detectHealthBarUnits(Bitmap bmp, boolean opp){
+        try{
+            int w=bmp.getWidth(), h=bmp.getHeight();
+            boolean portrait = h > w;
+            int topPct = portrait ? pool.getPortraitBoardTopPct() : pool.getBoardTopPct();
+            int botPct = portrait ? pool.getPortraitBoardBotPct() : pool.getBoardBotPct();
+            int tlPct  = portrait ? pool.getPortraitBoardTopLeftPct()  : pool.getBoardTopLeftPct();
+            int trPct  = portrait ? pool.getPortraitBoardTopRightPct() : pool.getBoardTopRightPct();
+            int blPct  = portrait ? pool.getPortraitBoardBotLeftPct()  : pool.getBoardBotLeftPct();
+            int brPct  = portrait ? pool.getPortraitBoardBotRightPct() : pool.getBoardBotRightPct();
+
+            int zoneTop, zoneBot;
+            if(opp){
+                int frontY = h * (100 - botPct) / 100; // nearest player (lower on screen)
+                int backY  = h * (100 - topPct) / 100; // opponent back row (higher)
+                int span = frontY - backY;
+                zoneTop = backY  - (int)(span*0.15);
+                zoneBot = frontY + (int)(span*0.25);
+            } else {
+                int top = h * topPct / 100, bot = h * botPct / 100;
+                int span = bot - top;
+                // health bars float ABOVE the hex centre, so reach above the top row
+                zoneTop = top - (int)(span*0.40);
+                zoneBot = bot + (int)(span*0.15);
+            }
+            int leftExtreme  = w * Math.min(tlPct, blPct) / 100 - w*2/100;
+            int rightExtreme = w * Math.max(trPct, brPct) / 100 + w*2/100;
+            zoneTop = Math.max(0, zoneTop);
+            zoneBot = Math.min(h, zoneBot);
+            leftExtreme  = Math.max(0, leftExtreme);
+            rightExtreme = Math.min(w, rightExtreme);
+            int zw=rightExtreme-leftExtreme, zh=zoneBot-zoneTop;
+            if(zw<10 || zh<10) return null;
+
+            // floating button bbox, to ignore its sigil
+            int[] btnLoc=new int[2]; int btnW=0,btnH=0;
+            if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
+
+            int[] px=new int[zw*zh];
+            bmp.getPixels(px,0,zw,leftExtreme,zoneTop,zw,zh);
+
+            int minLen=Math.max(6, w*2/100);   // a bar is at least ~2% of screen wide
+            int maxLen=Math.max(minLen+4, w*11/100); // and at most ~11% wide
+            // each segment: {screenY, screenCx}
+            java.util.List<int[]> segs=new java.util.ArrayList<>();
+            for(int ry=0; ry<zh; ry+=2){
+                int base=ry*zw; int runStart=-1;
+                for(int rx=0; rx<zw; rx++){
+                    int c=px[base+rx];
+                    int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
+                    boolean m = opp
+                        ? (r>140 && r-g>55 && r-b>55)             // enemy red bar
+                        : (g>125 && g-r>40 && g-b>45 && r<190);   // ally green bar
+                    if(m){ if(runStart<0) runStart=rx; }
+                    else { if(runStart>=0){ addBarSeg(segs,runStart,rx-1,ry,minLen,maxLen,leftExtreme,zoneTop,btnLoc,btnW,btnH); runStart=-1; } }
+                }
+                if(runStart>=0) addBarSeg(segs,runStart,zw-1,ry,minLen,maxLen,leftExtreme,zoneTop,btnLoc,btnW,btnH);
+            }
+            if(segs.isEmpty()){ addScanLog("smart: no health bars found, using grid"); return null; }
+
+            // cluster segments belonging to the same bar: similar centre-x, vertically
+            // adjacent scanlines. segs are produced in increasing y already.
+            int clusterXTol=Math.max(8, w*4/100);
+            int rowGap=10; // px of vertical tolerance between a bar's scanlines
+            int maxBarThick=Math.max(6, h*4/100);
+            // cluster as {sumCx,count,minY,maxY}
+            java.util.List<int[]> cl=new java.util.ArrayList<>();
+            for(int[] s : segs){
+                int sy=s[0], scx=s[1];
+                int[] best=null;
+                for(int[] c : cl){
+                    int ccx=c[0]/c[1];
+                    if(Math.abs(scx-ccx)<=clusterXTol && sy-c[3]<=rowGap){ best=c; break; }
+                }
+                if(best==null){ cl.add(new int[]{scx,1,sy,sy}); }
+                else { best[0]+=scx; best[1]++; if(sy<best[2])best[2]=sy; if(sy>best[3])best[3]=sy; }
+            }
+
+            // keep clusters that look like a real bar (several scanlines, thin),
+            // then merge any that ended up near each other.
+            java.util.List<int[]> units=new java.util.ArrayList<>(); // {tapX,tapY}
+            int bodyDrop=Math.max(8, h*3/100);
+            for(int[] c : cl){
+                int count=c[1], minY=c[2], maxY=c[3];
+                if(count<3) continue;
+                if(maxY-minY>maxBarThick) continue; // tall green blob = tree/background
+                int cx=c[0]/count;
+                int tapY=maxY+bodyDrop;
+                boolean dup=false;
+                for(int[] u : units){
+                    if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
+                }
+                if(!dup) units.add(new int[]{cx,tapY});
+            }
+            if(units.isEmpty() || units.size()>18){
+                addScanLog("smart: detection inconclusive ("+units.size()+" units), using grid");
+                return null;
+            }
+            // scan order: back-to-front (top y first), then left-to-right
+            java.util.Collections.sort(units,(a,b)-> a[1]!=b[1] ? a[1]-b[1] : a[0]-b[0]);
+            addScanLog("smart: detected "+units.size()+" units by health bar");
+            return units;
+        }catch(Exception e){
+            addScanLog("smart err: "+e.getMessage()+", using grid");
+            return null;
+        }
+    }
+
+    private void addBarSeg(java.util.List<int[]> segs,int xs,int xe,int ry,int minLen,int maxLen,
+                           int zoneLeft,int zoneTop,int[] btnLoc,int btnW,int btnH){
+        int len=xe-xs+1;
+        if(len<minLen || len>maxLen) return;
+        int cx=zoneLeft+(xs+xe)/2, cy=zoneTop+ry;
+        if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
+                  && cy>=btnLoc[1]-30 && cy<=btnLoc[1]+btnH+30) return;
+        segs.add(new int[]{cy,cx});
+    }
+
+    // Keep only probes that have real detail (a unit), used for the bench when
+    // Smart Scan handled the board. Never returns empty: if every slot scores low
+    // it returns the originals so we don't silently skip a full bench.
+    private java.util.List<int[]> filterByDetail(Bitmap bmp, java.util.List<int[]> probes){
+        try{
+            int n=probes.size();
+            if(n==0) return probes;
+            int w=bmp.getWidth(), h=bmp.getHeight();
+            int boxR=Math.max(10, Math.min(w,h)/45);
+            float[] m=new float[n];
+            for(int i=0;i<n;i++){ int[] p=probes.get(i); m[i]=hexDetail(bmp,p[0],p[1],boxR,w,h); }
+            float[] s=m.clone(); java.util.Arrays.sort(s);
+            float thresh=s[n/2]*1.12f+1f;
+            java.util.List<int[]> out=new java.util.ArrayList<>();
+            for(int i=0;i<n;i++) if(m[i]>=thresh) out.add(probes.get(i));
+            return out.isEmpty()?probes:out;
+        }catch(Exception e){ return probes; }
     }
 
     private void dispatchTap(float x, float y, final Runnable onDone){
