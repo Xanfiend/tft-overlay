@@ -141,6 +141,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.38 - 2026-06-09
+- Smart Scan no longer needs calibration. It searches a fixed region of the screen for unit health bars (lower-centre for your board, upper half for the enemy in combat) instead of using calibrated probe positions, so it finds and taps the actual units even if calibration is untouched or a little off.
+- Calibration is now only a fallback grid for the rare case health bar detection finds nothing. SHOW DOTS, with Smart Scan on, takes a real screenshot and draws a marker on every detected unit so you can see exactly what the scan sees.
+
 ### v1.37 - 2026-06-09
 - New: Smart Scan. Auto Scan now finds your units by looking for their health bars in the screenshot and taps the exact spot each unit is standing, instead of tapping calibrated grid dots. It lands on the units even if calibration is a little off, and skips empty hexes. Auto Opp Scan does the same using the enemy red health bars.
 - Calibration still sets the rough board area, but exact dot placement no longer matters. If health bar detection looks wrong the scan falls back to the calibrated grid, and you can turn Smart Scan off in the SETUP tab.
