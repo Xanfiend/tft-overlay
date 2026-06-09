@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.37");
+        ver.setText("v1.38");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.38  ·  2026-06-09","Smart Scan no longer needs calibration at all. It now searches a fixed region of the screen for unit health bars (the lower-centre for your own board, the upper half for the enemy during combat) instead of relying on your calibrated probe positions. So even with calibration untouched or a little off, it finds and taps the actual units. Calibration is now only used as a fallback grid if health bar detection ever comes up empty, and the SETUP tab says so. Also: tap SHOW DOTS with Smart Scan on and it now takes a real screenshot and draws a marker on every unit it detected, so you can see exactly what the scan sees before you run it, no calibration involved. The fix for probe dots stacking toward the front row only applied to the old grid path, which Smart Scan now bypasses entirely."},
             {"v1.37  ·  2026-06-09","New: Smart Scan. Auto Scan now finds your units by looking for their health bars in the screenshot and taps the exact spot each unit is standing, instead of tapping the calibrated grid dots. This means it lands right on the units even if your calibration is a little off, and it does not waste taps on empty hexes. It works the same for Auto Opp Scan by looking for the enemy red health bars. Calibration still matters as a rough guide for where the board is, but exact dot placement is no longer important. If the health bar detection ever looks wrong, the scan automatically falls back to the old calibrated grid, and you can turn Smart Scan off entirely in the SETUP tab. The in app debug log shows how many units it detected."},
             {"v1.36  ·  2026-06-09","New: Auto Opp Scan. The Grid tab now has an Auto Opp Scan button next to Auto Scan. Tap it during combat and the app automatically taps through the opponent board zone (the mirrored side of the screen, opposite your own board), reads each champion name from the unit popup, and marks them as contested in the ◉ badge column. No manual tapping needed. The old Opp Manual button is still there if you prefer to tap each unit yourself. The scan stops itself after finishing all probes or after 35 seconds, whichever comes first."},
             {"v1.35  ·  2026-06-09","Fix: bench probe row was landing a little too far to the right. The default now shifts the bench 4% left to match where the actual TFT Mobile bench slots sit. You can fine tune it yourself using the new Bench L/R shift slider in the SETUP tab under calibration. Also, Auto Scan now skips empty bench slots by analysing the board screenshot it already takes at the start, the same way it skips empty board hexes. This means it no longer taps through the empty slots at the right end of your bench."},
