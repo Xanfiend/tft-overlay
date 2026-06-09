@@ -141,6 +141,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.36 - 2026-06-09
+- New: Auto Opp Scan. The Grid tab now has an Auto Opp Scan button next to Auto Scan. Tap it during combat and the app automatically taps through the opponent board zone (the mirrored side of the screen, opposite your own board), reads each champion name from the unit popup, and marks them as contested in the badge column.
+- No manual tapping needed. The scan stops after finishing all probes or after 35 seconds. The old Opp Manual button is still there if you prefer to tap each unit yourself.
+
 ### v1.35 - 2026-06-09
 - Fix: bench probe row was landing a little too far to the right. The default now shifts the bench 4% left to align with where the TFT Mobile bench slots actually sit. You can fine tune it using the new Bench L/R shift slider in SETUP under calibration (negative = left, positive = right).
 - Auto Scan now also skips empty bench slots by analysing the board screenshot it already takes at the start, the same way it skips empty board hexes. No more tapping through the empty slots at the end of your bench.
