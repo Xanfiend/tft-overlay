@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.32";
+    private static final String APP_VERSION = "v1.33";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -123,6 +123,15 @@ public class OverlayService extends Service {
     private static final int TAP_STROKE_MS   = 25;  // gesture press duration
     private static final int POPUP_WAIT_MS   = 260; // wait for the unit popup to render after the tap
     private static final int PROBE_GAP_MS    = 12;  // gap before moving to the next probe
+    // Android rate-limits AccessibilityService.takeScreenshot() to one call per
+    // second. Calling faster fails with ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT
+    // (errorCode 3). The auto-tap loop fires a screenshot every probe, so it MUST
+    // space them at least this far apart, otherwise most shots fail and their
+    // champions get silently missed. 1050ms leaves a small margin over the 1000ms
+    // limit. This sets the hard floor on auto-scan speed: ~1 second per unit.
+    private static final int MIN_SHOT_GAP_MS = 1050;
+    private long lastShotMs = 0;          // uptimeMillis of the most recent takeScreenshot request
+    private int  autoTapShotRetry = 0;    // retries for the current probe when rate-limited
 
     // in-app debug log — last 80 lines, shown in Settings
     private static final java.util.List<String> scanLog = new java.util.ArrayList<>();
@@ -1966,6 +1975,7 @@ public class OverlayService extends Service {
         addScanLog("auto-tap: starting, getting screen size");
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         try{
+            lastShotMs=android.os.SystemClock.uptimeMillis();
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
@@ -2099,50 +2109,70 @@ public class OverlayService extends Service {
         if(btnLabel!=null) btnLabel.setText(autoTapIndex+"/"+autoTapProbes.size());
         int[] pt=autoTapProbes.get(autoTapIndex);
         final float px=pt[0], py=pt[1];
+        autoTapShotRetry=0;
         addScanLog("auto-tap: probe "+(autoTapIndex+1)+"/"+autoTapProbes.size()+" @"+((int)px)+","+((int)py));
         dispatchTap(px, py, new Runnable(){ public void run(){
-            // wait for popup to render before taking screenshot
-            autoTapHandler.postDelayed(new Runnable(){ public void run(){
-                if(!autoScanPending) return;
-                TFTAccessibilityService svc=TFTAccessibilityService.instance;
-                if(svc==null){ finishAutoTapScan(); return; }
-                try{
-                    svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
-                        new AccessibilityService.TakeScreenshotCallback(){
-                            @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
-                                try{
-                                    android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
-                                    Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
-                                    hb.close();
-                                    final int sw=hw.getWidth(), sh=hw.getHeight();
-                                    final Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
-                                    hw.recycle();
-                                    // crop to popup band — board rows 39-60%, bench 72%, popups appear above units
-                                    boolean portrait=sh>sw;
-                                    final int cropTop=portrait? sh*8/100 : sh*15/100;
-                                    int cropBot=sh*78/100;
-                                    Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
-                                    new ScreenScanner(OverlayService.this,null).scanPopupZone(crop,sw,sh,
-                                        new ScreenScanner.ScanCallback(){
-                                            public void onResult(ScreenScanner.ScanResult r){
-                                                if(r.detectedBoardUnit!=null&&!r.detectedBoardUnit.isEmpty()
-                                                        &&r.detectedPopupBounds!=null){
-                                                    r.detectedPopupBounds.offset(0,cropTop); // crop->full coords
-                                                    applyAutoTapProbeResult(r,full);
-                                                } else {
-                                                    full.recycle();
-                                                    applyAutoTapProbeResult(r,null);
-                                                }
-                                            }
-                                            public void onError(String msg){ full.recycle(); addScanLog("auto-tap OCR err: "+msg); advanceAutoTap(); }
-                                        });
-                                }catch(Exception e){ addScanLog("ERR auto-tap probe: "+e.getMessage()); advanceAutoTap(); }
-                            }
-                            @Override public void onFailure(int errorCode){ addScanLog("ERR auto-tap shot: "+errorCode); advanceAutoTap(); }
-                        });
-                }catch(Exception e){ addScanLog("ERR auto-tap svc: "+e.getMessage()); advanceAutoTap(); }
-            }},POPUP_WAIT_MS);
+            // Wait long enough for the popup to render AND for the screenshot
+            // rate limit to clear since the previous shot, whichever is longer.
+            long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
+            long wait=Math.max(POPUP_WAIT_MS, MIN_SHOT_GAP_MS-sinceShot);
+            autoTapHandler.postDelayed(new Runnable(){ public void run(){ captureProbeShot(); }}, wait);
         }});
+    }
+
+    @SuppressWarnings("NewApi")
+    private void captureProbeShot(){
+        if(!autoScanPending) return;
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null){ finishAutoTapScan(); return; }
+        try{
+            lastShotMs=android.os.SystemClock.uptimeMillis();
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            hb.close();
+                            final int sw=hw.getWidth(), sh=hw.getHeight();
+                            final Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hw.recycle();
+                            // crop to popup band — board rows 39-60%, bench 72%, popups appear above units
+                            boolean portrait=sh>sw;
+                            final int cropTop=portrait? sh*8/100 : sh*15/100;
+                            int cropBot=sh*78/100;
+                            Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
+                            new ScreenScanner(OverlayService.this,null).scanPopupZone(crop,sw,sh,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){
+                                        if(r.detectedBoardUnit!=null&&!r.detectedBoardUnit.isEmpty()
+                                                &&r.detectedPopupBounds!=null){
+                                            r.detectedPopupBounds.offset(0,cropTop); // crop->full coords
+                                            applyAutoTapProbeResult(r,full);
+                                        } else {
+                                            full.recycle();
+                                            applyAutoTapProbeResult(r,null);
+                                        }
+                                    }
+                                    public void onError(String msg){ full.recycle(); addScanLog("auto-tap OCR err: "+msg); advanceAutoTap(); }
+                                });
+                        }catch(Exception e){ addScanLog("ERR auto-tap probe: "+e.getMessage()); advanceAutoTap(); }
+                    }
+                    @Override public void onFailure(int errorCode){
+                        // errorCode 3 = ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT: the
+                        // rate limiter rejected us. The popup is still on screen, so wait
+                        // a full second and retry the SAME probe instead of skipping it.
+                        if(errorCode==3 && autoTapShotRetry<3){
+                            autoTapShotRetry++;
+                            addScanLog("auto-tap shot rate-limited, retry "+autoTapShotRetry);
+                            autoTapHandler.postDelayed(new Runnable(){ public void run(){ captureProbeShot(); }}, MIN_SHOT_GAP_MS);
+                        } else {
+                            addScanLog("ERR auto-tap shot: "+errorCode);
+                            advanceAutoTap();
+                        }
+                    }
+                });
+        }catch(Exception e){ addScanLog("ERR auto-tap svc: "+e.getMessage()); advanceAutoTap(); }
     }
 
     private void advanceAutoTap(){
