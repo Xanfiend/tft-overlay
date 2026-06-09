@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.34";
+    private static final String APP_VERSION = "v1.35";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1489,9 +1489,9 @@ public class OverlayService extends Service {
         tapCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startTapCalibration(); }});
         root.addView(tapCalBtn);
 
-        String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row"};
-        final TextView[] calValTvs=new TextView[5];
-        for(int ci=0;ci<5;ci++){
+        String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row","Bench L/R shift"};
+        final TextView[] calValTvs=new TextView[6];
+        for(int ci=0;ci<6;ci++){
             final int cii=ci;
             LinearLayout crow=new LinearLayout(this); crow.setOrientation(LinearLayout.HORIZONTAL);
             crow.setGravity(Gravity.CENTER_VERTICAL);
@@ -1731,14 +1731,16 @@ public class OverlayService extends Service {
             case 1: return pool.getPortraitBoardBotPct();
             case 2: return pool.getPortraitBoardLeftPct();
             case 3: return pool.getPortraitBoardRightPct();
-            default: return pool.getPortraitBenchYPct();
+            case 4: return pool.getPortraitBenchYPct();
+            default: return pool.getBenchXOffsetPct();
         }
         switch(idx){
             case 0: return pool.getBoardTopPct();
             case 1: return pool.getBoardBotPct();
             case 2: return pool.getBoardLeftPct();
             case 3: return pool.getBoardRightPct();
-            default: return pool.getBenchYPct();
+            case 4: return pool.getBenchYPct();
+            default: return pool.getBenchXOffsetPct();
         }
     }
     private void calSet(int idx, int val){
@@ -1747,14 +1749,16 @@ public class OverlayService extends Service {
             case 1: pool.setPortraitBoardBotPct(val); return;
             case 2: pool.setPortraitBoardLeftPct(val); return;
             case 3: pool.setPortraitBoardRightPct(val); return;
-            default: pool.setPortraitBenchYPct(val); return;
+            case 4: pool.setPortraitBenchYPct(val); return;
+            default: pool.setBenchXOffsetPct(val); return;
         }
         switch(idx){
             case 0: pool.setBoardTopPct(val); break;
             case 1: pool.setBoardBotPct(val); break;
             case 2: pool.setBoardLeftPct(val); break;
             case 3: pool.setBoardRightPct(val); break;
-            default: pool.setBenchYPct(val); break;
+            case 4: pool.setBenchYPct(val); break;
+            default: pool.setBenchXOffsetPct(val); break;
         }
     }
 
@@ -2072,8 +2076,9 @@ public class OverlayService extends Service {
         // are the measured CENTERS of the front row's outer hexes, so nudge outward by half a
         // hex-gap on each side to approximate the bench's true span before spreading 9 slots.
         int benchHalfGap = frontWidth / 12;
-        int benchLeft  = botLeft  - benchHalfGap;
-        int benchRight = botRight + benchHalfGap;
+        int benchXShift  = w * (portrait ? 0 : pool.getBenchXOffsetPct()) / 100;
+        int benchLeft  = botLeft  - benchHalfGap + benchXShift;
+        int benchRight = botRight + benchHalfGap + benchXShift;
         for(int col=0;col<benchCols;col++){
             int cx=benchLeft+(int)((col+0.5f)*(benchRight-benchLeft)/benchCols);
             if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
@@ -2083,43 +2088,62 @@ public class OverlayService extends Service {
         return pts;
     }
 
-    // Decide which board hexes actually have a unit on them, from one clean board
-    // screenshot, so the auto-tap only visits occupied hexes. A champion sprite has
-    // a health bar and lots of detail, so the brightness varies a lot across the
-    // sample box; an empty hex is comparatively flat ground. We score each board hex
-    // by that variation and keep the ones clearly above the empty baseline.
+    // Decide which board hexes and bench slots actually have a unit on them, from one
+    // clean board screenshot, so the auto-tap only visits occupied probes. A champion
+    // sprite has a health bar and lots of detail; an empty hex or slot is flat ground.
+    // We score each probe by luminance variance and keep those clearly above the baseline.
     //
-    // Bias is deliberately toward KEEPING hexes: a false keep just wastes ~1 second,
-    // but a false skip would miss a real unit. If the result looks implausible (kept
-    // nothing, or nearly everything), the detector is treated as inconclusive and we
-    // fall back to tapping every board hex, i.e. the old thorough behaviour.
-    // Bench probes are never filtered out.
+    // Bias is deliberately toward KEEPING probes: a false keep wastes ~1 second, but a
+    // false skip would miss a real unit. If board results look implausible the board
+    // falls back to tapping every hex (old thorough behaviour). Bench is always filtered
+    // — the few extra misses saved matter when scanning 9 bench slots at 1s/slot.
     private java.util.List<int[]> filterOccupiedProbes(Bitmap bmp, java.util.List<int[]> probes, int boardCount){
         try{
             if(boardCount<=0 || probes.size()<boardCount) return probes;
             int w=bmp.getWidth(), h=bmp.getHeight();
             int boxR=Math.max(10, Math.min(w,h)/45);
-            float[] metric=new float[boardCount];
-            for(int i=0;i<boardCount;i++){
+            int total=probes.size();
+
+            float[] metric=new float[total];
+            for(int i=0;i<total;i++){
                 int[] p=probes.get(i);
                 metric[i]=hexDetail(bmp,p[0],p[1],boxR,w,h);
             }
-            float[] sorted=metric.clone();
-            java.util.Arrays.sort(sorted);
-            float median=sorted[boardCount/2];           // most hexes are empty -> median ~ empty baseline
-            float thresh=median*1.12f+1f;                // keep hexes clearly above empty, biased low
+
+            // Board filtering
+            float[] boardMetric=java.util.Arrays.copyOf(metric, boardCount);
+            float[] boardSorted=boardMetric.clone();
+            java.util.Arrays.sort(boardSorted);
+            float boardMedian=boardSorted[boardCount/2];
+            float boardThresh=boardMedian*1.12f+1f;
             java.util.List<int[]> out=new java.util.ArrayList<>();
-            int kept=0;
+            int keptBoard=0;
             for(int i=0;i<boardCount;i++){
-                if(metric[i]>=thresh){ out.add(probes.get(i)); kept++; }
+                if(metric[i]>=boardThresh){ out.add(probes.get(i)); keptBoard++; }
             }
-            if(kept==0 || kept>boardCount*4/5){
-                addScanLog("occupancy: inconclusive (kept "+kept+"/"+boardCount+"), tapping all board hexes");
-                return probes; // fall back to the full grid unchanged
+            if(keptBoard==0 || keptBoard>boardCount*4/5){
+                addScanLog("occupancy: board inconclusive (kept "+keptBoard+"/"+boardCount+"), tapping all board hexes");
+                for(int i=0;i<boardCount;i++) if(!out.contains(probes.get(i))) out.add(0,probes.get(i));
+                // rebuild properly — fall back by keeping all board probes
+                out.clear(); for(int i=0;i<boardCount;i++) out.add(probes.get(i)); keptBoard=boardCount;
             }
-            addScanLog("occupancy: "+kept+"/"+boardCount+" board hexes occupied, skipping "+(boardCount-kept)+" empties");
-            for(int i=boardCount;i<probes.size();i++) out.add(probes.get(i)); // keep all bench probes
-            autoTapBoardProbeCount=kept;
+            addScanLog("occupancy: "+keptBoard+"/"+boardCount+" board probes occupied");
+            autoTapBoardProbeCount=keptBoard;
+
+            // Bench filtering — same approach, independent threshold
+            int benchCount=total-boardCount;
+            if(benchCount>0){
+                float[] benchMetric=java.util.Arrays.copyOfRange(metric, boardCount, total);
+                float[] benchSorted=benchMetric.clone();
+                java.util.Arrays.sort(benchSorted);
+                float benchMedian=benchSorted[benchCount/2];
+                float benchThresh=benchMedian*1.12f+1f;
+                int keptBench=0;
+                for(int i=0;i<benchCount;i++){
+                    if(benchMetric[i]>=benchThresh){ out.add(probes.get(boardCount+i)); keptBench++; }
+                }
+                addScanLog("occupancy: "+keptBench+"/"+benchCount+" bench slots occupied");
+            }
             return out;
         }catch(Exception e){
             addScanLog("occupancy err: "+e.getMessage()+", tapping all");
