@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.36");
+        ver.setText("v1.37");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.37  ·  2026-06-09","New: Smart Scan. Auto Scan now finds your units by looking for their health bars in the screenshot and taps the exact spot each unit is standing, instead of tapping the calibrated grid dots. This means it lands right on the units even if your calibration is a little off, and it does not waste taps on empty hexes. It works the same for Auto Opp Scan by looking for the enemy red health bars. Calibration still matters as a rough guide for where the board is, but exact dot placement is no longer important. If the health bar detection ever looks wrong, the scan automatically falls back to the old calibrated grid, and you can turn Smart Scan off entirely in the SETUP tab. The in app debug log shows how many units it detected."},
             {"v1.36  ·  2026-06-09","New: Auto Opp Scan. The Grid tab now has an Auto Opp Scan button next to Auto Scan. Tap it during combat and the app automatically taps through the opponent board zone (the mirrored side of the screen, opposite your own board), reads each champion name from the unit popup, and marks them as contested in the ◉ badge column. No manual tapping needed. The old Opp Manual button is still there if you prefer to tap each unit yourself. The scan stops itself after finishing all probes or after 35 seconds, whichever comes first."},
             {"v1.35  ·  2026-06-09","Fix: bench probe row was landing a little too far to the right. The default now shifts the bench 4% left to match where the actual TFT Mobile bench slots sit. You can fine tune it yourself using the new Bench L/R shift slider in the SETUP tab under calibration. Also, Auto Scan now skips empty bench slots by analysing the board screenshot it already takes at the start, the same way it skips empty board hexes. This means it no longer taps through the empty slots at the right end of your bench."},
             {"v1.34  ·  2026-06-09","Speed: Auto Scan no longer taps empty hexes. Because Android caps screenshots at one per second, the slow part of the scan was visiting all of the empty board space. The scan now looks at the one board screenshot it already takes at the start, works out which hexes actually have a unit on them (a champion sprite has a health bar and lots of detail, an empty hex is flat ground), and only taps those. On a normal board that is roughly the number of units you have instead of all twenty eight hexes, so the scan finishes much faster. It is deliberately cautious: if a hex is even a little ambiguous it still taps it, and if the detection looks off it falls back to tapping everything like before, so it should not miss units. If you ever see a unit get skipped, the in app debug log shows what it decided. Your bench is always fully scanned."},

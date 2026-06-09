@@ -95,6 +95,11 @@ public class Pool {
     public void  setAlpha(float a) { p.edit().putFloat("cfg_alpha", a).apply(); }
     public boolean getHaptic()         { return p.getBoolean("cfg_haptic", true); }
     public void    setHaptic(boolean h){ p.edit().putBoolean("cfg_haptic", h).apply(); }
+    // Smart Scan: find units by their health bars in the screenshot and tap the
+    // exact unit position, instead of tapping calibrated grid dots. Falls back to
+    // the grid automatically when detection is inconclusive. On by default.
+    public boolean getSmartScan()         { return p.getBoolean("cfg_smartscan", true); }
+    public void    setSmartScan(boolean s){ p.edit().putBoolean("cfg_smartscan", s).apply(); }
     // 0 = smart (board if pool non-empty, else grid), 1 = always grid
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }

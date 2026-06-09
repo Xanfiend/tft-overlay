@@ -141,6 +141,10 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.37 - 2026-06-09
+- New: Smart Scan. Auto Scan now finds your units by looking for their health bars in the screenshot and taps the exact spot each unit is standing, instead of tapping calibrated grid dots. It lands on the units even if calibration is a little off, and skips empty hexes. Auto Opp Scan does the same using the enemy red health bars.
+- Calibration still sets the rough board area, but exact dot placement no longer matters. If health bar detection looks wrong the scan falls back to the calibrated grid, and you can turn Smart Scan off in the SETUP tab.
+
 ### v1.36 - 2026-06-09
 - New: Auto Opp Scan. The Grid tab now has an Auto Opp Scan button next to Auto Scan. Tap it during combat and the app automatically taps through the opponent board zone (the mirrored side of the screen, opposite your own board), reads each champion name from the unit popup, and marks them as contested in the badge column.
 - No manual tapping needed. The scan stops after finishing all probes or after 35 seconds. The old Opp Manual button is still there if you prefer to tap each unit yourself.
