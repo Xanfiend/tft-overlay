@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.35";
+    private static final String APP_VERSION = "v1.36";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -109,6 +109,7 @@ public class OverlayService extends Service {
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
+    private boolean autoOppMode = false;    // when true, results route to oppScanResults
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoScanGold = -1;
     private int autoScanLevel = -1;
@@ -414,7 +415,10 @@ public class OverlayService extends Service {
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
             String prog=total>0?(done+"/"+total+" hexes"):"starting...";
-            TextView asActive=new TextView(this); asActive.setText("\u29bf Auto Scan: "+prog+" \u00b7 tap sigil to stop");
+            String label=autoOppMode
+                    ? ("\u25C9 Auto Opp Scan: "+prog+" \u00b7 tap sigil to stop")
+                    : ("\u29bf Auto Scan: "+prog+" \u00b7 tap sigil to stop");
+            TextView asActive=new TextView(this); asActive.setText(label);
             asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
             asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
@@ -423,18 +427,18 @@ public class OverlayService extends Service {
             long rem=oppScanDeadline-System.currentTimeMillis();
             int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
             TextView osActive=new TextView(this);
-            osActive.setText("\u25C9 Opp scan: "+remSec+"s \u00b7 tap to stop");
+            osActive.setText("\u25C9 Opp manual: "+remSec+"s \u00b7 tap to stop");
             osActive.setTextColor(GOLD); osActive.setTextSize(12); osActive.setGravity(Gravity.CENTER);
             osActive.setBackground(box(BLOOD,6,BLOODL,2)); osActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams osal=new LinearLayout.LayoutParams(-1,-2); osal.setMargins(0,0,0,6); osActive.setLayoutParams(osal);
             osActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopOppScanMode(); }});
             root.addView(osActive);
         } else {
-            // two scan buttons side by side
-            LinearLayout scanBtnRow=new LinearLayout(this); scanBtnRow.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams sbrp=new LinearLayout.LayoutParams(-1,-2); sbrp.setMargins(0,0,0,6); scanBtnRow.setLayoutParams(sbrp);
+            // row 1: Auto Scan Board  |  Auto Opp Scan
+            LinearLayout row1=new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams r1p=new LinearLayout.LayoutParams(-1,-2); r1p.setMargins(0,0,0,4); row1.setLayoutParams(r1p);
 
-            TextView asBtn=new TextView(this); asBtn.setText(accAvail?"\u29bf Auto Scan Board":"\u29bf Auto Scan");
+            TextView asBtn=new TextView(this); asBtn.setText("\u29bf Auto Scan");
             asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(11); asBtn.setGravity(Gravity.CENTER);
             asBtn.setPadding(8,12,8,12);
             asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
@@ -444,18 +448,31 @@ public class OverlayService extends Service {
                 startAutoTapScan();
             }});
 
-            TextView osBtn=new TextView(this); osBtn.setText(accAvail?"\u25C9 Opp Board":"\u25C9 Opp Board");
-            osBtn.setTextColor(accAvail?BONE:ASH); osBtn.setTextSize(11); osBtn.setGravity(Gravity.CENTER);
-            osBtn.setPadding(8,12,8,12);
-            osBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
-            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(0,-2,1f); osl.setMargins(3,0,0,0); osBtn.setLayoutParams(osl);
+            TextView aoBtn=new TextView(this); aoBtn.setText("\u25C9 Auto Opp Scan");
+            aoBtn.setTextColor(accAvail?BONE:ASH); aoBtn.setTextSize(11); aoBtn.setGravity(Gravity.CENTER);
+            aoBtn.setPadding(8,12,8,12);
+            aoBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            LinearLayout.LayoutParams aol=new LinearLayout.LayoutParams(0,-2,1f); aol.setMargins(3,0,0,0); aoBtn.setLayoutParams(aol);
+            aoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                startAutoOppScan();
+            }});
+
+            row1.addView(asBtn); row1.addView(aoBtn);
+            root.addView(row1);
+
+            // row 2: Opp Board (manual fallback \u2014 smaller, secondary style)
+            TextView osBtn=new TextView(this); osBtn.setText("\u25C9 Opp Manual  (tap each unit yourself \u00b7 30s)");
+            osBtn.setTextColor(accAvail?ASH:DIM); osBtn.setTextSize(10); osBtn.setGravity(Gravity.CENTER);
+            osBtn.setPadding(8,8,8,8);
+            osBtn.setBackground(box(0xFF0D0909,6,accAvail?DIM:0xFF1A0C0E,1));
+            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(-1,-2); osl.setMargins(0,0,0,6); osBtn.setLayoutParams(osl);
             osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startOppScanMode();
             }});
+            root.addView(osBtn);
 
-            scanBtnRow.addView(asBtn); scanBtnRow.addView(osBtn);
-            root.addView(scanBtnRow);
             if(!accAvail){
                 TextView accHint=new TextView(this); accHint.setText("Enable Accessibility in SETUP tab to use scan features");
                 accHint.setTextColor(DIM); accHint.setTextSize(10); accHint.setPadding(2,0,2,4); root.addView(accHint);
@@ -1967,6 +1984,7 @@ public class OverlayService extends Service {
             return;
         }
         autoScanPending=true;
+        autoOppMode=false;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1;
         autoScanLevel=-1;
@@ -2019,6 +2037,53 @@ public class OverlayService extends Service {
                     @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
                 });
         }catch(Exception e){ autoScanPending=false; addScanLog("ERR startAutoTapScan: "+e.getMessage()); mode=0; showPanel(); }
+    }
+
+    @SuppressWarnings("NewApi")
+    private void startAutoOppScan(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        autoScanPending=true;
+        autoOppMode=true;
+        autoScanResults=new java.util.ArrayList<>();
+        autoScanGold=-1; autoScanLevel=-1;
+        autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
+        autoTapProbes=new java.util.ArrayList<>();
+        oppScanResults=new java.util.LinkedHashMap<>();
+        closePanel();
+        if(btnLabel!=null) btnLabel.setText("...");
+        addScanLog("auto-opp: starting");
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        try{
+            lastShotMs=android.os.SystemClock.uptimeMillis();
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            final int sw=hw.getWidth(), sh=hw.getHeight();
+                            final Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hb.close(); hw.recycle();
+                            autoTapProbes=buildOppProbeGrid(sw,sh);
+                            autoTapProbes=filterOccupiedProbes(bmp,autoTapProbes,autoTapBoardProbeCount);
+                            addScanLog("auto-opp: "+autoTapProbes.size()+" probes "+sw+"x"+sh);
+                            if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
+                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){
+                                        autoScanGold=r.gold; autoScanLevel=r.level;
+                                        autoTapNextProbe();
+                                    }
+                                    public void onError(String msg){ autoTapNextProbe(); }
+                                }, ScreenScanner.MODE_FULL);
+                        }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-opp init: "+e.getMessage()); mode=0; showPanel(); }
+                    }
+                    @Override public void onFailure(int errorCode){ autoScanPending=false; autoOppMode=false; addScanLog("ERR auto-opp shot: "+errorCode); mode=0; showPanel(); }
+                });
+        }catch(Exception e){ autoScanPending=false; autoOppMode=false; addScanLog("ERR startAutoOppScan: "+e.getMessage()); mode=0; showPanel(); }
     }
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
@@ -2085,6 +2150,51 @@ public class OverlayService extends Service {
                       &&benchY>=btnLoc[1]-30&&benchY<=btnLoc[1]+btnH+30) continue;
             pts.add(new int[]{cx,benchY});
         }
+        return pts;
+    }
+
+    // Probe grid for the opponent's board during combat. The opponent's units fight
+    // from the top portion of the board — their front row (nearest the player) sits
+    // near screen-centre and their back row is at the top. We mirror the player's
+    // calibrated Y zone vertically: oppFrontY = 100 - boardBotPct, oppBackY = 100 -
+    // boardTopPct. Perspective row fractions are also inverted so the wider gaps are
+    // near the player (opponent front) and compress toward the top (opponent back).
+    // No bench probes — opponent bench units don't fight.
+    private java.util.List<int[]> buildOppProbeGrid(int w, int h){
+        java.util.List<int[]> pts=new java.util.ArrayList<>();
+        boolean portrait = h > w;
+        int oppFrontY, oppBackY, oppLeft, oppRight;
+        if(portrait){
+            oppFrontY = h * (100 - pool.getPortraitBoardBotPct()) / 100;
+            oppBackY  = h * (100 - pool.getPortraitBoardTopPct()) / 100;
+            oppLeft   = w * pool.getPortraitBoardTopLeftPct()  / 100;
+            oppRight  = w * pool.getPortraitBoardTopRightPct() / 100;
+        } else {
+            oppFrontY = h * (100 - pool.getBoardBotPct()) / 100;
+            oppBackY  = h * (100 - pool.getBoardTopPct()) / 100;
+            oppLeft   = w * pool.getBoardTopLeftPct()  / 100;
+            oppRight  = w * pool.getBoardTopRightPct() / 100;
+        }
+        // Inverted perspective: gaps widen toward oppFrontY (screen centre, closest to
+        // player). Row 0 = opponent back row (top), row 3 = opponent front row (nearest
+        // player, oppFrontY). ROW_F[0..3] is 0→1 mapping back→front.
+        final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
+        int cols=7;
+        int[] btnLoc=new int[2]; int btnW=0,btnH=0;
+        if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
+        for(int row=0;row<4;row++){
+            float t=ROW_F[row];
+            int cy=oppBackY-(int)(t*(oppBackY-oppFrontY)); // back=top, front=lower
+            int rowLeft =(int)(oppLeft);
+            int rowRight=(int)(oppRight);
+            for(int col=0;col<cols;col++){
+                int cx=rowLeft+col*(rowRight-rowLeft)/(cols-1);
+                if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
+                          &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
+                pts.add(new int[]{cx,cy});
+            }
+        }
+        autoTapBoardProbeCount=pts.size();
         return pts;
     }
 
@@ -2274,45 +2384,57 @@ public class OverlayService extends Service {
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
         if(!autoScanPending){ if(sourceBmp!=null) sourceBmp.recycle(); return; }
-        boolean inBenchPhase=(autoTapBoardProbeCount>0 && autoTapIndex>=autoTapBoardProbeCount);
+        boolean inBenchPhase=(!autoOppMode && autoTapBoardProbeCount>0 && autoTapIndex>=autoTapBoardProbeCount);
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
             int stars=Math.max(1,r.detectedBoardStars);
-            pool.add(name,1);
             buzz();
-            StringBuilder entry=new StringBuilder(name);
-            for(int i=0;i<stars;i++) entry.append("★");
-            autoScanResults.add(entry.toString());
             autoTapConsecutiveMisses=0;
-            if(sourceBmp!=null){
-                final android.graphics.Rect bounds=r.detectedPopupBounds;
-                new Thread(new Runnable(){ public void run(){
-                    ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
-                    sourceBmp.recycle();
-                }}).start();
+            if(autoOppMode){
+                // opponent scan: record into oppScanResults, increment contest badge
+                if(!oppScanResults.containsKey(name)){
+                    oppScanResults.put(name,stars);
+                    pool.addOpp(name,1);
+                    addScanLog("auto-opp: +"+name+" "+stars+"★");
+                    if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
+                }
+                if(sourceBmp!=null) sourceBmp.recycle();
+            } else {
+                // own board scan: mark pool and save template
+                pool.add(name,1);
+                StringBuilder entry=new StringBuilder(name);
+                for(int i=0;i<stars;i++) entry.append("★");
+                autoScanResults.add(entry.toString());
+                if(sourceBmp!=null){
+                    final android.graphics.Rect bounds=r.detectedPopupBounds;
+                    new Thread(new Runnable(){ public void run(){
+                        ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
+                        sourceBmp.recycle();
+                    }}).start();
+                }
+                addScanLog("auto-tap: +"+name+" "+stars+"★");
+                if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
             }
-            addScanLog("auto-tap: +"+name+" "+stars+"★");
-            if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
         } else {
+            if(sourceBmp!=null) sourceBmp.recycle();
             if(inBenchPhase){
                 if(r.detectedPopupBounds!=null){
-                    // item/ability popup on bench — skip, don't count as miss
                     addScanLog("auto-tap: non-champion bench popup, skipping");
                 } else {
-                    // truly empty bench slot
                     autoTapConsecutiveMisses++;
                     if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
                 }
             } else {
-                // board: count ALL non-hits (empty hex AND stray augment/item popups)
-                // so probes off the board don't keep the scan running indefinitely
                 autoTapConsecutiveMisses++;
                 if(autoTapConsecutiveMisses>=8){
-                    // skip straight to bench — threshold 8 allows one full empty row (7 cols)
-                    // before aborting, so an empty top/bottom row doesn't prematurely end the scan
-                    autoTapIndex=autoTapBoardProbeCount-1; // -1 because advanceAutoTap adds 1
-                    autoTapConsecutiveMisses=0;
-                    addScanLog("auto-tap: 8 board misses, jumping to bench");
+                    if(autoOppMode){
+                        // opponent board has no bench — just finish
+                        finishAutoTapScan(); return;
+                    } else {
+                        autoTapIndex=autoTapBoardProbeCount-1;
+                        autoTapConsecutiveMisses=0;
+                        addScanLog("auto-tap: 8 board misses, jumping to bench");
+                    }
                 }
             }
         }
@@ -2323,10 +2445,14 @@ public class OverlayService extends Service {
         autoScanPending=false;
         autoTapHandler.removeCallbacksAndMessages(null);
         if(btnLabel!=null) btnLabel.setText("SCRY");
-        if(autoScanGold>=0) pool.setGold(autoScanGold);
-        if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
-        addScanLog("auto-tap: done, "+autoScanResults.size()+" hits / "+autoTapProbes.size()+" probes"
-                +" · gold="+autoScanGold+" level="+autoScanLevel);
+        if(!autoOppMode){
+            if(autoScanGold>=0) pool.setGold(autoScanGold);
+            if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
+        }
+        addScanLog((autoOppMode?"auto-opp":"auto-tap")+": done, "
+                +(autoOppMode?oppScanResults.size():autoScanResults.size())
+                +" hits / "+autoTapProbes.size()+" probes");
+        autoOppMode=false;
         mode=0; showPanel();
     }
 
