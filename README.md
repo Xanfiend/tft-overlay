@@ -102,6 +102,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.34 - 2026-06-09
+- Speed: Auto Scan no longer taps empty hexes. Since Android caps screenshots at one per second, the slow part of the scan was visiting all the empty board space.
+- The scan now reads the one board screenshot it already takes at the start, works out which hexes actually have a unit on them (a champion sprite has a health bar and lots of detail, an empty hex is flat ground), and only taps those. On a normal board that is about the number of units you have instead of all twenty eight hexes, so it finishes much faster.
+- It is cautious on purpose: if a hex is even a little ambiguous it still taps it, and if the detection looks off it falls back to tapping everything like before, so it should not miss units. The in app debug log shows what it decided. Your bench is always fully scanned.
+
 ### v1.33 - 2026-06-09
 - Fix: Auto Scan was missing most units after the v1.31 speed update. Android only allows an accessibility service to take one screenshot per second, and the speed update made the scan tap and shoot faster than that, so the system was quietly rejecting most of the screenshots and those units never got read.
 - The scan now spaces its screenshots out to stay under the one per second limit, and if a screenshot still gets rejected it waits and retries the same hex instead of skipping it. Auto Scan reads every unit again.
