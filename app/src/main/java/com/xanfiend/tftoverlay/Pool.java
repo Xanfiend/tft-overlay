@@ -132,11 +132,16 @@ public class Pool {
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
     public int getBoardRightPct()      { return p.getInt("cal_right", 88); }
     public void setBoardRightPct(int v){ p.edit().putInt("cal_right", Math.max(50, Math.min(100,v))).apply(); }
-    public int getBenchYPct()          { return p.getInt("cal_bench", 80); }
-    public void setBenchYPct(int v)    { p.edit().putInt("cal_bench", Math.max(50, Math.min(95,v))).apply(); }
+    public int getBenchYPct()          { return p.getInt("cal_bench",   80); }
+    public void setBenchYPct(int v)    { p.edit().putInt("cal_bench",   Math.max(50, Math.min(95,v))).apply(); }
+    // Horizontal shift of the whole bench row as a percentage of screen width.
+    // Negative = left, positive = right. Default -4 shifts the bench 4% left
+    // to align with the actual TFT Mobile bench slot centers.
+    public int getBenchXOffsetPct()         { return p.getInt("cal_bench_x",  -4); }
+    public void setBenchXOffsetPct(int v)   { p.edit().putInt("cal_bench_x", Math.max(-20, Math.min(20,v))).apply(); }
     public void resetCalibration()     {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
-                .remove("cal_right").remove("cal_bench")
+                .remove("cal_right").remove("cal_bench").remove("cal_bench_x")
                 .remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br").apply();
     }
     // Per-corner X% for trapezoidal board (front row wider than back row).
