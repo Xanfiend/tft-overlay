@@ -102,6 +102,11 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
+### v1.33 - 2026-06-09
+- Fix: Auto Scan was missing most units after the v1.31 speed update. Android only allows an accessibility service to take one screenshot per second, and the speed update made the scan tap and shoot faster than that, so the system was quietly rejecting most of the screenshots and those units never got read.
+- The scan now spaces its screenshots out to stay under the one per second limit, and if a screenshot still gets rejected it waits and retries the same hex instead of skipping it. Auto Scan reads every unit again.
+- The tradeoff is that the one per second screenshot limit sets a hard floor of about a second per unit, so a full board takes a little longer, but it is accurate now. A smarter version that only taps hexes with a unit on them is coming next.
+
 ### v1.32 - 2026-06-08
 - Auto Scan now reads your gold and level too, not just champions. Right before it starts tapping hexes, it takes one extra screenshot of the board and reads the gold count and level number out of the corners, the same way the regular Scan Now button does.
 - Those numbers are saved straight into your gold tracker and level, and shown at the top of the auto scan results once the scan finishes, so you do not have to type them in by hand.

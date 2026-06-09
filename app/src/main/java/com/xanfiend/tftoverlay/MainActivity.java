@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.32");
+        ver.setText("v1.33");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.33  ·  2026-06-09","Fix: Auto Scan was missing most units after the v1.31 speed update. Android only lets an accessibility service take one screenshot per second, and the speed update made the scan tap and shoot faster than that, so the system was quietly rejecting most of the screenshots and those units never got read. The scan now spaces its screenshots out to stay under that one-per-second limit, and if a screenshot still gets rejected it waits and retries the same hex instead of skipping it. This means the scan is reliable again. The tradeoff is that the screenshot limit sets a hard floor of about one second per unit, so a full board takes a bit longer, but it actually reads every unit now."},
             {"v1.32  ·  2026-06-08","Auto Scan now also reads your gold and level. Right before it starts tapping hexes, it takes one extra screenshot of the board and reads the gold count and level number from the corners, the same way the regular Scan Now does. Those numbers get saved straight into your gold tracker and level so you do not have to enter them by hand. They also show up at the top of the auto scan results once the scan finishes."},
             {"v1.31  ·  2026-06-07","Speed: Auto Scan now runs noticeably faster. The board scan taps every hex, waits for the unit popup, takes a screenshot, and reads the name, dozens of times in a row, so every little delay adds up. Trimmed the per-tap timing (shorter tap, shorter wait for the popup to appear, shorter gap between taps), shrank the screenshot down before reading text from it so the recognizer has fewer pixels to chew through, and cut out repeated text cleanup work that was running on every name check. The champion name reading stays just as accurate, it just gets there quicker. Same goes for the visual board matching, which now reads pixels in one batch instead of one at a time."},
             {"v1.30  ·  2026-06-07","Fix: the probe dots really were landing on the right spots after all, the dots themselves were just drawn too big. The board is shown at an angle, so the back rows sit closer together on screen than the front rows. The dots had a fixed size that did not shrink for the back rows, so next to each other they overlapped into what looked like a tangled mesh, even though their centers were correctly placed in a clean grid. Dots now shrink to fit the gap between them, so the back rows look as clean as the front rows. This was the real cause of the crisscross look reported after v1.28 and v1.29, not the placement math, which is why changing that math did not help."},
