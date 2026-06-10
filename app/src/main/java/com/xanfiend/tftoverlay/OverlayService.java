@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.45";
+    private static final String APP_VERSION = "v1.46";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1326,8 +1326,19 @@ public class OverlayService extends Service {
         else buildItems(root);
     }
 
+    // Used by scan buttons when accessibility is unavailable: tell the user the
+    // exact problem — not enabled at all, or enabled in settings but not running.
+    private String accErrorMsg(){
+        return TFTAccessibilityService.enabledInSettings(this)
+            ? "Accessibility is stuck: toggle TFT Scryer OFF then ON in Accessibility settings"
+            : "Enable Accessibility service first";
+    }
+
     private void buildSettings(LinearLayout root){
         boolean accEnabled = Build.VERSION.SDK_INT >= 31 && TFTAccessibilityService.instance != null;
+        // ON in Android settings but service not bound = stuck (common after updates)
+        boolean accStuck = !accEnabled && Build.VERSION.SDK_INT >= 31
+                && TFTAccessibilityService.enabledInSettings(this);
 
         // ◇ PERMISSIONS
         TextView permHdr=new TextView(this); permHdr.setText("◇ PERMISSIONS");
@@ -1340,13 +1351,21 @@ public class OverlayService extends Service {
         TextView accLabel=new TextView(this); accLabel.setText("Accessibility (silent scan)");
         accLabel.setTextColor(ASH); accLabel.setTextSize(10); accLabel.setLetterSpacing(0.05f); accCard.addView(accLabel);
         TextView accStatus=new TextView(this);
-        accStatus.setText(accEnabled ? "Enabled — scan works silently, no app switch" : "Disabled — scan buttons will not work");
+        accStatus.setText(accEnabled ? "Enabled — scan works silently, no app switch"
+                : accStuck ? "Stuck — switch shows ON but the service is not running"
+                : "Disabled — scan buttons will not work");
         accStatus.setTextColor(accEnabled?GREEN:BLOODL);
         accStatus.setTextSize(13); accStatus.setTypeface(null,android.graphics.Typeface.BOLD); accCard.addView(accStatus);
         if(!accEnabled){
-            String steps = Build.VERSION.SDK_INT >= 33
-                ? "1. App settings below → Allow restricted settings\n2. Accessibility → TFT Scryer → On"
-                : "Accessibility → TFT Scryer → On";
+            String steps;
+            if(accStuck){
+                steps = "Android did not restart the service (happens after updates).\n"
+                      + "Accessibility → TFT Scryer → toggle OFF, then ON again";
+            } else {
+                steps = Build.VERSION.SDK_INT >= 33
+                    ? "1. App settings below → Allow restricted settings\n2. Accessibility → TFT Scryer → On"
+                    : "Accessibility → TFT Scryer → On";
+            }
             TextView accInstr=new TextView(this); accInstr.setText(steps);
             accInstr.setTextColor(ASH); accInstr.setTextSize(11); accInstr.setPadding(0,4,0,0); accCard.addView(accInstr);
         }
@@ -1355,7 +1374,8 @@ public class OverlayService extends Service {
         if(!accEnabled){
             LinearLayout accBtnRow=new LinearLayout(this); accBtnRow.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams abrp=new LinearLayout.LayoutParams(-1,-2); abrp.setMargins(0,0,0,12); accBtnRow.setLayoutParams(abrp);
-            if(Build.VERSION.SDK_INT >= 33){
+            // restricted-settings step only applies to a first-time enable, not a stuck toggle
+            if(Build.VERSION.SDK_INT >= 33 && !accStuck){
                 TextView appInfoBtn=new TextView(this); appInfoBtn.setText("App settings");
                 appInfoBtn.setTextColor(BONE); appInfoBtn.setTextSize(12); appInfoBtn.setGravity(Gravity.CENTER);
                 appInfoBtn.setPadding(0,10,0,10); appInfoBtn.setBackground(box(CARD,6,EDGE,1));
@@ -1436,7 +1456,7 @@ public class OverlayService extends Service {
         dbgScanBtn.setPadding(0,10,0,10); dbgScanBtn.setBackground(box(CARD,6,canDbgScan?EDGE:DIM,1));
         LinearLayout.LayoutParams dbgl=new LinearLayout.LayoutParams(-1,-2); dbgl.setMargins(0,6,0,4); dbgScanBtn.setLayoutParams(dbgl);
         dbgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(!canDbgScan){ Toast.makeText(OverlayService.this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show(); return; }
+            if(!canDbgScan){ Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return; }
             clearScanLog();
             addScanLog("=== DEBUG SCAN ===");
             debugScanPending=true;
@@ -2171,7 +2191,7 @@ public class OverlayService extends Service {
 
     private void startBoardScanMode(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
         }
         boardScanMode=true;
@@ -2210,7 +2230,7 @@ public class OverlayService extends Service {
     @SuppressWarnings("NewApi")
     private void startAutoTapScan(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
         }
         autoScanPending=true;
@@ -2307,7 +2327,7 @@ public class OverlayService extends Service {
     @SuppressWarnings("NewApi")
     private void startAutoOppScan(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
         }
         autoScanPending=true;
@@ -3164,7 +3184,7 @@ public class OverlayService extends Service {
 
     private void startOppScanMode(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,"Enable Accessibility service first",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
         }
         oppScanMode=true;

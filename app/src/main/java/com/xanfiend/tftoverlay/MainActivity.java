@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.45");
+        ver.setText("v1.46");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -196,7 +196,13 @@ public class MainActivity extends Activity {
 
     private void buildSetup(){
         boolean granted = canDraw();
-        boolean accEnabled = isAccessibilityEnabled();
+        // Three states: connected (works), stuck (settings say ON but Android never
+        // rebound the service — common right after an app update; needs an OFF/ON
+        // toggle), or plain disabled.
+        boolean accConnected = TFTAccessibilityService.instance != null;
+        boolean accInSettings = isAccessibilityEnabled();
+        boolean accStuck = accInSettings && !accConnected;
+        boolean accEnabled = accConnected;
 
         // ---- permission status cards ----
         permCard(granted,
@@ -212,8 +218,13 @@ public class MainActivity extends Activity {
             "Accessibility service  (Auto Scan / Board Scan)",
             accEnabled
                 ? "Silent scan enabled — no app switch needed"
+                : accStuck
+                ? "Stuck: the switch shows ON but the service is not running. This happens after app updates. Open Accessibility settings and toggle TFT Scryer OFF, then ON again."
                 : "Android resets this after every update. Takes about 30 seconds to restore.",
-            accEnabled ? null : new View.OnClickListener(){ public void onClick(View v){
+            accEnabled ? null : accStuck ? new View.OnClickListener(){ public void onClick(View v){
+                openAccessibility();
+                toast("Toggle TFT Scryer OFF, then ON again");
+            }} : new View.OnClickListener(){ public void onClick(View v){
                 if(Build.VERSION.SDK_INT >= 33){
                     try{
                         Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
@@ -223,9 +234,11 @@ public class MainActivity extends Activity {
                     }catch(Exception e){ openAccessibility(); }
                 } else { openAccessibility(); }
             }},
-            accEnabled ? null : (Build.VERSION.SDK_INT >= 33 ? "Step 1: App settings" : "Enable Accessibility"));
+            accEnabled ? null
+                : accStuck ? "Fix: toggle OFF then ON"
+                : (Build.VERSION.SDK_INT >= 33 ? "Step 1: App settings" : "Enable Accessibility"));
 
-        if(!accEnabled && Build.VERSION.SDK_INT >= 33){
+        if(!accEnabled && !accStuck && Build.VERSION.SDK_INT >= 33){
             contentArea.addView(btn("Step 2: Accessibility settings", new View.OnClickListener(){
                 public void onClick(View v){ openAccessibility(); }
             }));
@@ -344,6 +357,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.46  ·  2026-06-10","Fix for Accessibility acting up after updates. There are really two different problems and the app only told you about one of them. The first is Android turning the service off after an update, which the app already showed. The second is sneakier: Android sometimes leaves the switch in Accessibility settings showing ON but never actually restarts the service, so everything looks enabled while no scan works. The app now detects that stuck state and tells you exactly what is happening. The setup screen and the overlay SETUP tab both show a clear Stuck status with the fix (open Accessibility settings, toggle TFT Scryer OFF, then ON again), and the launch screen card has a one-tap button straight to the right settings page. Scan buttons also stop showing the generic enable message when this happens and instead tell you the service is stuck and how to unstick it."},
             {"v1.45  ·  2026-06-10","Fix: probe dots were bunching up at the front of the board after calibration. The cause was tap order during TAP TO CALIBRATE. The guide asks for the back row first, but if you tapped the front row first instead, the stored back and front positions ended up swapped, and the perspective spacing then ran backwards, squeezing the rows together at the front. Calibration now detects a swapped tap order and corrects it automatically when saving, so either order works. It also repairs an already saved swapped calibration on the fly, so you do not need to recalibrate, your existing calibration will lay out correctly right away. The same correction applies to the opponent board grid used by Auto Opp Scan. Note: in the screenshot you shared, the banner read GRID FALLBACK with no health bars detected, which means Smart Scan could not find your unit health bars on that frame and used the calibrated grid instead. If that keeps happening, open the scan log in SETUP, it records the exact colour values of every bar candidate, and sharing that log will let the detection be tuned for your screen."},
             {"v1.44  ·  2026-06-10","Game data updated for TFT patch 17.5, which went live on June 9. The augment guide now reflects the big 17.5 augment pass: econ augments like Risky Moves, Save This Account, Upward Mobility and Slam and Plus were nerfed, while combat augments like Buried Treasures (back to 5 rounds), Climb the Ladder, Early Learnings, Heart of the Swarm, Little Buddies and Earth were buffed. Comp priorities updated to match: Vex Fast 9 is back on top after her spell damage rebuff, Stargazer Xayah dropped after the Serpent poison bugfix nerf, Space Groove Ornn was nerfed at every Groove breakpoint, and 5-Meeple Rammus lost its innate bonuses while individual Meeple champions got buffed, opening up 7-Meeple boards. Champion roster and pool sizes are unchanged, so your tracking data carries over. Note: the Pengu's Party event is live in game through patch 17.6."},
             {"v1.43  ·  2026-06-10","Visual polish pass across the app and overlay. The floating sigil now bounces in when the overlay starts, gives a quick press animation on every tap, and the panel now fades and scales in when it opens instead of snapping into view. Switching tabs in the overlay cross-fades the new content in, and tab buttons plus the close button give the same tactile press feedback. On the launch screen, the hero sigil has a slow ambient glow pulse, tab content (Setup / Changelog) fades in smoothly when switching, and every button gives a soft press animation."},
