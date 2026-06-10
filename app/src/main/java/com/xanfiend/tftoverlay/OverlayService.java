@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.42";
+    private static final String APP_VERSION = "v1.43";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -196,6 +196,21 @@ public class OverlayService extends Service {
         GradientDrawable g=new GradientDrawable(); g.setColor(c); g.setCornerRadius(r);
         if(sw>0) g.setStroke(sw,sc); return g;
     }
+    // brief press-down feedback for panel buttons/tabs, without consuming the click
+    private void pressFeedback(final View v){
+        v.setOnTouchListener(new View.OnTouchListener(){
+            public boolean onTouch(View view, MotionEvent e){
+                int a = e.getAction();
+                if(a==MotionEvent.ACTION_DOWN){
+                    view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(70).start();
+                } else if(a==MotionEvent.ACTION_UP || a==MotionEvent.ACTION_CANCEL){
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(110)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
+                }
+                return false;
+            }
+        });
+    }
     private void buzz(){ try{ if(pool.getHaptic() && vib!=null) vib.vibrate(18); }catch(Exception e){} }
     // distinct double pulse so a finished scan can be felt without looking at the screen
     @SuppressWarnings("deprecation")
@@ -215,6 +230,7 @@ public class OverlayService extends Service {
         btnLabel.setGravity(Gravity.CENTER); btnLabel.setLetterSpacing(0.25f); btnLabel.setPadding(0,2,0,0);
         c.addView(g); c.addView(btnLabel); button=c;
         button.setAlpha(pool.getAlpha());
+        button.setScaleX(0f); button.setScaleY(0f);
 
         btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
@@ -223,7 +239,11 @@ public class OverlayService extends Service {
             int ix,iy; float tx,ty; long down; boolean moved;
             public boolean onTouch(View v, MotionEvent e){
                 int a=e.getAction();
-                if(a==MotionEvent.ACTION_DOWN){ ix=btnLp.x;iy=btnLp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false; return true; }
+                if(a==MotionEvent.ACTION_DOWN){
+                    ix=btnLp.x;iy=btnLp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false;
+                    button.animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).start();
+                    return true;
+                }
                 else if(a==MotionEvent.ACTION_MOVE){
                     int dx=(int)(e.getRawX()-tx),dy=(int)(e.getRawY()-ty);
                     if(Math.abs(dx)>14||Math.abs(dy)>14){ moved=true; showCloseTarget(true); }
@@ -231,6 +251,8 @@ public class OverlayService extends Service {
                     if(moved) highlightClose(e.getRawX(), e.getRawY());
                     return true;
                 } else if(a==MotionEvent.ACTION_UP){
+                    button.animate().scaleX(1f).scaleY(1f).setDuration(120)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
                     if(moved && overClose(e.getRawX(), e.getRawY())){
                         showCloseTarget(false);
                         stopSelf();
@@ -257,6 +279,8 @@ public class OverlayService extends Service {
             }
         });
         wm.addView(button, btnLp);
+        button.animate().scaleX(1f).scaleY(1f).setDuration(280)
+            .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
     }
 
     // After a drag, glide the floating button to the nearest screen edge so it
@@ -370,12 +394,20 @@ public class OverlayService extends Service {
                 }
             });
             wm.addView(panel,panelLp);
-            panel.setAlpha(pool.getAlpha());
+            // entrance: panel scales and fades in from the floating button
+            final float targetAlpha=pool.getAlpha();
+            panel.setAlpha(0f); panel.setScaleX(0.92f); panel.setScaleY(0.92f);
+            panel.animate().alpha(targetAlpha).scaleX(1f).scaleY(1f).setDuration(180)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
         } else {
             // panel already open: reuse the window, just clear and rebuild content — no flash
             root=(LinearLayout)((ScrollView)panel).getChildAt(0);
             root.removeAllViews();
             panel.setAlpha(pool.getAlpha());
+            // quick cross-fade so tab switches and refreshes feel less abrupt
+            root.setAlpha(0.4f);
+            root.animate().alpha(1f).setDuration(120)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
         }
 
         // header: title + close
@@ -388,6 +420,7 @@ public class OverlayService extends Service {
         TextView close=new TextView(this); close.setText("\u2715"); close.setTextColor(BONE); close.setTextSize(18);
         close.setGravity(Gravity.CENTER); close.setBackground(box(BLOOD,6,BLOODL,2)); close.setPadding(22,14,22,14);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
+        pressFeedback(close);
         head.addView(title); head.addView(close);
         root.addView(head);
 
@@ -403,6 +436,7 @@ public class OverlayService extends Service {
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,15,0,15);
             LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(2,0,2,0); tab.setLayoutParams(tl);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
+            pressFeedback(tab);
             tabs.addView(tab);
         }
         root.addView(tabs);
