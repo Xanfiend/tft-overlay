@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.44";
+    private static final String APP_VERSION = "v1.45";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1860,15 +1860,27 @@ public class OverlayService extends Service {
             int topRight = calTmpTopRight;
             int botLeft  = calTmpBotLeft;
             int botRight = xPct;
+            int boardTopPct = calTmpTopY;
             int boardBotPct = calTmpBotY;
 
+            // Tap-order safety: if the front row was tapped before the back row, the
+            // "back" Y lands below the "front" Y and the perspective grid runs backwards
+            // (rows bunch up at the front). Swap rows so back is always the upper one.
+            if(boardTopPct > boardBotPct){
+                int t=boardTopPct; boardTopPct=boardBotPct; boardBotPct=t;
+                t=topLeft;  topLeft=botLeft;   botLeft=t;
+                t=topRight; topRight=botRight; botRight=t;
+            }
+
             if(portrait){
+                pool.setPortraitBoardTopPct(boardTopPct);
                 pool.setPortraitBoardBotPct(boardBotPct);
                 pool.setPortraitBoardTopLeftPct(topLeft); pool.setPortraitBoardTopRightPct(topRight);
                 pool.setPortraitBoardBotLeftPct(botLeft); pool.setPortraitBoardBotRightPct(botRight);
                 pool.setPortraitBoardLeftPct((topLeft+botLeft)/2);
                 pool.setPortraitBoardRightPct((topRight+botRight)/2);
             } else {
+                pool.setBoardTopPct(boardTopPct);
                 pool.setBoardBotPct(boardBotPct);
                 pool.setBoardTopLeftPct(topLeft); pool.setBoardTopRightPct(topRight);
                 pool.setBoardBotLeftPct(botLeft); pool.setBoardBotRightPct(botRight);
@@ -2386,6 +2398,14 @@ public class OverlayService extends Service {
             botRight = w * pool.getBoardBotRightPct() / 100;
             benchY   = h * pool.getBenchYPct()        / 100;
         }
+        // Repair swapped calibration saved by older versions (front row tapped before
+        // the back row): the back-row Y would sit below the front-row Y and the
+        // perspective fractions below would run backwards, bunching rows at the front.
+        if(top > bot){
+            int t=top; top=bot; bot=t;
+            t=topLeft;  topLeft=botLeft;   botLeft=t;
+            t=topRight; topRight=botRight; botRight=t;
+        }
         // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE: back rows are
         // visually compressed, front rows are spread apart. We tried adding an extra
         // alternating row-stagger correction (derived from real measured PC coordinates)
@@ -2454,6 +2474,9 @@ public class OverlayService extends Service {
             oppLeft   = w * pool.getBoardTopLeftPct()  / 100;
             oppRight  = w * pool.getBoardTopRightPct() / 100;
         }
+        // Repair swapped calibration (see buildProbeGrid): opponent back row must be
+        // the upper one, otherwise the mirrored perspective also runs backwards.
+        if(oppBackY > oppFrontY){ int t=oppBackY; oppBackY=oppFrontY; oppFrontY=t; }
         // Inverted perspective: gaps widen toward oppFrontY (screen centre, closest to
         // player). Row 0 = opponent back row (top), row 3 = opponent front row (nearest
         // player, oppFrontY). ROW_F[0..3] is 0→1 mapping back→front.
