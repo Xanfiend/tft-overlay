@@ -10,6 +10,7 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
+[![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
 [![Version](https://img.shields.io/badge/version-1.43-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
@@ -23,6 +24,19 @@
 `❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
 
 </div>
+
+<div align="center">
+
+**[Screenshots](#-screenshots) · [Features](#-what-you-get) · [Install](#-install) · [Tabs](#-tabs) · [Usage](#-usage) · [Requirements](#-device-requirements) · [FAQ](#-faq) · [Safety](#-is-it-safe) · [Changelog](#-changelog)**
+
+</div>
+
+<div align="center">
+
+`❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
+
+</div>
+
 
 ## ✦ Screenshots
 
@@ -51,12 +65,50 @@
 
 ## ✦ What you get
 
-- **◇ Pool tracking** · tap a champion to mark a copy seen, watch how many copies are left and how contested each unit is.
-- **◇ Reroll odds** · your real hit chance per roll at your current level, with your carry pinned to the top.
-- **◇ Auto Scan** · taps your board for you and reads every unit, star level, gold, and level straight off the screen. No typing.
-- **◇ Opponent scan** · tap through an enemy board to log their units and star levels, then see who you are contesting.
-- **◇ Gold planner** · live interest, the 10 to 50 gold bracket ladder, and win or loss streak income, all over the game.
-- **◇ Augment and item guide** · S to C tier ratings, comp tags, the full component build chart, and trait breakpoints.
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**◇ Pool tracking**
+Tap a champion to mark a copy seen, watch how many copies are left and how contested each unit is.
+
+</td>
+<td width="50%" valign="top">
+
+**◇ Reroll odds**
+Your real hit chance per roll at your current level, with your carry pinned to the top.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**◇ Auto Scan**
+Taps your board for you and reads every unit, star level, gold, and level straight off the screen. No typing.
+
+</td>
+<td width="50%" valign="top">
+
+**◇ Opponent scan**
+Tap through an enemy board to log their units and star levels, then see who you are contesting.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**◇ Gold planner**
+Live interest, the 10 to 50 gold bracket ladder, and win or loss streak income, all over the game.
+
+</td>
+<td width="50%" valign="top">
+
+**◇ Augment and item guide**
+S to C tier ratings, comp tags, the full component build chart, and trait breakpoints.
+
+</td>
+</tr>
+</table>
 
 Everything runs on your phone. No internet permission, no accounts, no data leaves the device.
 
@@ -104,32 +156,59 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 
 ## ✦ FAQ
 
-**Does it work on iPhone?**
+<details>
+<summary><b>Does it work on iPhone?</b></summary><br>
+
 No. Android only.
+</details>
 
-**Does it work on PC?**
+<details>
+<summary><b>Does it work on PC?</b></summary><br>
+
 No. It is a mobile overlay for TFT Mobile on Android.
+</details>
 
-**The overlay does not appear over TFT.**
+<details>
+<summary><b>The overlay does not appear over TFT.</b></summary><br>
+
 Open TFT Scryer, tap Start Overlay, then switch to TFT. If it still does not show, go to Android Settings and make sure TFT Scryer has the "Display over other apps" permission.
+</details>
 
-**The app crashes when I tap Scan Now.**
+<details>
+<summary><b>The app crashes when I tap Scan Now.</b></summary><br>
+
 This is a known issue on some devices (especially Xiaomi / MIUI). Update to the latest version from the releases page. If it still crashes, open Settings in the overlay after the next scan attempt and check the Debug Log card for the exact error.
+</details>
 
-**Scan Now runs but detects nothing / wrong values.**
+<details>
+<summary><b>Scan Now runs but detects nothing / wrong values.</b></summary><br>
+
 The scan reads text from your screen using OCR. Make sure the TFT game screen is visible and not covered when you tap Scan. Bright HUD elements and high contrast help. Detection is best on a clean shop or augment screen.
+</details>
 
-**Play Protect says the app is not recognised / blocks the install.**
+<details>
+<summary><b>Play Protect says the app is not recognised / blocks the install.</b></summary><br>
+
 Tap **Install anyway** or **More details → Install anyway**. Play Protect warns about any APK not distributed through the Play Store, regardless of whether it is safe. This app has no internet permission and collects nothing. The full source code is in this repo. If the button is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser, then try again.
+</details>
 
-**A virus scanner flagged the APK.**
+<details>
+<summary><b>A virus scanner flagged the APK.</b></summary><br>
+
 Same reason as above. It is a common false positive for APKs not signed by a Play Store publisher. Full source is here, check it yourself or see the VirusTotal link below.
+</details>
 
-**The champion pool data is out of date.**
+<details>
+<summary><b>The champion pool data is out of date.</b></summary><br>
+
 Pool data updates with each new version. Check the releases page for the latest APK. If a new patch just dropped and the app has not updated yet, open an issue.
+</details>
 
-**I want to report a bug or suggest something.**
+<details>
+<summary><b>I want to report a bug or suggest something.</b></summary><br>
+
 Open an issue on this repo or message [@xanfiend](https://instagram.com/xanfiend).
+</details>
 
 ## ✦ Is it safe?
 
@@ -203,6 +282,9 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 - The screenshot is now shrunk down before the text reader looks at it, so there are far fewer pixels to process per unit. The champion name stays just as readable, so detection accuracy does not change.
 - Removed repeated text cleanup that was running on every single name comparison, and made the visual board matching read pixels in one batch instead of one at a time.
 - If you ever notice a unit getting missed, it likely means a popup did not finish appearing in time. The timing values are now in one place in the code and easy to nudge back up.
+
+<details>
+<summary><b>Older versions (v1.0 - v1.30)</b></summary>
 
 ### v1.30 - 2026-06-07
 - Fix: the probe dots were landing in the right place all along, the dots themselves were just drawn too big to tell. The TFT board is shown at an angle, so the back rows sit closer together on screen than the front rows. The dots had a fixed size that did not shrink for the back rows, so neighbouring dots overlapped into what looked like a tangled mesh, even though their centers were correctly placed in a clean grid.
@@ -364,6 +446,8 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 - Grid and board tabs with champion pool tracking and contest badges
 - Drag the sigil to move it, drag onto X to close
 - Level memory, recent champions at the top of the grid, version footer
+
+</details>
 
 ## ✦ Roadmap
 
