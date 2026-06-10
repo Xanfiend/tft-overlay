@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.41";
+    private static final String APP_VERSION = "v1.42";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -117,6 +117,16 @@ public class OverlayService extends Service {
     private int autoTapConsecutiveMisses = 0;
     private int autoTapBoardProbeCount = 0; // index where bench probes start
     private java.util.List<int[]> autoTapProbes = new java.util.ArrayList<>();
+    // Smart-scan resilience state:
+    private boolean autoTapSmartBoard = false;     // board probes came from health-bar detection
+    private boolean autoTapSwitchedToGrid = false; // mid-scan grid fallback already used
+    private boolean autoTapNudged = false;         // current probe already re-tapped lower once
+    private int autoTapHits = 0;                   // units identified this scan (popup or visual)
+    private int autoScanVisualCount = 0;           // of which: recognized visually, no tap needed
+    private int autoTapScreenH = 0;                // screen height, for the nudge distance
+    private long autoScanStartMs = 0;              // for the duration in the done log
+    private java.util.List<int[]> autoTapFallbackBoard = null; // occupancy-filtered grid board probes
+    private java.util.List<int[]> autoTapBenchProbes = new java.util.ArrayList<>();
     private final android.os.Handler autoTapHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     // Per-probe timing. These three delays run once per probe (37+ per scan), so they
     // dominate the total scan time. Tuned for speed while leaving the popup enough time
@@ -538,9 +548,20 @@ public class OverlayService extends Service {
                 glTv.setPadding(2,0,2,4); root.addView(glTv);
             }
             StringBuilder asrSb=new StringBuilder();
-            for(String s:autoScanResults){ if(asrSb.length()>0) asrSb.append(" · "); asrSb.append(s); }
+            boolean anyVisual=false;
+            for(String s:autoScanResults){
+                if(asrSb.length()>0) asrSb.append(" · ");
+                asrSb.append(s);
+                if(s.endsWith("≈")) anyVisual=true;
+            }
             TextView asrTv=new TextView(this); asrTv.setText(asrSb.toString());
             asrTv.setTextColor(BONE); asrTv.setTextSize(12); asrTv.setPadding(2,0,2,4); root.addView(asrTv);
+            if(anyVisual){
+                TextView visHint=new TextView(this);
+                visHint.setText("★ = read from popup  ·  ≈ = recognized by sprite, no tap needed");
+                visHint.setTextColor(DIM); visHint.setTextSize(9); visHint.setPadding(2,0,2,4);
+                root.addView(visHint);
+            }
             TextView clearAsr=new TextView(this); clearAsr.setText("clear");
             clearAsr.setTextColor(ASH); clearAsr.setTextSize(10); clearAsr.setPadding(2,0,2,8);
             clearAsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }});
@@ -1554,6 +1575,35 @@ public class OverlayService extends Service {
         }
         root.addView(ssRow);
 
+        TextView hdrVid=new TextView(this); hdrVid.setText("◇ INSTANT VISUAL ID");
+        hdrVid.setTextColor(GOLD); hdrVid.setTextSize(11); hdrVid.setTypeface(null,android.graphics.Typeface.BOLD);
+        hdrVid.setLetterSpacing(0.1f); hdrVid.setPadding(2,18,0,6); root.addView(hdrVid);
+
+        TextView vidInfo=new TextView(this);
+        int sprites=ChampionTemplates.boardTemplateCount();
+        vidInfo.setText("Every unit read by popup teaches the app how that champion looks on your board. "
+                +"Next scan, learned units are recognized straight from the screenshot with no tapping, "
+                +"so the scan gets faster every game. Only sure matches skip the tap. Anything uncertain "
+                +"is tapped and read as usual. Learned sprites so far: "+sprites+".");
+        vidInfo.setTextColor(ASH); vidInfo.setTextSize(10); vidInfo.setPadding(2,0,0,6); root.addView(vidInfo);
+
+        boolean curVid=pool.getVisualId();
+        LinearLayout vidRow=new LinearLayout(this); vidRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<2;i++){
+            final boolean sv=ssVals[i];
+            TextView btn=new TextView(this); btn.setText(ssLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curVid==sv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setVisualId(sv); showPanel();
+            }});
+            vidRow.addView(btn);
+        }
+        root.addView(vidRow);
+
         // ◇ CALIBRATE SCAN
         TextView calDiv=new TextView(this); calDiv.setText("────────────────────");
         calDiv.setTextColor(EDGE); calDiv.setTextSize(8);
@@ -1885,7 +1935,7 @@ public class OverlayService extends Service {
                                     out=new java.util.ArrayList<>(detected); out.addAll(bench); bc=detected.size();
                                     addScanLog("show dots: "+detected.size()+" units detected by health bar");
                                     renderProbeDots(out, bc, bw, bh, sw, sh,
-                                        "SMART SCAN · "+detected.size()+" units found by health bar");
+                                        "SMART SCAN · "+detected.size()+" units · "+lastSmartTier);
                                 } else { out=grid; bc=gridBoardCount; addScanLog("show dots: using grid (no detection)");
                                     renderProbeDots(out, bc, bw, bh, sw, sh,
                                         "GRID FALLBACK · no health bars detected"); }
@@ -2126,6 +2176,10 @@ public class OverlayService extends Service {
         autoTapConsecutiveMisses=0;
         autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
+        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudged=false;
+        autoTapHits=0; autoScanVisualCount=0;
+        autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
+        autoScanStartMs=android.os.SystemClock.uptimeMillis();
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
         addScanLog("auto-tap: starting, getting screen size");
@@ -2143,7 +2197,13 @@ public class OverlayService extends Service {
                             hb.close();
                             java.util.List<int[]> grid=buildProbeGrid(sw,sh);
                             hw.recycle();
+                            autoTapScreenH=sh;
                             int gridBoardCount=autoTapBoardProbeCount;
+                            // Occupancy-filtered grid computed UP FRONT (one cheap variance
+                            // pass on the screenshot we already have) so the scan can swap
+                            // to it mid-run if the smart positions turn out to be wrong.
+                            java.util.List<int[]> filteredGrid=filterOccupiedProbes(goldLvlBmp,grid,gridBoardCount);
+                            int filteredBoardCount=autoTapBoardProbeCount;
                             // Smart Scan: find units by their health bars and tap the exact
                             // unit position. The calibrated grid is the fallback if detection
                             // is inconclusive. The bench keeps the grid (bench units have no
@@ -2152,15 +2212,26 @@ public class OverlayService extends Service {
                                     ? detectHealthBarUnits(goldLvlBmp,false) : null;
                             if(detected!=null){
                                 java.util.List<int[]> bench=new java.util.ArrayList<>(
-                                        grid.subList(gridBoardCount, grid.size()));
-                                bench=filterByDetail(goldLvlBmp,bench);
-                                autoTapProbes=new java.util.ArrayList<>(detected);
+                                        filteredGrid.subList(filteredBoardCount, filteredGrid.size()));
+                                // Instant Visual ID: units whose board sprite was learned in
+                                // an earlier scan are recorded straight from this screenshot
+                                // and removed from the tap list. New/unknown units get tapped
+                                // and their sprite is learned for next time.
+                                java.util.List<int[]> toTap = pool.getVisualId()
+                                        ? visualIdPass(goldLvlBmp, detected, false) : detected;
+                                autoTapSmartBoard=true;
+                                autoTapFallbackBoard=new java.util.ArrayList<>(
+                                        filteredGrid.subList(0, filteredBoardCount));
+                                autoTapBenchProbes=bench;
+                                autoTapProbes=new java.util.ArrayList<>(toTap);
                                 autoTapProbes.addAll(bench);
-                                autoTapBoardProbeCount=detected.size();
-                                addScanLog("auto-tap: "+detected.size()+" units (health bar) + "
+                                autoTapBoardProbeCount=toTap.size();
+                                addScanLog("auto-tap: "+detected.size()+" units (health bar), "
+                                        +autoScanVisualCount+" visual, "+toTap.size()+" to tap + "
                                         +bench.size()+" bench "+sw+"x"+sh);
                             } else {
-                                autoTapProbes=filterOccupiedProbes(goldLvlBmp,grid,gridBoardCount);
+                                autoTapProbes=filteredGrid;
+                                autoTapBoardProbeCount=filteredBoardCount;
                                 addScanLog("auto-tap: "+autoTapProbes.size()+" grid probes "+sw+"x"+sh);
                             }
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
@@ -2199,6 +2270,10 @@ public class OverlayService extends Service {
         autoScanGold=-1; autoScanLevel=-1;
         autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
+        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudged=false;
+        autoTapHits=0; autoScanVisualCount=0;
+        autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
+        autoScanStartMs=android.os.SystemClock.uptimeMillis();
         oppScanResults=new java.util.LinkedHashMap<>();
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
@@ -2215,19 +2290,29 @@ public class OverlayService extends Service {
                             final int sw=hw.getWidth(), sh=hw.getHeight();
                             final Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hb.close(); hw.recycle();
+                            autoTapScreenH=sh;
                             java.util.List<int[]> oppGrid=buildOppProbeGrid(sw,sh);
                             int oppGridCount=autoTapBoardProbeCount;
+                            java.util.List<int[]> filteredOpp=filterOccupiedProbes(bmp,oppGrid,oppGridCount);
+                            int filteredOppCount=autoTapBoardProbeCount;
                             // Smart Scan for the opponent: enemy units in combat show RED
                             // health bars. Detect those for exact positions; fall back to the
                             // mirrored grid if inconclusive.
                             java.util.List<int[]> oppDetected = pool.getSmartScan()
                                     ? detectHealthBarUnits(bmp,true) : null;
                             if(oppDetected!=null){
-                                autoTapProbes=new java.util.ArrayList<>(oppDetected);
-                                autoTapBoardProbeCount=oppDetected.size();
-                                addScanLog("auto-opp: "+oppDetected.size()+" enemy units (health bar) "+sw+"x"+sh);
+                                java.util.List<int[]> toTap = pool.getVisualId()
+                                        ? visualIdPass(bmp, oppDetected, true) : oppDetected;
+                                autoTapSmartBoard=true;
+                                autoTapFallbackBoard=new java.util.ArrayList<>(
+                                        filteredOpp.subList(0, filteredOppCount));
+                                autoTapProbes=new java.util.ArrayList<>(toTap);
+                                autoTapBoardProbeCount=toTap.size();
+                                addScanLog("auto-opp: "+oppDetected.size()+" enemy units (health bar), "
+                                        +autoScanVisualCount+" visual, "+toTap.size()+" to tap "+sw+"x"+sh);
                             } else {
-                                autoTapProbes=filterOccupiedProbes(bmp,oppGrid,oppGridCount);
+                                autoTapProbes=filteredOpp;
+                                autoTapBoardProbeCount=filteredOppCount;
                                 addScanLog("auto-opp: "+autoTapProbes.size()+" grid probes "+sw+"x"+sh);
                             }
                             if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
@@ -2450,6 +2535,10 @@ public class OverlayService extends Service {
     // used at all — the region bounds below are fixed percentages of the screen.
     // Returns null when the result looks implausible so the caller can fall back
     // to the calibrated grid.
+    // Human-readable note about how the last detection succeeded ("strict colors",
+    // "relaxed colors") — shown in the SHOW DOTS banner and the debug log.
+    private String lastSmartTier = "";
+
     private java.util.List<int[]> detectHealthBarUnits(Bitmap bmp, boolean opp){
         try{
             int w=bmp.getWidth(), h=bmp.getHeight();
@@ -2496,83 +2585,156 @@ public class OverlayService extends Service {
             int[] px=new int[zw*zh];
             bmp.getPixels(px,0,zw,leftExtreme,zoneTop,zw,zh);
 
-            int minLen=Math.max(6, w*2/100);   // a bar is at least ~2% of screen wide
-            int maxLen=Math.max(minLen+4, w*11/100); // and at most ~11% wide
-            // each segment: {screenY, screenCx}
-            java.util.List<int[]> segs=new java.util.ArrayList<>();
-            for(int ry=0; ry<zh; ry+=2){
-                int base=ry*zw; int runStart=-1;
-                for(int rx=0; rx<zw; rx++){
-                    int c=px[base+rx];
-                    int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
-                    boolean m = opp
-                        ? (r>150 && r-g>65 && r-b>60 && g<130)    // enemy red bar
-                        : (g>165 && g-r>80 && g-b>70 && r<100);   // ally green bar (bright saturated only)
-                    if(m){ if(runStart<0) runStart=rx; }
-                    else { if(runStart>=0){ addBarSeg(segs,runStart,rx-1,ry,minLen,maxLen,leftExtreme,zoneTop,btnLoc,btnW,btnH); runStart=-1; } }
-                }
-                if(runStart>=0) addBarSeg(segs,runStart,zw-1,ry,minLen,maxLen,leftExtreme,zoneTop,btnLoc,btnW,btnH);
+            // Two color tiers. RATIO rules instead of absolute channel differences:
+            // g >= 1.8*r is true for a health-bar green whether the screen renders
+            // it bright or dim, while absolute thresholds break whenever a device's
+            // brightness/color profile shifts the values. Tier 2 (standard) accepts
+            // a wider brightness range and is a strict superset of tier 1 — so it
+            // is tried FIRST: on a normal screen it finds every bar. Only when it
+            // is noisy (more hits than a board can hold, meaning this arena has
+            // colors that fool the relaxed rule) does tier 1 re-run with vivid-only
+            // thresholds. Arena foliage (olive/yellow greens, where red is more
+            // than ~60% of green) fails the ratio test at both tiers, and anything
+            // that slips through must still survive the structural checks below.
+            java.util.List<int[]> units = detectBarsAtTier(px, zw, zh, w, h, opp, 2,
+                    leftExtreme, zoneTop, btnLoc, btnW, btnH);
+            if(units == null){
+                addScanLog("smart: no health bars found, using grid");
+                return null; // tier 1 is a subset of tier 2 — nothing to gain by trying it
             }
-            if(segs.isEmpty()){ addScanLog("smart: no health bars found, using grid"); return null; }
-
-            // cluster segments belonging to the same bar: similar centre-x, vertically
-            // adjacent scanlines. segs are produced in increasing y already.
-            int clusterXTol=Math.max(8, w*4/100);
-            int rowGap=10; // px of vertical tolerance between a bar's scanlines
-            int maxBarThick=Math.max(6, h*4/100);
-            // cluster as {sumCx,count,minY,maxY}
-            java.util.List<int[]> cl=new java.util.ArrayList<>();
-            for(int[] s : segs){
-                int sy=s[0], scx=s[1];
-                int[] best=null;
-                for(int[] c : cl){
-                    int ccx=c[0]/c[1];
-                    if(Math.abs(scx-ccx)<=clusterXTol && sy-c[3]<=rowGap){ best=c; break; }
-                }
-                if(best==null){ cl.add(new int[]{scx,1,sy,sy}); }
-                else { best[0]+=scx; best[1]++; if(sy<best[2])best[2]=sy; if(sy>best[3])best[3]=sy; }
+            if(units.size() <= 13){
+                lastSmartTier = "standard colors";
+                addScanLog("smart: "+units.size()+" units by health bar ("+lastSmartTier+")");
+                return units;
             }
-
-            // keep clusters that look like a real bar (several scanlines, thin),
-            // then merge any that ended up near each other.
-            java.util.List<int[]> units=new java.util.ArrayList<>(); // {tapX,tapY}
-            int bodyDrop=Math.max(8, h*3/100);
-            for(int[] c : cl){
-                int count=c[1], minY=c[2], maxY=c[3];
-                if(count<3) continue;
-                if(maxY-minY>maxBarThick) continue; // tall green blob = tree/background
-                int cx=c[0]/count;
-                int tapY=maxY+bodyDrop;
-                boolean dup=false;
-                for(int[] u : units){
-                    if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
-                }
-                if(!dup) units.add(new int[]{cx,tapY});
+            int relaxedCount = units.size();
+            units = detectBarsAtTier(px, zw, zh, w, h, opp, 1,
+                    leftExtreme, zoneTop, btnLoc, btnW, btnH);
+            if(units != null && units.size() <= 13){
+                lastSmartTier = "strict colors";
+                addScanLog("smart: standard tier noisy ("+relaxedCount+"), strict tier gave "
+                        +units.size()+" units");
+                return units;
             }
-            if(units.isEmpty() || units.size()>18){
-                addScanLog("smart: detection inconclusive ("+units.size()+" units), using grid");
-                return null;
-            }
-            // scan order: back-to-front (top y first), then left-to-right
-            java.util.Collections.sort(units,(a,b2)-> a[1]!=b2[1] ? a[1]-b2[1] : a[0]-b2[0]);
-            // log bar colors for each detected unit to help tune thresholds
-            StringBuilder clrLog=new StringBuilder("smart bar colors:");
-            int bodyDropLog=Math.max(8, h*3/100);
-            for(int[] u : units){
-                int barYrel=u[1]-bodyDropLog-zoneTop;
-                int barXrel=u[0]-leftExtreme;
-                if(barXrel>=0 && barXrel<zw && barYrel>=0 && barYrel<zh){
-                    int pc=px[barYrel*zw+barXrel];
-                    clrLog.append(" (").append((pc>>16)&0xFF).append(",").append((pc>>8)&0xFF).append(",").append(pc&0xFF).append(")");
-                }
-            }
-            addScanLog(clrLog.toString());
-            addScanLog("smart: detected "+units.size()+" units by health bar");
-            return units;
+            addScanLog("smart: detection too noisy ("+relaxedCount+" standard"
+                    +(units!=null?", "+units.size()+" strict":"")+"), using grid");
+            return null;
         }catch(Exception e){
             addScanLog("smart err: "+e.getMessage()+", using grid");
             return null;
         }
+    }
+
+    // True if the pixel reads as health-bar fill at the given tier.
+    private static boolean barPixel(int c, boolean opp, int tier){
+        int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
+        if(opp){
+            // enemy red bar: red strongly dominant over both green and blue
+            return tier==1 ? (r>=150 && r*5>=g*9 && r*5>=b*9)   // r ≥ 1.8g, 1.8b
+                           : (r>=120 && r*5>=g*8 && r*5>=b*8);  // r ≥ 1.6g, 1.6b
+        }
+        // ally green bar: green strongly dominant. Foliage greens have r at
+        // 60-80% of g and fail the ratio; bar greens have r under ~50% of g.
+        return tier==1 ? (g>=150 && g*5>=r*9 && g*5>=b*8)       // g ≥ 1.8r, 1.6b
+                       : (g>=115 && g*5>=r*8 && g*5>=b*7);      // g ≥ 1.6r, 1.4b
+    }
+
+    // One full detection pass at a single color tier: scanline runs -> clusters ->
+    // structural validation -> tap points. Returns null when no unit survives.
+    private java.util.List<int[]> detectBarsAtTier(int[] px, int zw, int zh, int w, int h,
+                                                   boolean opp, int tier,
+                                                   int zoneLeft, int zoneTop,
+                                                   int[] btnLoc, int btnW, int btnH){
+        int minLen=Math.max(6, w*2/100);          // a bar is at least ~2% of screen wide
+        int maxLen=Math.max(minLen+4, w*11/100);  // and at most ~11% wide
+        // Runs tolerate up to 2 non-matching pixels in a row, so the thin tick
+        // marks and star icons drawn over the bar don't split one bar into two
+        // short segments that both fail the minimum-length check.
+        final int GAP_TOL=2;
+        // each segment: {screenY, screenCx, len}
+        java.util.List<int[]> segs=new java.util.ArrayList<>();
+        for(int ry=0; ry<zh; ry+=2){
+            int base=ry*zw; int runStart=-1, lastHit=-1;
+            for(int rx=0; rx<zw; rx++){
+                if(barPixel(px[base+rx], opp, tier)){
+                    if(runStart<0) runStart=rx;
+                    lastHit=rx;
+                } else if(runStart>=0 && rx-lastHit>GAP_TOL){
+                    addBarSeg(segs,runStart,lastHit,ry,minLen,maxLen,zoneLeft,zoneTop,btnLoc,btnW,btnH);
+                    runStart=-1;
+                }
+            }
+            if(runStart>=0) addBarSeg(segs,runStart,lastHit,ry,minLen,maxLen,zoneLeft,zoneTop,btnLoc,btnW,btnH);
+        }
+        if(segs.isEmpty()) return null;
+
+        // cluster segments belonging to the same bar: similar centre-x, vertically
+        // adjacent scanlines. segs are produced in increasing y already.
+        int clusterXTol=Math.max(8, w*4/100);
+        int rowGap=10; // px of vertical tolerance between a bar's scanlines
+        // a health bar is a THIN strip: ~1-1.5% of screen height including border
+        int maxBarThick=Math.max(8, h*25/1000);
+        // cluster as {sumCx,count,minY,maxY,sumLen}
+        java.util.List<int[]> cl=new java.util.ArrayList<>();
+        for(int[] s : segs){
+            int sy=s[0], scx=s[1], slen=s[2];
+            int[] best=null;
+            for(int[] c : cl){
+                int ccx=c[0]/c[1];
+                if(Math.abs(scx-ccx)<=clusterXTol && sy-c[3]<=rowGap){ best=c; break; }
+            }
+            if(best==null){ cl.add(new int[]{scx,1,sy,sy,slen}); }
+            else { best[0]+=scx; best[1]++; if(sy<best[2])best[2]=sy; if(sy>best[3])best[3]=sy; best[4]+=slen; }
+        }
+
+        java.util.List<int[]> units=new java.util.ArrayList<>(); // {tapX,tapY}
+        int bodyDrop=Math.max(10, h*4/100); // bar bottom -> unit body
+        StringBuilder clrLog=new StringBuilder("smart t"+tier+" bars:");
+        for(int[] c : cl){
+            int count=c[1], minY=c[2], maxY=c[3];
+            if(count<3) continue;                 // needs >=3 scanlines (>=~6px tall)
+            if(maxY-minY>maxBarThick) continue;   // tall blob = foliage, not a bar
+            int cx=c[0]/count;
+            int barW=c[4]/count;
+            // VERTICAL ISOLATION: a real bar floats clear of other bar-colored
+            // pixels. Foliage that happens to form a thin matching band is part of
+            // a larger green region, so the rows just above and below it also
+            // match. Reject the cluster if either flanking row is >40% bar-colored
+            // across the bar's own width.
+            if(flankMatches(px, zw, zh, cx-zoneLeft, minY-zoneTop-6, barW, opp, tier) ||
+               flankMatches(px, zw, zh, cx-zoneLeft, maxY-zoneTop+6, barW, opp, tier)) continue;
+            int tapY=maxY+bodyDrop;
+            boolean dup=false;
+            for(int[] u : units){
+                if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
+            }
+            if(dup) continue;
+            units.add(new int[]{cx,tapY});
+            // log the bar's center pixel color so thresholds stay tunable from logs
+            int relX=cx-zoneLeft, relY=(minY+maxY)/2-zoneTop;
+            if(relX>=0 && relX<zw && relY>=0 && relY<zh){
+                int pc=px[relY*zw+relX];
+                clrLog.append(" (").append((pc>>16)&0xFF).append(",").append((pc>>8)&0xFF).append(",").append(pc&0xFF).append(")");
+            }
+        }
+        if(units.isEmpty()) return null;
+        // scan order: back-to-front (top y first), then left-to-right
+        java.util.Collections.sort(units,(a,b2)-> a[1]!=b2[1] ? a[1]-b2[1] : a[0]-b2[0]);
+        addScanLog(clrLog.toString());
+        return units;
+    }
+
+    // True if the zone-relative scanline at relY is more than 40% bar-colored
+    // across [relCx-barW/2, relCx+barW/2] — meaning the candidate bar is actually
+    // part of a taller colored region. Out-of-zone rows count as clear.
+    private boolean flankMatches(int[] px, int zw, int zh, int relCx, int relY, int barW,
+                                 boolean opp, int tier){
+        if(relY<0 || relY>=zh) return false;
+        int x0=Math.max(0, relCx-barW/2), x1=Math.min(zw-1, relCx+barW/2);
+        if(x1<=x0) return false;
+        int base=relY*zw, hits=0, total=x1-x0+1;
+        for(int x=x0;x<=x1;x++) if(barPixel(px[base+x], opp, tier)) hits++;
+        return hits*10 > total*4;
     }
 
     private void addBarSeg(java.util.List<int[]> segs,int xs,int xe,int ry,int minLen,int maxLen,
@@ -2582,7 +2744,7 @@ public class OverlayService extends Service {
         int cx=zoneLeft+(xs+xe)/2, cy=zoneTop+ry;
         if(btnW>0 && cx>=btnLoc[0]-30 && cx<=btnLoc[0]+btnW+30
                   && cy>=btnLoc[1]-30 && cy<=btnLoc[1]+btnH+30) return;
-        segs.add(new int[]{cy,cx});
+        segs.add(new int[]{cy,cx,len});
     }
 
     // Keep only probes that have real detail (a unit), used for the bench when
@@ -2703,17 +2865,69 @@ public class OverlayService extends Service {
 
     private void advanceAutoTap(){
         autoTapIndex++;
+        autoTapNudged=false; // each probe gets at most one lower-retry
         autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},PROBE_GAP_MS);
+    }
+
+    // Instant Visual ID: try to recognize each detected unit from the board
+    // screenshot using sprites learned in earlier scans. Recognized units are
+    // recorded immediately (zero taps, zero screenshots); the rest are returned
+    // for the normal tap-and-read loop. Match thresholds live in
+    // ChampionTemplates.matchBoardSprite and are strict enough to never guess —
+    // an uncertain unit simply gets tapped like before.
+    private java.util.List<int[]> visualIdPass(Bitmap bmp, java.util.List<int[]> units, boolean opp){
+        java.util.List<int[]> toTap=new java.util.ArrayList<>();
+        if(ChampionTemplates.boardTemplateCount()==0) return new java.util.ArrayList<>(units);
+        int w=bmp.getWidth(), h=bmp.getHeight();
+        int cs=Math.max(48, h*9/100); // crop edge: ~9% of screen height, covers the sprite
+        int[] btnLoc=new int[2]; int btnW=0,btnH=0;
+        if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
+        for(int[] u : units){
+            ChampionTemplates.BoardMatch m=null;
+            try{
+                int x0=u[0]-cs/2, y0=u[1]-cs/2;
+                boolean underButton = btnW>0 && x0<btnLoc[0]+btnW && x0+cs>btnLoc[0]
+                                            && y0<btnLoc[1]+btnH && y0+cs>btnLoc[1];
+                if(!underButton && x0>=0 && y0>=0 && x0+cs<=w && y0+cs<=h){
+                    Bitmap crop=Bitmap.createBitmap(bmp,x0,y0,cs,cs);
+                    m=ChampionTemplates.matchBoardSprite(crop,opp);
+                    crop.recycle();
+                }
+            }catch(Exception e){ m=null; } // any failure: this unit just gets tapped normally
+            if(m==null){ toTap.add(u); continue; }
+            autoScanVisualCount++;
+            autoTapHits++;
+            addScanLog("visual ID: "+m.name+" sim="+(int)(m.sim*100)+"% margin="+(int)(m.margin*100)+"%");
+            if(opp){
+                if(!oppScanResults.containsKey(m.name)){
+                    oppScanResults.put(m.name,1);
+                    pool.addOpp(m.name,1);
+                }
+            } else {
+                pool.add(m.name,1);
+                autoScanResults.add(m.name+" ≈"); // ≈ marks a visual match
+            }
+        }
+        if(autoScanVisualCount>0) buzz();
+        return toTap;
     }
 
     private void applyAutoTapProbeResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
         if(!autoScanPending){ if(sourceBmp!=null) sourceBmp.recycle(); return; }
-        boolean inBenchPhase=(!autoOppMode && autoTapBoardProbeCount>0 && autoTapIndex>=autoTapBoardProbeCount);
+        // (boardProbeCount can legitimately be 0 when Visual ID recognized every
+        // board unit — then all remaining probes are bench probes)
+        boolean inBenchPhase=(!autoOppMode && autoTapIndex>=autoTapBoardProbeCount);
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
             int stars=Math.max(1,r.detectedBoardStars);
             buzz();
             autoTapConsecutiveMisses=0;
+            autoTapHits++;
+            // learn this champion's board sprite at the confirmed position, so the
+            // next scan can recognize it visually without tapping. Skip when the
+            // popup overlaps the crop area (would contaminate the sprite).
+            final int[] probePos = autoTapIndex<autoTapProbes.size() ? autoTapProbes.get(autoTapIndex) : null;
+            final boolean onBoard = !inBenchPhase;
             if(autoOppMode){
                 // opponent scan: record into oppScanResults, increment contest badge
                 if(!oppScanResults.containsKey(name)){
@@ -2722,22 +2936,37 @@ public class OverlayService extends Service {
                     addScanLog("auto-opp: +"+name+" "+stars+"★");
                     if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
                 }
-                if(sourceBmp!=null) sourceBmp.recycle();
             } else {
-                // own board scan: mark pool and save template
                 pool.add(name,1);
                 StringBuilder entry=new StringBuilder(name);
                 for(int i=0;i<stars;i++) entry.append("★");
                 autoScanResults.add(entry.toString());
-                if(sourceBmp!=null){
-                    final android.graphics.Rect bounds=r.detectedPopupBounds;
-                    new Thread(new Runnable(){ public void run(){
-                        ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
-                        sourceBmp.recycle();
-                    }}).start();
-                }
                 addScanLog("auto-tap: +"+name+" "+stars+"★");
                 if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
+            }
+            if(sourceBmp!=null){
+                final android.graphics.Rect bounds=r.detectedPopupBounds;
+                final boolean oppMode=autoOppMode;
+                final int spriteSize=Math.max(48, autoTapScreenH*9/100);
+                new Thread(new Runnable(){ public void run(){
+                    // popup-portrait template (legacy board-vision path, own board only)
+                    if(!oppMode) ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
+                    // board-sprite template for Instant Visual ID — only from board
+                    // probes (bench sprites are framed differently), and only when
+                    // the popup isn't covering the unit
+                    if(onBoard && probePos!=null && bounds!=null){
+                        android.graphics.Rect spriteRect=new android.graphics.Rect(
+                                probePos[0]-spriteSize/2, probePos[1]-spriteSize/2,
+                                probePos[0]+spriteSize/2, probePos[1]+spriteSize/2);
+                        android.graphics.Rect popupGrown=new android.graphics.Rect(bounds);
+                        popupGrown.inset(-20,-20);
+                        if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
+                            ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
+                                    probePos[0],probePos[1],spriteSize,oppMode);
+                        }
+                    }
+                    sourceBmp.recycle();
+                }}).start();
             }
         } else {
             if(sourceBmp!=null) sourceBmp.recycle();
@@ -2749,8 +2978,37 @@ public class OverlayService extends Service {
                     if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
                 }
             } else {
+                // BOARD phase miss. Smart positions are supposed to be real units,
+                // so an empty tap there gets one retry slightly lower (the bar->body
+                // offset is an estimate and can land between the bar and the unit).
+                boolean trulyEmpty = r.detectedPopupBounds==null;
+                if(autoTapSmartBoard && !autoTapSwitchedToGrid && trulyEmpty && !autoTapNudged
+                        && autoTapIndex<autoTapBoardProbeCount){
+                    autoTapNudged=true;
+                    int[] pt=autoTapProbes.get(autoTapIndex);
+                    pt[1]+=Math.max(8, autoTapScreenH*3/100);
+                    addScanLog("auto-tap: empty at smart position, retrying lower");
+                    autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},PROBE_GAP_MS);
+                    return; // same index, do not count a miss
+                }
                 autoTapConsecutiveMisses++;
-                if(autoTapConsecutiveMisses>=8){
+                // If the smart positions produce ONLY empties (no popup hits and no
+                // visual IDs), the detection was wrong for this screen — switch to
+                // the occupancy-filtered calibrated grid instead of wasting the
+                // remaining taps. One switch per scan.
+                if(autoTapSmartBoard && !autoTapSwitchedToGrid && autoTapHits==0
+                        && autoTapConsecutiveMisses>=3
+                        && autoTapFallbackBoard!=null && !autoTapFallbackBoard.isEmpty()){
+                    autoTapSwitchedToGrid=true;
+                    autoTapProbes=new java.util.ArrayList<>(autoTapFallbackBoard);
+                    autoTapProbes.addAll(autoTapBenchProbes);
+                    autoTapBoardProbeCount=autoTapFallbackBoard.size();
+                    autoTapIndex=-1; // advanceAutoTap() below moves to 0
+                    autoTapConsecutiveMisses=0;
+                    addScanLog("auto-tap: smart positions all empty, switching to calibrated grid ("
+                            +autoTapBoardProbeCount+" probes)");
+                    if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
+                } else if(autoTapConsecutiveMisses>=8){
                     if(autoOppMode){
                         // opponent board has no bench — just finish
                         finishAutoTapScan(); return;
@@ -2773,9 +3031,10 @@ public class OverlayService extends Service {
             if(autoScanGold>=0) pool.setGold(autoScanGold);
             if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
         }
-        addScanLog((autoOppMode?"auto-opp":"auto-tap")+": done, "
-                +(autoOppMode?oppScanResults.size():autoScanResults.size())
-                +" hits / "+autoTapProbes.size()+" probes");
+        long tookMs=autoScanStartMs>0 ? android.os.SystemClock.uptimeMillis()-autoScanStartMs : 0;
+        int found=autoOppMode?oppScanResults.size():autoScanResults.size();
+        addScanLog((autoOppMode?"auto-opp":"auto-tap")+": done, "+found+" units ("
+                +autoScanVisualCount+" visual) in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
         autoOppMode=false;
         buzzDone();
         mode=0; showPanel();

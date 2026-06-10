@@ -110,6 +110,12 @@ public class Pool {
     // the grid automatically when detection is inconclusive. On by default.
     public boolean getSmartScan()         { return p.getBoolean("cfg_smartscan", true); }
     public void    setSmartScan(boolean s){ p.edit().putBoolean("cfg_smartscan", s).apply(); }
+    // Instant Visual ID: units whose board sprite was learned from an earlier
+    // popup-confirmed scan are recognized straight from the first screenshot,
+    // skipping their tap entirely. Strict match thresholds; popup OCR stays the
+    // source of truth and is what teaches the sprites. On by default.
+    public boolean getVisualId()         { return p.getBoolean("cfg_visualid", true); }
+    public void    setVisualId(boolean s){ p.edit().putBoolean("cfg_visualid", s).apply(); }
     // 0 = smart (board if pool non-empty, else grid), 1 = always grid
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }

@@ -10,21 +10,40 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Manages per-champion visual templates captured from the unit stat popup.
+ * Manages per-champion visual templates captured from the unit stat popup,
+ * plus board-sprite templates captured from the board itself.
  *
- * Templates are cropped from the popup portrait area when My Board scan detects
- * a champion. They're stored in the app's private files directory so they survive
- * restarts but reflect the CURRENT patch (no stale CDN data).
+ * Popup templates are cropped from the popup portrait area when a board scan
+ * detects a champion. Board-sprite templates are crops of the champion standing
+ * on the board, captured at the exact probe position the moment its popup is
+ * confirmed — so they show how that champion looks on THIS device at the current
+ * patch. Own-board and opponent sprites face different directions, so they are
+ * stored separately and never cross-matched.
+ *
+ * Both are stored in the app's private files directory so they survive restarts
+ * but reflect the current patch (no stale CDN data).
  *
  * Matching: 8×8 grid average RGB signature (192 floats), cosine similarity.
+ * Board-sprite matching mean-centers the signature per channel first (removes
+ * the shared ground tint so the sprite pattern dominates) and requires both a
+ * high score AND a clear margin over the second-best champion before accepting.
  */
 public class ChampionTemplates {
 
     private static final int SIG_GRID = 8;
     private static final int SCALE    = 48;
     private static final float MIN_SIM = 0.72f;
+    // Board-sprite matching is allowed to skip the popup tap entirely, so it must
+    // never guess: high absolute similarity, plus a clear gap to the runner-up.
+    private static final float BOARD_MIN_SIM    = 0.93f;
+    private static final float BOARD_MIN_MARGIN = 0.03f;
+    // With a single template there is no runner-up to compare against, so the
+    // absolute bar is raised instead.
+    private static final float BOARD_SOLO_SIM   = 0.96f;
 
     private static final Map<String, float[]> sigs = new LinkedHashMap<>();
+    private static final Map<String, float[]> boardSigs    = new LinkedHashMap<>(); // own units (facing away)
+    private static final Map<String, float[]> oppBoardSigs = new LinkedHashMap<>(); // enemy units (facing player)
     private static boolean loaded = false;
 
     // ---- storage helpers ----
@@ -48,20 +67,29 @@ public class ChampionTemplates {
         if(files == null) return;
         for(File f : files){
             String fn = f.getName();
-            if(!fn.startsWith("tpl_") || !fn.endsWith(".png")) continue;
-            String key = fn.substring(4, fn.length()-4); // strip tpl_ and .png
+            if(!fn.endsWith(".png")) continue;
+            String prefix;
+            Map<String, float[]> target;
+            boolean meanCenter;
+            if(fn.startsWith("btplo_")){ prefix="btplo_"; target=oppBoardSigs; meanCenter=true; }
+            else if(fn.startsWith("btpl_")){ prefix="btpl_"; target=boardSigs; meanCenter=true; }
+            else if(fn.startsWith("tpl_")){ prefix="tpl_"; target=sigs; meanCenter=false; }
+            else continue;
+            String key = fn.substring(prefix.length(), fn.length()-4);
             // find SetData name that lowercases to this key
             String champName = findChampName(key);
             if(champName == null) continue;
             try{
                 Bitmap bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
                 if(bmp == null) continue;
-                sigs.put(champName, sig(bmp));
+                float[] s = sig(bmp);
+                if(meanCenter) meanCenter(s);
+                target.put(champName, s);
                 bmp.recycle();
             }catch(Exception e){ android.util.Log.w("TFTTemplates","load err "+f.getName()+": "+e.getMessage()); }
         }
-        android.util.Log.d("TFTTemplates","loaded "+sigs.size()+" templates");
-        OverlayService.addScanLog("templates: "+sigs.size()+" loaded");
+        android.util.Log.d("TFTTemplates","loaded "+sigs.size()+" popup + "+boardSigs.size()+"/"+oppBoardSigs.size()+" board templates");
+        OverlayService.addScanLog("templates: "+sigs.size()+" popup, "+boardSigs.size()+" own sprites, "+oppBoardSigs.size()+" enemy sprites");
     }
 
     private static String findChampName(String lowerKey){
@@ -100,6 +128,82 @@ public class ChampionTemplates {
         }
     }
 
+    // ---- board-sprite templates: how the champion looks STANDING ON THE BOARD ----
+    // Captured at the confirmed probe position the moment the popup names the unit.
+    // cx,cy is the tap point (unit body); size is the square crop edge in px.
+
+    public static synchronized void saveBoardTemplate(Context ctx, String champName, Bitmap sourceBmp,
+                                                      int cx, int cy, int size, boolean opp){
+        try{
+            int x0 = cx - size/2, y0 = cy - size/2;
+            if(x0 < 0 || y0 < 0 || x0+size > sourceBmp.getWidth() || y0+size > sourceBmp.getHeight()) return;
+            Bitmap crop = Bitmap.createBitmap(sourceBmp, x0, y0, size, size);
+            Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
+            crop.recycle();
+            File d = dir(ctx);
+            if(!d.exists()) d.mkdirs();
+            String fn = (opp ? "btplo_" : "btpl_") + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + ".png";
+            File out = new File(d, fn);
+            FileOutputStream fos = new FileOutputStream(out);
+            scaled.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.close();
+            float[] s = sig(scaled);
+            meanCenter(s);
+            (opp ? oppBoardSigs : boardSigs).put(champName, s);
+            scaled.recycle();
+            OverlayService.addScanLog("sprite learned: "+champName+(opp?" (enemy)":""));
+        }catch(Exception e){
+            OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
+        }
+    }
+
+    public static class BoardMatch {
+        public final String name;
+        public final float sim;
+        public final float margin; // gap to the second-best champion
+        public BoardMatch(String n, float s, float m){ name=n; sim=s; margin=m; }
+    }
+
+    // Match a board crop against learned sprites. Returns null unless the best
+    // match is both strong AND clearly ahead of every other champion — a wrong
+    // visual ID is worse than a 1-second tap, so this must never guess.
+    public static synchronized BoardMatch matchBoardSprite(Bitmap crop, boolean opp){
+        Map<String, float[]> pool = opp ? oppBoardSigs : boardSigs;
+        if(pool.isEmpty()) return null;
+        Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
+        float[] s = sig(scaled);
+        scaled.recycle();
+        meanCenter(s);
+        String best = null; float bestSim = -2f, secondSim = -2f;
+        for(Map.Entry<String,float[]> e : pool.entrySet()){
+            float sim = cosine(s, e.getValue());
+            if(sim > bestSim){ secondSim = bestSim; bestSim = sim; best = e.getKey(); }
+            else if(sim > secondSim){ secondSim = sim; }
+        }
+        if(best == null) return null;
+        if(pool.size() == 1){
+            if(bestSim < BOARD_SOLO_SIM) return null;
+            return new BoardMatch(best, bestSim, 1f);
+        }
+        float margin = bestSim - secondSim;
+        if(bestSim < BOARD_MIN_SIM || margin < BOARD_MIN_MARGIN) return null;
+        return new BoardMatch(best, bestSim, margin);
+    }
+
+    public static synchronized int boardTemplateCount(){ return boardSigs.size() + oppBoardSigs.size(); }
+
+    // Subtract the per-channel mean across all grid cells. Crops of different
+    // champions share most of their pixels (board ground), which inflates raw
+    // cosine similarity toward 1 for everything. Removing the average color
+    // leaves the spatial pattern — the sprite — to drive the score.
+    private static void meanCenter(float[] s){
+        float mr=0, mg=0, mb=0;
+        int cells = s.length / 3;
+        for(int i=0;i<s.length;i+=3){ mr+=s[i]; mg+=s[i+1]; mb+=s[i+2]; }
+        mr/=cells; mg/=cells; mb/=cells;
+        for(int i=0;i<s.length;i+=3){ s[i]-=mr; s[i+1]-=mg; s[i+2]-=mb; }
+    }
+
     // ---- match a hex crop against all saved templates ----
 
     public static class Match {
@@ -124,8 +228,8 @@ public class ChampionTemplates {
 
     public static int templateCount(){ return sigs.size(); }
 
-    public static void clearAll(Context ctx){
-        sigs.clear();
+    public static synchronized void clearAll(Context ctx){
+        sigs.clear(); boardSigs.clear(); oppBoardSigs.clear();
         File d = dir(ctx);
         if(d.exists()){
             File[] files = d.listFiles();
