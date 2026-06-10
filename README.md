@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.46-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.47-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,11 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.47 - 2026-06-10
+- Fix for Auto Scan only finding a few units on the board after calibration. A tap that landed slightly off a unit was counted as empty right away, so a calibration that was a little off in either direction could miss most of the board.
+- Every board tap that comes back empty now gets up to two more tries at slightly different positions, one a bit lower and one a bit higher than the original spot, before it is given up on. This applies to your own board scan and Auto Opp Scan.
+- The scan can take a little longer when it needs these extra tries, but it should now pick up far more of the units on the board.
 
 ### v1.46 - 2026-06-10
 - Fix for Accessibility acting up after updates. Android sometimes leaves the Accessibility switch showing ON after an update without actually restarting the service, so everything looks enabled but no scan works.
