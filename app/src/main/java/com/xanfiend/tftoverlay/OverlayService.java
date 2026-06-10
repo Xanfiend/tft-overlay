@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.49";
+    private static final String APP_VERSION = "v1.50";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1970,27 +1970,41 @@ public class OverlayService extends Service {
 
         gridAdjustView=new View(OverlayService.this){
             // working copies in percent; written to Pool only on SAVE
-            float wTop, wBot, wTL, wTR, wBL, wBR, wBenchY, wBenchShift;
+            float wTop, wBot, wTL, wTR, wBL, wBR, wBenchY, wBenchL, wBenchR;
+            float wF1, wF2; // middle-row spacing, percent of back-to-front span
             { // init from saved calibration for the current orientation
                 if(portrait){
                     wTop=pool.getPortraitBoardTopPct();      wBot=pool.getPortraitBoardBotPct();
                     wTL =pool.getPortraitBoardTopLeftPct();  wTR =pool.getPortraitBoardTopRightPct();
                     wBL =pool.getPortraitBoardBotLeftPct();  wBR =pool.getPortraitBoardBotRightPct();
-                    wBenchY=pool.getPortraitBenchYPct();     wBenchShift=0;
+                    wBenchY=pool.getPortraitBenchYPct();
+                    wF1=pool.getPortraitRowF1Pct();          wF2=pool.getPortraitRowF2Pct();
+                    wBenchL=pool.getPortraitBenchLeftPct();  wBenchR=pool.getPortraitBenchRightPct();
                 } else {
                     wTop=pool.getBoardTopPct();      wBot=pool.getBoardBotPct();
                     wTL =pool.getBoardTopLeftPct();  wTR =pool.getBoardTopRightPct();
                     wBL =pool.getBoardBotLeftPct();  wBR =pool.getBoardBotRightPct();
-                    wBenchY=pool.getBenchYPct();     wBenchShift=pool.getBenchXOffsetPct();
+                    wBenchY=pool.getBenchYPct();
+                    wF1=pool.getRowF1Pct();          wF2=pool.getRowF2Pct();
+                    wBenchL=pool.getBenchLeftPct();  wBenchR=pool.getBenchRightPct();
                 }
                 if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
                                t=wTL; wTL=wBL; wBL=t;  t=wTR; wTR=wBR; wBR=t; }
+                // no explicit bench span saved yet: derive it the same way the scan does
+                if(wBenchL<0 || wBenchR<=wBenchL){
+                    float halfGap=(wBR-wBL)/12f;
+                    float shift=portrait?0:pool.getBenchXOffsetPct();
+                    wBenchL=wBL-halfGap+shift;
+                    wBenchR=wBR+halfGap+shift;
+                }
             }
-            int dragIdx=-1;       // 0..3 = corners, 4 = bench, -1 = none
+            int dragIdx=-1;       // 0..3 corners, 4..5 row spacing, 6..7 bench ends, -1 none
             boolean downOnBar=false; boolean downOnSave=false;
             private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
-            // handle positions in px: 0=back-left 1=back-right 2=front-left 3=front-right 4=bench
+            // handle positions in px:
+            // 0=back-left 1=back-right 2=front-left 3=front-right
+            // 4=row-2 spacing 5=row-3 spacing 6=bench-left 7=bench-right
             private float[] handleX(int i){
                 float topY=sh*wTop/100f, botY=sh*wBot/100f;
                 switch(i){
@@ -1998,7 +2012,15 @@ public class OverlayService extends Service {
                     case 1: return new float[]{sw*wTR/100f, topY};
                     case 2: return new float[]{sw*wBL/100f, botY};
                     case 3: return new float[]{sw*wBR/100f, botY};
-                    default: return new float[]{(sw*wBL/100f+sw*wBR/100f)/2f + sw*wBenchShift/100f, sh*wBenchY/100f};
+                    case 4: case 5: {
+                        float t=(i==4?wF1:wF2)/100f;
+                        float cy=topY+t*(botY-topY);
+                        float rowL=sw*wTL/100f+t*(sw*wBL/100f-sw*wTL/100f);
+                        float rowR=sw*wTR/100f+t*(sw*wBR/100f-sw*wTR/100f);
+                        return new float[]{(rowL+rowR)/2f, cy};
+                    }
+                    case 6: return new float[]{sw*wBenchL/100f, sh*wBenchY/100f};
+                    default: return new float[]{sw*wBenchR/100f, sh*wBenchY/100f};
                 }
             }
 
@@ -2009,7 +2031,7 @@ public class OverlayService extends Service {
                 canvas.drawRect(0,0,W,H,p);
 
                 // probe dots — same interpolation as buildProbeGrid so what you see is what taps
-                final float[] ROW_F={0f,0.27f,0.58f,1f};
+                final float[] ROW_F={0f,wF1/100f,wF2/100f,1f};
                 float topY=H*wTop/100f, botY=H*wBot/100f;
                 float tlx=W*wTL/100f, trx=W*wTR/100f, blx=W*wBL/100f, brx=W*wBR/100f;
                 p.setColor(0xFFE03131);
@@ -2022,10 +2044,8 @@ public class OverlayService extends Service {
                         canvas.drawCircle(cx,cy,7,p);
                     }
                 }
-                // bench dots (blue)
-                float benchHalfGap=(brx-blx)/12f;
-                float benchShiftPx=W*wBenchShift/100f;
-                float bLx=blx-benchHalfGap+benchShiftPx, bRx=brx+benchHalfGap+benchShiftPx;
+                // bench dots (blue) — span runs between the two bench end handles
+                float bLx=W*wBenchL/100f, bRx=W*wBenchR/100f;
                 float bY=H*wBenchY/100f;
                 p.setColor(0xFF3B82F6);
                 for(int col=0;col<9;col++){
@@ -2033,10 +2053,10 @@ public class OverlayService extends Service {
                     canvas.drawCircle(cx,bY,7,p);
                 }
 
-                // drag handles: gold rings at the 4 corners + bench center
+                // drag handles: gold rings — 4 corners, 2 middle-row spacing, 2 bench ends
                 p.setStyle(android.graphics.Paint.Style.STROKE);
                 p.setStrokeWidth(4);
-                for(int i=0;i<5;i++){
+                for(int i=0;i<8;i++){
                     float[] hp=handleX(i);
                     p.setColor(i==dragIdx?0xFFFFE066:0xFFC9A227);
                     canvas.drawCircle(hp[0],hp[1],26,p);
@@ -2054,7 +2074,7 @@ public class OverlayService extends Service {
                 canvas.drawText("ADJUST GRID", W/2f, barH*0.42f, p);
                 p.setTypeface(android.graphics.Typeface.DEFAULT);
                 p.setColor(0xFF7A6B60); p.setTextSize(10*spx);
-                canvas.drawText("Drag the gold rings until the dots sit on your units", W/2f, barH*0.78f, p);
+                canvas.drawText("Corners shape the board · middle rings space the rows · end rings stretch the bench", W/2f, barH*0.78f, p);
 
                 // bottom bar: SAVE | CANCEL
                 float btnTop=H*0.90f;
@@ -2076,7 +2096,7 @@ public class OverlayService extends Service {
                     // handles win over the bottom bar — the bench handle can sit inside it
                     dragIdx=-1;
                     float best=grabR;
-                    for(int i=0;i<5;i++){
+                    for(int i=0;i<8;i++){
                         float[] hp=handleX(i);
                         float d=(float)Math.hypot(x-hp[0],y-hp[1]);
                         if(d<best){ best=d; dragIdx=i; }
@@ -2094,12 +2114,22 @@ public class OverlayService extends Service {
                             case 1: wTR=xp; wTop=yp; break;
                             case 2: wBL=xp; wBot=yp; break;
                             case 3: wBR=xp; wBot=yp; break;
-                            default:
-                                wBenchY=Math.max(50f,Math.min(95f,yp));
-                                if(!portrait){
-                                    float center=(W*wBL/100f+W*wBR/100f)/2f;
-                                    wBenchShift=Math.max(-20f,Math.min(20f,(x-center)*100f/W));
+                            case 4: case 5: {
+                                // row spacing: convert drag Y to a fraction of the span
+                                float span=wBot-wTop;
+                                if(span>1f){
+                                    float f=Math.max(5f,Math.min(95f,(yp-wTop)*100f/span));
+                                    if(dragIdx==4) wF1=f; else wF2=f;
                                 }
+                                break;
+                            }
+                            case 6:
+                                wBenchL=xp;
+                                wBenchY=Math.max(50f,Math.min(95f,yp));
+                                break;
+                            default:
+                                wBenchR=xp;
+                                wBenchY=Math.max(50f,Math.min(95f,yp));
                         }
                         invalidate();
                     }
@@ -2108,9 +2138,12 @@ public class OverlayService extends Service {
                     if(dragIdx>=0){ dragIdx=-1; invalidate(); return true; }
                     if(downOnBar && y>=H*0.90f){
                         if(downOnSave && x<W/2f){
-                            // normalize: back row must be the upper one
+                            // normalize: back row must be the upper one, row 2 above row 3,
+                            // bench left end left of the right end
                             if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
                                            t=wTL; wTL=wBL; wBL=t;  t=wTR; wTR=wBR; wBR=t; }
+                            if(wF1>wF2){ float t=wF1; wF1=wF2; wF2=t; }
+                            if(wBenchL>wBenchR){ float t=wBenchL; wBenchL=wBenchR; wBenchR=t; }
                             if(portrait){
                                 pool.setPortraitBoardTopPct(Math.round(wTop));
                                 pool.setPortraitBoardBotPct(Math.round(wBot));
@@ -2121,6 +2154,10 @@ public class OverlayService extends Service {
                                 pool.setPortraitBoardLeftPct(Math.round((wTL+wBL)/2f));
                                 pool.setPortraitBoardRightPct(Math.round((wTR+wBR)/2f));
                                 pool.setPortraitBenchYPct(Math.round(wBenchY));
+                                pool.setPortraitRowF1Pct(Math.round(wF1));
+                                pool.setPortraitRowF2Pct(Math.round(wF2));
+                                pool.setPortraitBenchLeftPct(Math.round(wBenchL));
+                                pool.setPortraitBenchRightPct(Math.round(wBenchR));
                             } else {
                                 pool.setBoardTopPct(Math.round(wTop));
                                 pool.setBoardBotPct(Math.round(wBot));
@@ -2131,7 +2168,10 @@ public class OverlayService extends Service {
                                 pool.setBoardLeftPct(Math.round((wTL+wBL)/2f));
                                 pool.setBoardRightPct(Math.round((wTR+wBR)/2f));
                                 pool.setBenchYPct(Math.round(wBenchY));
-                                pool.setBenchXOffsetPct(Math.round(wBenchShift));
+                                pool.setRowF1Pct(Math.round(wF1));
+                                pool.setRowF2Pct(Math.round(wF2));
+                                pool.setBenchLeftPct(Math.round(wBenchL));
+                                pool.setBenchRightPct(Math.round(wBenchR));
                             }
                             Toast.makeText(OverlayService.this,"Grid saved",Toast.LENGTH_SHORT).show();
                         }
@@ -2667,7 +2707,11 @@ public class OverlayService extends Service {
         //   botLeft/botRight  = measured centers of column 0 / column 6, FRONT row
         //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
         // ROW_F[0]=back ... ROW_F[3]=front. Gaps grow toward the front (perspective).
-        final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
+        // The two middle fractions are adjustable via ADJUST GRID (row-spacing handles).
+        final float[] ROW_F = {0f,
+            (portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct())/100f,
+            (portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct())/100f,
+            1f};
         int cols=7;
         int frontWidth = botRight - botLeft;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
@@ -2686,13 +2730,22 @@ public class OverlayService extends Service {
         }
         autoTapBoardProbeCount=pts.size();
         int benchCols=9;
-        // Bench is below the board and physically wider (9 slots vs 7 hexes). botLeft/botRight
-        // are the measured CENTERS of the front row's outer hexes, so nudge outward by half a
+        // Bench span: an explicit left/right saved by ADJUST GRID wins. Otherwise fall
+        // back to deriving it from the board's front row: botLeft/botRight are the
+        // measured CENTERS of the front row's outer hexes, so nudge outward by half a
         // hex-gap on each side to approximate the bench's true span before spreading 9 slots.
-        int benchHalfGap = frontWidth / 12;
-        int benchXShift  = w * (portrait ? 0 : pool.getBenchXOffsetPct()) / 100;
-        int benchLeft  = botLeft  - benchHalfGap + benchXShift;
-        int benchRight = botRight + benchHalfGap + benchXShift;
+        int benchLeft, benchRight;
+        int savedBenchL = portrait ? pool.getPortraitBenchLeftPct()  : pool.getBenchLeftPct();
+        int savedBenchR = portrait ? pool.getPortraitBenchRightPct() : pool.getBenchRightPct();
+        if(savedBenchL>=0 && savedBenchR>savedBenchL){
+            benchLeft  = w * savedBenchL / 100;
+            benchRight = w * savedBenchR / 100;
+        } else {
+            int benchHalfGap = frontWidth / 12;
+            int benchXShift  = w * (portrait ? 0 : pool.getBenchXOffsetPct()) / 100;
+            benchLeft  = botLeft  - benchHalfGap + benchXShift;
+            benchRight = botRight + benchHalfGap + benchXShift;
+        }
         for(int col=0;col<benchCols;col++){
             int cx=benchLeft+(int)((col+0.5f)*(benchRight-benchLeft)/benchCols);
             if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
@@ -2729,8 +2782,12 @@ public class OverlayService extends Service {
         if(oppBackY > oppFrontY){ int t=oppBackY; oppBackY=oppFrontY; oppFrontY=t; }
         // Inverted perspective: gaps widen toward oppFrontY (screen centre, closest to
         // player). Row 0 = opponent back row (top), row 3 = opponent front row (nearest
-        // player, oppFrontY). ROW_F[0..3] is 0→1 mapping back→front.
-        final float[] ROW_F = {0f, 0.27f, 0.58f, 1f};
+        // player, oppFrontY). ROW_F[0..3] is 0→1 mapping back→front. Middle fractions
+        // follow the same adjustable row spacing as the player grid.
+        final float[] ROW_F = {0f,
+            (portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct())/100f,
+            (portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct())/100f,
+            1f};
         int cols=7;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }

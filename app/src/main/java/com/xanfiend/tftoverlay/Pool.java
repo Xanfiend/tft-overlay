@@ -160,10 +160,25 @@ public class Pool {
     // to align with the actual TFT Mobile bench slot centers.
     public int getBenchXOffsetPct()         { return p.getInt("cal_bench_x",  -4); }
     public void setBenchXOffsetPct(int v)   { p.edit().putInt("cal_bench_x", Math.max(-20, Math.min(20,v))).apply(); }
+    // Row spacing: vertical position of board rows 2 and 3 as a percent of the
+    // back-to-front span (row 1 = 0, row 4 = 100). Defaults match the previously
+    // hardcoded perspective fractions 0.27 / 0.58.
+    public int getRowF1Pct()        { return p.getInt("cal_rowf1", 27); }
+    public void setRowF1Pct(int v)  { p.edit().putInt("cal_rowf1", Math.max(5, Math.min(95,v))).apply(); }
+    public int getRowF2Pct()        { return p.getInt("cal_rowf2", 58); }
+    public void setRowF2Pct(int v)  { p.edit().putInt("cal_rowf2", Math.max(5, Math.min(95,v))).apply(); }
+    // Bench span: explicit left/right ends of the bench row as a percent of screen
+    // width. -1 = unset, fall back to deriving the span from the board's front row.
+    public int getBenchLeftPct()        { return p.getInt("cal_bench_l", -1); }
+    public void setBenchLeftPct(int v)  { p.edit().putInt("cal_bench_l", v).apply(); }
+    public int getBenchRightPct()       { return p.getInt("cal_bench_r", -1); }
+    public void setBenchRightPct(int v) { p.edit().putInt("cal_bench_r", v).apply(); }
     public void resetCalibration()     {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
                 .remove("cal_right").remove("cal_bench").remove("cal_bench_x")
-                .remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br").apply();
+                .remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br")
+                .remove("cal_rowf1").remove("cal_rowf2")
+                .remove("cal_bench_l").remove("cal_bench_r").apply();
     }
     // Per-corner X% for trapezoidal board (front row wider than back row).
     // Default falls back to the rectangular cal_left/cal_right so old calibrations still work.
@@ -190,8 +205,18 @@ public class Pool {
     public void resetPortraitCalibration()     {
         p.edit().remove("cal_p_top").remove("cal_p_bot").remove("cal_p_left")
                 .remove("cal_p_right").remove("cal_p_bench")
-                .remove("cal_p_tl").remove("cal_p_tr").remove("cal_p_bl").remove("cal_p_br").apply();
+                .remove("cal_p_tl").remove("cal_p_tr").remove("cal_p_bl").remove("cal_p_br")
+                .remove("cal_p_rowf1").remove("cal_p_rowf2")
+                .remove("cal_p_bench_l").remove("cal_p_bench_r").apply();
     }
+    public int getPortraitRowF1Pct()        { return p.getInt("cal_p_rowf1", 27); }
+    public void setPortraitRowF1Pct(int v)  { p.edit().putInt("cal_p_rowf1", Math.max(5, Math.min(95,v))).apply(); }
+    public int getPortraitRowF2Pct()        { return p.getInt("cal_p_rowf2", 58); }
+    public void setPortraitRowF2Pct(int v)  { p.edit().putInt("cal_p_rowf2", Math.max(5, Math.min(95,v))).apply(); }
+    public int getPortraitBenchLeftPct()        { return p.getInt("cal_p_bench_l", -1); }
+    public void setPortraitBenchLeftPct(int v)  { p.edit().putInt("cal_p_bench_l", v).apply(); }
+    public int getPortraitBenchRightPct()       { return p.getInt("cal_p_bench_r", -1); }
+    public void setPortraitBenchRightPct(int v) { p.edit().putInt("cal_p_bench_r", v).apply(); }
     public int getPortraitBoardTopLeftPct()       { return p.getInt("cal_p_tl", getPortraitBoardLeftPct()); }
     public void setPortraitBoardTopLeftPct(int v) { p.edit().putInt("cal_p_tl", v).apply(); }
     public int getPortraitBoardTopRightPct()      { return p.getInt("cal_p_tr", getPortraitBoardRightPct()); }
