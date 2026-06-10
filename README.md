@@ -10,7 +10,7 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-[![Version](https://img.shields.io/badge/version-1.41-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.42-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -64,8 +64,8 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 
 1. **[Download the APK](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)**
 2. Open the downloaded file. If your browser asks, tap **Open** or **Install anyway**.
-3. Android will ask to allow installing from unknown sources — tap **Settings**, enable it for your browser, then go back and tap **Install**.
-4. **Play Protect warning**: Google may show a warning saying the app is not recognised. This is normal for any APK not distributed through the Play Store. Tap **Install anyway** (or **More details → Install anyway** on some devices). The app is safe — the full source code is in this repo.
+3. Android will ask to allow installing from unknown sources. Tap **Settings**, enable it for your browser, then go back and tap **Install**.
+4. **Play Protect warning**: Google may show a warning saying the app is not recognised. This is normal for any APK not distributed through the Play Store. Tap **Install anyway** (or **More details → Install anyway** on some devices). The app is safe. The full source code is in this repo.
 5. Open TFT Scryer, grant the overlay permission, and tap **Start Overlay**.
 6. Launch TFT. The floating sigil appears on screen.
 
@@ -123,7 +123,7 @@ The scan reads text from your screen using OCR. Make sure the TFT game screen is
 Tap **Install anyway** or **More details → Install anyway**. Play Protect warns about any APK not distributed through the Play Store, regardless of whether it is safe. This app has no internet permission and collects nothing. The full source code is in this repo. If the button is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser, then try again.
 
 **A virus scanner flagged the APK.**
-Same reason as above — common false positive for APKs not signed by a Play Store publisher. Full source is here, check it yourself or see the VirusTotal link below.
+Same reason as above. It is a common false positive for APKs not signed by a Play Store publisher. Full source is here, check it yourself or see the VirusTotal link below.
 
 **The champion pool data is out of date.**
 Pool data updates with each new version. Check the releases page for the latest APK. If a new patch just dropped and the app has not updated yet, open an issue.
@@ -140,6 +140,12 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.42 - 2026-06-10
+- Auto Scan rebuilt for reliability and speed. Health bar detection now uses colour ratios instead of fixed colour values, so it works whether your screen renders bright or dim. It runs a standard pass first and a stricter pass only if the first picks up too much. Candidate bars must also pass shape checks (a thin floating strip with clear space above and below), which rules out green grass and trees.
+- New: Instant Visual ID. Every unit read by popup teaches the app what that champion looks like standing on your board. On later scans, learned units are recognized straight from the first screenshot with no tapping, so the scan gets faster every game. Only sure matches skip the tap. The results list shows which units were read by popup and which were recognized visually. Toggle in SETUP.
+- If a smart position taps empty ground, the scan retries slightly lower once before counting a miss. If smart positions turn out wrong for your screen, the scan switches to the calibrated grid mid run instead of wasting the remaining taps.
+- SHOW DOTS banner now says which colour pass found your units. The scan log shows total scan time and how each unit was identified.
 
 ### v1.41 - 2026-06-09
 - Tap anywhere outside the panel to close it. No need to reach for the X or DONE button.
@@ -202,7 +208,7 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 - Fix: the v1.28 sideways stagger correction made probe dots worse on TFT Mobile, not better. It worked out a sideways shift from real measured PC board coordinates and applied it to alternating rows, but on phones that shift came out too large and turned the dots into a dense crisscross mesh instead of clean rows lined up on the hexes.
 - Removed that correction and went back to plain smooth interpolation between the four corners measured during calibration. Users confirmed this lines up well.
 - The 5-step calibration guide from v1.28 stays, since measuring the front-left corner directly is still more accurate than guessing it from symmetry. Only the math that places the dots between the four corners changed.
-- If your dots still look slightly off, re-run TAP TO CALIBRATE in the SETUP tab and try to tap as close to the exact center of each unit as you can — small taps on the wrong spot get stretched across the whole grid.
+- If your dots still look slightly off, re-run TAP TO CALIBRATE in the SETUP tab and try to tap as close to the exact center of each unit as you can. Small taps on the wrong spot get stretched across the whole grid.
 
 ### v1.28 - 2026-06-07
 - Fix: probe dots were still landing slightly off to the side on every other row. We dug into real measured TFT board coordinates and found the board uses a staggered hex grid (the hexes are pointy-top, and every other row is shifted sideways by about half a hex width), stacked on top of the front-to-back perspective that v1.27 already handled.
@@ -258,12 +264,12 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 - Default Board bottom calibration updated from 65% to 72%.
 
 ### v1.18 - 2026-06-05
-- Fix: default probe grid was too narrow. Board left edge moved from 28% to 8% — units in the left 3 columns were never tapped. Board right extended from 70% to 88%. Front row bottom corrected from 60% to 65%. Bench moved from 72% to 80%.
+- Fix: default probe grid was too narrow. Board left edge moved from 28% to 8% because units in the left 3 columns were never tapped. Board right extended from 70% to 88%. Front row bottom corrected from 60% to 65%. Bench moved from 72% to 80%.
 - Use Settings -> Calibrate Scan -> SHOW DOTS to fine-tune for your specific device.
 
 ### v1.17 - 2026-06-05
 - Calibrate Scan (Settings tab): nudge board top, bottom, left edge, right edge, and bench row by 1% increments until the probe dots land on your board hexes.
-- SHOW DOTS button closes the panel and draws numbered circles over TFT — red for board probes, blue for bench probes, in scan order. Fades after 5 seconds.
+- SHOW DOTS button closes the panel and draws numbered circles over TFT, red for board probes, blue for bench probes, in scan order. Fades after 5 seconds.
 - Calibration values persist across restarts. RESET returns to defaults.
 - Tabs reordered to Grid, Econ, Board, Augs, Items, Settings and labelled with words instead of symbols. Tap targets are taller.
 - My Board manual scan button removed from Grid tab (Auto Scan covers it). Opp Board promoted to a full-width button.
