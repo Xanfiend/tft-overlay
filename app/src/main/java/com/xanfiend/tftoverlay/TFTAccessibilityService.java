@@ -16,6 +16,22 @@ public class TFTAccessibilityService extends AccessibilityService {
 
     static volatile TFTAccessibilityService instance;
 
+    /**
+     * True when Android's settings list this service as enabled. If this returns
+     * true while {@link #instance} is null, the service is STUCK: the switch in
+     * Accessibility settings shows ON but Android never (re)bound the service.
+     * This commonly happens right after an app update. The only fix is toggling
+     * the service OFF and back ON in Accessibility settings.
+     */
+    static boolean enabledInSettings(android.content.Context c){
+        try{
+            String flat = android.provider.Settings.Secure.getString(
+                c.getContentResolver(),
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return flat != null && flat.toLowerCase().contains(c.getPackageName().toLowerCase());
+        }catch(Exception e){ return false; }
+    }
+
     @Override
     protected void onServiceConnected() {
         instance = this;
