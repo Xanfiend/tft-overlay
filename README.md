@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.48-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.49-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,11 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.49 - 2026-06-10
+- New way to calibrate: ADJUST GRID. The old calibration asked you to tap four corner units blind, and a slightly off tap meant scans missed units.
+- The new ADJUST GRID button in the SETUP tab shows every scan dot live on top of the game. Drag the gold rings on the four board corners and the bench until the dots sit exactly on your units, then tap SAVE. What you see is exactly where the scan will tap.
+- It starts from your current calibration, so you can nudge an almost-right grid instead of redoing it from scratch. The old TAP TO CALIBRATE and the fine tune rows are still there too.
 
 ### v1.48 - 2026-06-10
 - Fix for overlay animations not playing. Switching tabs or opening the panel just flickered instead of fading smoothly.
