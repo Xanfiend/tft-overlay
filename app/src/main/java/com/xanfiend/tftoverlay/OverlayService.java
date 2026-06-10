@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.46";
+    private static final String APP_VERSION = "v1.47";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -120,7 +120,7 @@ public class OverlayService extends Service {
     // Smart-scan resilience state:
     private boolean autoTapSmartBoard = false;     // board probes came from health-bar detection
     private boolean autoTapSwitchedToGrid = false; // mid-scan grid fallback already used
-    private boolean autoTapNudged = false;         // current probe already re-tapped lower once
+    private int autoTapNudgeStage = 0;             // 0=not retried, 1=tried lower, 2=tried higher
     private int autoTapHits = 0;                   // units identified this scan (popup or visual)
     private int autoScanVisualCount = 0;           // of which: recognized visually, no tap needed
     private int autoTapScreenH = 0;                // screen height, for the nudge distance
@@ -2242,7 +2242,7 @@ public class OverlayService extends Service {
         autoTapConsecutiveMisses=0;
         autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
-        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudged=false;
+        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudgeStage=0;
         autoTapHits=0; autoScanVisualCount=0;
         autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
         autoScanStartMs=android.os.SystemClock.uptimeMillis();
@@ -2336,7 +2336,7 @@ public class OverlayService extends Service {
         autoScanGold=-1; autoScanLevel=-1;
         autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
-        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudged=false;
+        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudgeStage=0;
         autoTapHits=0; autoScanVisualCount=0;
         autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
         autoScanStartMs=android.os.SystemClock.uptimeMillis();
@@ -2942,7 +2942,7 @@ public class OverlayService extends Service {
 
     private void advanceAutoTap(){
         autoTapIndex++;
-        autoTapNudged=false; // each probe gets at most one lower-retry
+        autoTapNudgeStage=0; // each probe gets up to two position retries
         autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},PROBE_GAP_MS);
     }
 
@@ -3055,16 +3055,24 @@ public class OverlayService extends Service {
                     if(autoTapConsecutiveMisses>=3){ finishAutoTapScan(); return; }
                 }
             } else {
-                // BOARD phase miss. Smart positions are supposed to be real units,
-                // so an empty tap there gets one retry slightly lower (the bar->body
-                // offset is an estimate and can land between the bar and the unit).
+                // BOARD phase miss. An empty tap on a board probe gets up to two
+                // position retries before counting as a real miss: first a nudge
+                // down (covers the smart-scan bar->body offset estimate), then a
+                // nudge up from the original spot (covers calibrated-grid probes
+                // whose error direction is unknown).
                 boolean trulyEmpty = r.detectedPopupBounds==null;
-                if(autoTapSmartBoard && !autoTapSwitchedToGrid && trulyEmpty && !autoTapNudged
+                if(!autoTapSwitchedToGrid && trulyEmpty && autoTapNudgeStage<2
                         && autoTapIndex<autoTapBoardProbeCount){
-                    autoTapNudged=true;
+                    int shift=Math.max(8, autoTapScreenH*3/100);
                     int[] pt=autoTapProbes.get(autoTapIndex);
-                    pt[1]+=Math.max(8, autoTapScreenH*3/100);
-                    addScanLog("auto-tap: empty at smart position, retrying lower");
+                    if(autoTapNudgeStage==0){
+                        pt[1]+=shift;
+                        addScanLog("auto-tap: empty, retrying lower");
+                    } else {
+                        pt[1]-=2*shift;
+                        addScanLog("auto-tap: empty, retrying higher");
+                    }
+                    autoTapNudgeStage++;
                     autoTapHandler.postDelayed(new Runnable(){ public void run(){ autoTapNextProbe(); }},PROBE_GAP_MS);
                     return; // same index, do not count a miss
                 }
