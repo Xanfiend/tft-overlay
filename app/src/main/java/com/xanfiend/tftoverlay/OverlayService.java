@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.48";
+    private static final String APP_VERSION = "v1.49";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -106,6 +106,10 @@ public class OverlayService extends Service {
     // temporary storage for steps 1-4 (committed to Pool once all 4 corners are measured)
     private int calTmpTopY = 0, calTmpTopLeft = 0, calTmpTopRight = 0;
     private int calTmpBotY = 0, calTmpBotLeft = 0;
+
+    // adjust-grid: full-screen overlay showing the live probe grid with draggable
+    // corner handles — visual calibration without blind taps
+    private View gridAdjustView = null;
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -1686,6 +1690,18 @@ public class OverlayService extends Service {
         tapCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startTapCalibration(); }});
         root.addView(tapCalBtn);
 
+        TextView adjGridBtn=new TextView(this); adjGridBtn.setText("ADJUST GRID (drag the dots)");
+        adjGridBtn.setTextColor(BONE); adjGridBtn.setTextSize(13); adjGridBtn.setGravity(Gravity.CENTER);
+        adjGridBtn.setPadding(0,12,0,12); adjGridBtn.setBackground(box(CARD,6,GOLD,2));
+        LinearLayout.LayoutParams agbl=new LinearLayout.LayoutParams(-1,-2); agbl.setMargins(0,0,0,4); adjGridBtn.setLayoutParams(agbl);
+        adjGridBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ startGridAdjust(); }});
+        root.addView(adjGridBtn);
+
+        TextView adjHint=new TextView(this);
+        adjHint.setText("Shows every scan dot live over the game. Drag the gold rings until the dots sit on your units, then tap SAVE. The most precise way to calibrate.");
+        adjHint.setTextColor(ASH); adjHint.setTextSize(10); adjHint.setPadding(2,0,0,12);
+        root.addView(adjHint);
+
         String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row","Bench L/R shift"};
         final TextView[] calValTvs=new TextView[6];
         for(int ci=0;ci<6;ci++){
@@ -1932,6 +1948,215 @@ public class OverlayService extends Service {
 
     private void hideCalCaptureView(){
         if(calCaptureView!=null){ try{ wm.removeView(calCaptureView); }catch(Exception e){} calCaptureView=null; }
+    }
+
+    // ---- adjust-grid: drag-based visual calibration ----
+
+    private void startGridAdjust(){
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+            new Runnable(){ public void run(){ showGridAdjustOverlay(); }}, 300);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showGridAdjustOverlay(){
+        hideGridAdjustView();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        final boolean portrait = sh > sw;
+        final float spx=getResources().getDisplayMetrics().scaledDensity;
+        final float grabR=42*getResources().getDisplayMetrics().density; // handle grab radius
+
+        gridAdjustView=new View(OverlayService.this){
+            // working copies in percent; written to Pool only on SAVE
+            float wTop, wBot, wTL, wTR, wBL, wBR, wBenchY, wBenchShift;
+            { // init from saved calibration for the current orientation
+                if(portrait){
+                    wTop=pool.getPortraitBoardTopPct();      wBot=pool.getPortraitBoardBotPct();
+                    wTL =pool.getPortraitBoardTopLeftPct();  wTR =pool.getPortraitBoardTopRightPct();
+                    wBL =pool.getPortraitBoardBotLeftPct();  wBR =pool.getPortraitBoardBotRightPct();
+                    wBenchY=pool.getPortraitBenchYPct();     wBenchShift=0;
+                } else {
+                    wTop=pool.getBoardTopPct();      wBot=pool.getBoardBotPct();
+                    wTL =pool.getBoardTopLeftPct();  wTR =pool.getBoardTopRightPct();
+                    wBL =pool.getBoardBotLeftPct();  wBR =pool.getBoardBotRightPct();
+                    wBenchY=pool.getBenchYPct();     wBenchShift=pool.getBenchXOffsetPct();
+                }
+                if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
+                               t=wTL; wTL=wBL; wBL=t;  t=wTR; wTR=wBR; wBR=t; }
+            }
+            int dragIdx=-1;       // 0..3 = corners, 4 = bench, -1 = none
+            boolean downOnBar=false; boolean downOnSave=false;
+            private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+            // handle positions in px: 0=back-left 1=back-right 2=front-left 3=front-right 4=bench
+            private float[] handleX(int i){
+                float topY=sh*wTop/100f, botY=sh*wBot/100f;
+                switch(i){
+                    case 0: return new float[]{sw*wTL/100f, topY};
+                    case 1: return new float[]{sw*wTR/100f, topY};
+                    case 2: return new float[]{sw*wBL/100f, botY};
+                    case 3: return new float[]{sw*wBR/100f, botY};
+                    default: return new float[]{(sw*wBL/100f+sw*wBR/100f)/2f + sw*wBenchShift/100f, sh*wBenchY/100f};
+                }
+            }
+
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                int W=getWidth(), H=getHeight();
+                p.setStyle(android.graphics.Paint.Style.FILL);
+                p.setColor(0x26000000);
+                canvas.drawRect(0,0,W,H,p);
+
+                // probe dots — same interpolation as buildProbeGrid so what you see is what taps
+                final float[] ROW_F={0f,0.27f,0.58f,1f};
+                float topY=H*wTop/100f, botY=H*wBot/100f;
+                float tlx=W*wTL/100f, trx=W*wTR/100f, blx=W*wBL/100f, brx=W*wBR/100f;
+                p.setColor(0xFFE03131);
+                for(int row=0;row<4;row++){
+                    float t=ROW_F[row];
+                    float cy=topY+t*(botY-topY);
+                    float rowL=tlx+t*(blx-tlx), rowR=trx+t*(brx-trx);
+                    for(int col=0;col<7;col++){
+                        float cx=rowL+col*(rowR-rowL)/6f;
+                        canvas.drawCircle(cx,cy,7,p);
+                    }
+                }
+                // bench dots (blue)
+                float benchHalfGap=(brx-blx)/12f;
+                float benchShiftPx=W*wBenchShift/100f;
+                float bLx=blx-benchHalfGap+benchShiftPx, bRx=brx+benchHalfGap+benchShiftPx;
+                float bY=H*wBenchY/100f;
+                p.setColor(0xFF3B82F6);
+                for(int col=0;col<9;col++){
+                    float cx=bLx+(col+0.5f)*(bRx-bLx)/9f;
+                    canvas.drawCircle(cx,bY,7,p);
+                }
+
+                // drag handles: gold rings at the 4 corners + bench center
+                p.setStyle(android.graphics.Paint.Style.STROKE);
+                p.setStrokeWidth(4);
+                for(int i=0;i<5;i++){
+                    float[] hp=handleX(i);
+                    p.setColor(i==dragIdx?0xFFFFE066:0xFFC9A227);
+                    canvas.drawCircle(hp[0],hp[1],26,p);
+                    canvas.drawCircle(hp[0],hp[1],34,p);
+                }
+
+                // banner
+                p.setStyle(android.graphics.Paint.Style.FILL);
+                float barH=H*0.115f;
+                p.setColor(0xF00B0709);
+                canvas.drawRect(0,0,W,barH,p);
+                p.setTextAlign(android.graphics.Paint.Align.CENTER);
+                p.setColor(0xFFE0D5C0); p.setTextSize(13*spx);
+                p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText("ADJUST GRID", W/2f, barH*0.42f, p);
+                p.setTypeface(android.graphics.Typeface.DEFAULT);
+                p.setColor(0xFF7A6B60); p.setTextSize(10*spx);
+                canvas.drawText("Drag the gold rings until the dots sit on your units", W/2f, barH*0.78f, p);
+
+                // bottom bar: SAVE | CANCEL
+                float btnTop=H*0.90f;
+                p.setColor(0xF00B0709);
+                canvas.drawRect(0,btnTop,W,H,p);
+                p.setColor(0xFF39FF14); p.setTextSize(14*spx);
+                canvas.drawText("SAVE", W*0.25f, (btnTop+H)/2f+5*spx, p);
+                p.setColor(0xFFC1121F);
+                canvas.drawText("CANCEL", W*0.75f, (btnTop+H)/2f+5*spx, p);
+                p.setColor(0xFF3A2024);
+                canvas.drawRect(W/2f-1,btnTop+10,W/2f+1,H-10,p);
+            }
+
+            @Override public boolean onTouchEvent(android.view.MotionEvent e){
+                int W=getWidth(), H=getHeight();
+                float x=e.getX(), y=e.getY();
+                int a=e.getAction();
+                if(a==android.view.MotionEvent.ACTION_DOWN){
+                    // handles win over the bottom bar — the bench handle can sit inside it
+                    dragIdx=-1;
+                    float best=grabR;
+                    for(int i=0;i<5;i++){
+                        float[] hp=handleX(i);
+                        float d=(float)Math.hypot(x-hp[0],y-hp[1]);
+                        if(d<best){ best=d; dragIdx=i; }
+                    }
+                    downOnBar = dragIdx<0 && y>=H*0.90f;
+                    downOnSave = downOnBar && x<W/2f;
+                    invalidate();
+                    return true;
+                } else if(a==android.view.MotionEvent.ACTION_MOVE){
+                    if(dragIdx>=0){
+                        float xp=Math.max(1f,Math.min(99f,x*100f/W));
+                        float yp=Math.max(1f,Math.min(99f,y*100f/H));
+                        switch(dragIdx){
+                            case 0: wTL=xp; wTop=yp; break;
+                            case 1: wTR=xp; wTop=yp; break;
+                            case 2: wBL=xp; wBot=yp; break;
+                            case 3: wBR=xp; wBot=yp; break;
+                            default:
+                                wBenchY=Math.max(50f,Math.min(95f,yp));
+                                if(!portrait){
+                                    float center=(W*wBL/100f+W*wBR/100f)/2f;
+                                    wBenchShift=Math.max(-20f,Math.min(20f,(x-center)*100f/W));
+                                }
+                        }
+                        invalidate();
+                    }
+                    return true;
+                } else if(a==android.view.MotionEvent.ACTION_UP){
+                    if(dragIdx>=0){ dragIdx=-1; invalidate(); return true; }
+                    if(downOnBar && y>=H*0.90f){
+                        if(downOnSave && x<W/2f){
+                            // normalize: back row must be the upper one
+                            if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
+                                           t=wTL; wTL=wBL; wBL=t;  t=wTR; wTR=wBR; wBR=t; }
+                            if(portrait){
+                                pool.setPortraitBoardTopPct(Math.round(wTop));
+                                pool.setPortraitBoardBotPct(Math.round(wBot));
+                                pool.setPortraitBoardTopLeftPct(Math.round(wTL));
+                                pool.setPortraitBoardTopRightPct(Math.round(wTR));
+                                pool.setPortraitBoardBotLeftPct(Math.round(wBL));
+                                pool.setPortraitBoardBotRightPct(Math.round(wBR));
+                                pool.setPortraitBoardLeftPct(Math.round((wTL+wBL)/2f));
+                                pool.setPortraitBoardRightPct(Math.round((wTR+wBR)/2f));
+                                pool.setPortraitBenchYPct(Math.round(wBenchY));
+                            } else {
+                                pool.setBoardTopPct(Math.round(wTop));
+                                pool.setBoardBotPct(Math.round(wBot));
+                                pool.setBoardTopLeftPct(Math.round(wTL));
+                                pool.setBoardTopRightPct(Math.round(wTR));
+                                pool.setBoardBotLeftPct(Math.round(wBL));
+                                pool.setBoardBotRightPct(Math.round(wBR));
+                                pool.setBoardLeftPct(Math.round((wTL+wBL)/2f));
+                                pool.setBoardRightPct(Math.round((wTR+wBR)/2f));
+                                pool.setBenchYPct(Math.round(wBenchY));
+                                pool.setBenchXOffsetPct(Math.round(wBenchShift));
+                            }
+                            Toast.makeText(OverlayService.this,"Grid saved",Toast.LENGTH_SHORT).show();
+                        }
+                        hideGridAdjustView();
+                        mode=4; showPanel();
+                    }
+                    return true;
+                }
+                return true;
+            }
+        };
+        WindowManager.LayoutParams glp=new WindowManager.LayoutParams(
+            sw,sh,0,0,
+            Build.VERSION.SDK_INT>=26
+                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                :WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT);
+        glp.gravity=Gravity.TOP|Gravity.LEFT;
+        try{ wm.addView(gridAdjustView,glp); }catch(Exception ex){ gridAdjustView=null; }
+    }
+
+    private void hideGridAdjustView(){
+        if(gridAdjustView!=null){ try{ wm.removeView(gridAdjustView); }catch(Exception e){} gridAdjustView=null; }
     }
 
     private int calGet(int idx){
@@ -3278,8 +3503,9 @@ public class OverlayService extends Service {
 
     @Override public void onConfigurationChanged(android.content.res.Configuration newConfig){
         super.onConfigurationChanged(newConfig);
-        // if tap-calibration was active, cancel it — the overlay will be wrong size
+        // if tap-calibration or grid-adjust was active, cancel it — the overlay will be wrong size
         if(calCaptureView!=null){ calStep=0; hideCalCaptureView(); }
+        if(gridAdjustView!=null) hideGridAdjustView();
         // screen rotated — rebuild panel with fresh dimensions so it fits the new orientation
         if(panel != null){
             int savedMode = mode;
@@ -3305,6 +3531,7 @@ public class OverlayService extends Service {
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         autoTapHandler.removeCallbacksAndMessages(null);
         hideCalCaptureView();
+        hideGridAdjustView();
         hideProbeDots();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
