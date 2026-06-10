@@ -68,6 +68,7 @@ public class MainActivity extends Activity {
         sigil.setTextSize(80);
         sigil.setGravity(Gravity.CENTER);
         root.addView(sigil);
+        pulseGlow(sigil);
 
         // glow ring of symbols under sigil
         TextView sigilRing = new TextView(this);
@@ -99,7 +100,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.42");
+        ver.setText("v1.43");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -121,6 +122,7 @@ public class MainActivity extends Activity {
             tl.setMargins(t==0?0:8, 0, 0, 0);
             tab.setLayoutParams(tl);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ activeTab=ti; rebuildContent(); }});
+            pressFeedback(tab);
             tabViews[t] = tab;
             tabs.addView(tab);
         }
@@ -153,6 +155,43 @@ public class MainActivity extends Activity {
         contentArea.removeAllViews();
         if(activeTab == 0) buildSetup();
         else buildChangelog();
+
+        // soft fade-in for the freshly built tab content
+        contentArea.setAlpha(0f);
+        contentArea.animate().alpha(1f).setDuration(220)
+            .setInterpolator(new android.view.animation.DecelerateInterpolator())
+            .start();
+    }
+
+    // slow ambient glow pulse on the hero sigil
+    private void pulseGlow(final TextView v){
+        android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0.55f, 1f);
+        va.setDuration(1800);
+        va.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        va.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        va.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener(){
+            public void onAnimationUpdate(android.animation.ValueAnimator a){
+                v.setAlpha((Float)a.getAnimatedValue());
+            }
+        });
+        va.start();
+    }
+
+    // brief press-down feedback for tappable views, without consuming the click
+    private void pressFeedback(final View v){
+        v.setOnTouchListener(new View.OnTouchListener(){
+            public boolean onTouch(View view, android.view.MotionEvent e){
+                int a = e.getAction();
+                if(a == android.view.MotionEvent.ACTION_DOWN){
+                    view.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start();
+                } else if(a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL){
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(120)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
+                }
+                return false;
+            }
+        });
     }
 
     private void buildSetup(){
@@ -282,6 +321,7 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1,-2);
             al.setMargins(0, 10, 0, 0); actionBtn.setLayoutParams(al);
             actionBtn.setOnClickListener(btnAction);
+            pressFeedback(actionBtn);
             card.addView(actionBtn);
         }
         contentArea.addView(card);
@@ -304,6 +344,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.43  ·  2026-06-10","Visual polish pass across the app and overlay. The floating sigil now bounces in when the overlay starts, gives a quick press animation on every tap, and the panel now fades and scales in when it opens instead of snapping into view. Switching tabs in the overlay cross-fades the new content in, and tab buttons plus the close button give the same tactile press feedback. On the launch screen, the hero sigil has a slow ambient glow pulse, tab content (Setup / Changelog) fades in smoothly when switching, and every button gives a soft press animation."},
             {"v1.42  ·  2026-06-10","Auto Scan rebuilt to be as reliable and as fast as the platform allows. Health bar detection now uses colour ratios instead of fixed colour values, so it works the same whether your screen renders bright or dim, and it runs in two passes: a standard pass first, then a stricter one only if the first picks up too much. Every candidate bar must also pass shape checks (a thin floating strip with clear space above and below it), which rules out grass and trees that happen to be green. New: Instant Visual ID. Each unit read by popup teaches the app what that champion looks like standing on your board. On later scans, learned units are recognized straight from the first screenshot with no tapping at all, so the scan gets faster every game you play. Only sure matches skip the tap; anything uncertain is tapped and read as usual, and a clear unit list shows which were read by popup and which were recognized visually. If a smart position taps empty ground, the scan retries slightly lower once before counting it a miss. And if the smart positions turn out to be wrong for your screen, the scan switches to the calibrated grid mid run instead of wasting the remaining taps. The SHOW DOTS banner now also says which colour pass found your units, and the scan log shows total time and how each unit was identified. Toggle Instant Visual ID in SETUP."},
             {"v1.41  ·  2026-06-09","Speed and comfort pass across the whole app. Tap anywhere outside the panel to close it, no need to reach for the X or DONE button. The floating button now glides to the nearest screen edge after you drag it, so it never settles over the middle of the board, and it pulls itself back on screen if dropped half off the edge. A finished Auto Scan now gives a distinct double vibration so you can feel it complete without watching the screen. Under the hood: champion cost lookups during panel rendering were doing a full name-list sweep per lookup, tens of thousands of string comparisons every time the ODDS tab opened on a tracked board — now a cached single-step lookup, so tab switching is snappier on slower phones. The OCR champion matcher also stops re-normalizing all sixty champion names for every piece of text it reads, which trims time off every scan, and settings writes are batched."},
             {"v1.40  ·  2026-06-09","Fix: Smart Scan was detecting a false unit on an empty board and missing real units when champions were present. The health bar colour filter was too loose and was picking up green arena elements like grass and bamboo. The filter now requires a much brighter, more saturated green with very low red, which matches actual TFT unit health bars and rejects background colour. The enemy red bar filter got the same tightening pass. The debug log now also shows the exact RGB colour values of every bar it detects, so if detection ever drifts again you can share the log and we can tune the numbers precisely."},
@@ -395,7 +436,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(0, 0, 0, 12);
         b.setLayoutParams(lp);
-        b.setOnClickListener(l); return b;
+        b.setOnClickListener(l); pressFeedback(b); return b;
     }
 
     private TextView btnPrimary(String txt, View.OnClickListener l){
@@ -406,7 +447,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(0, 0, 0, 12);
         b.setLayoutParams(lp);
-        b.setOnClickListener(l); return b;
+        b.setOnClickListener(l); pressFeedback(b); return b;
     }
 
     private TextView btnDestructive(String txt, View.OnClickListener l){
@@ -416,7 +457,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(0, 0, 0, 12);
         b.setLayoutParams(lp);
-        b.setOnClickListener(l); return b;
+        b.setOnClickListener(l); pressFeedback(b); return b;
     }
 
     private GradientDrawable shape(int fill, int stroke, int radius, int strokeW){

@@ -10,7 +10,7 @@
 
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
-[![Version](https://img.shields.io/badge/version-1.42-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.43-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -140,6 +140,11 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.43 - 2026-06-10
+- Visual polish pass across the app and overlay. The floating sigil now bounces in when the overlay starts and gives a quick press animation on every tap.
+- The overlay panel fades and scales in when it opens instead of snapping into view, and switching tabs now cross-fades the new content in. Tab buttons and the close button give the same press feedback.
+- On the launch screen, the hero sigil has a slow ambient glow pulse, tab content fades in smoothly when switching between Setup and Changelog, and every button gives a soft press animation.
 
 ### v1.42 - 2026-06-10
 - Auto Scan rebuilt for reliability and speed. Health bar detection now uses colour ratios instead of fixed colour values, so it works whether your screen renders bright or dim. It runs a standard pass first and a stricter pass only if the first picks up too much. Candidate bars must also pass shape checks (a thin floating strip with clear space above and below), which rules out green grass and trees.
