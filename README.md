@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.50-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.51-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,11 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.51 - 2026-06-10
+- Real fix for the animations. Switching tabs rebuilds the whole panel, and that rebuild took longer than the animation, so the fade finished invisibly before the first new frame reached the screen. Animations now start on the new content's first drawn frame, so the panel entrance and tab cross fades actually play. Tab switches also slide up slightly.
+- Star levels for every scanned unit. Units recognized by sprite (no tap needed) now get their star level from the color of the star icons above their health bar: bronze is 1 star, silver is 2, gold is 3. Color is used instead of unit size on purpose, since size also changes with naturally-big champions and combat effects.
+- If the popup text misses the stars on a tapped unit, the bar-icon color fills in as a backup. Star counts show next to each name in the AUTO SCAN and OPP SCAN results.
 
 ### v1.50 - 2026-06-10
 - ADJUST GRID upgrade: row spacing and bench length are now adjustable too.
