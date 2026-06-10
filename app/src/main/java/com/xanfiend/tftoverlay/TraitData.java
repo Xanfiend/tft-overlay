@@ -10,7 +10,9 @@ package com.xanfiend.tftoverlay;
  */
 public final class TraitData {
 
-    // Set 17 "Space Gods" — verified vs Riot patch notes 17.4
+    // Set 17 "Space Gods" — verified vs Riot patch notes 17.5
+    // (17.5 changed trait stat numbers only — Arbiter, Meeple, Space
+    //  Groove nerfs — breakpoints below are unchanged)
     public static final String[][] TRAITS = {
         // Origins
         {"Dark Star",    "2 / 4 / 6 / 9", "Black holes execute <10% HP; units gain AP/AD"},
