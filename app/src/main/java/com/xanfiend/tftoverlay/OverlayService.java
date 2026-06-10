@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.47";
+    private static final String APP_VERSION = "v1.48";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -232,8 +232,12 @@ public class OverlayService extends Service {
         button.setAlpha(pool.getAlpha());
         button.setScaleX(0f); button.setScaleY(0f);
 
+        // FLAG_HARDWARE_ACCELERATED is required for windows added from a Service:
+        // without it the window renders in software mode and View.animate() skips
+        // frames, so animations show as a flicker instead of a smooth transition.
         btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
         btnLp.gravity=Gravity.TOP|Gravity.START; btnLp.x=20; btnLp.y=300;
         button.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; long down; boolean moved;
@@ -383,7 +387,8 @@ public class OverlayService extends Service {
                 (int)(getResources().getDisplayMetrics().heightPixels*0.86),
                 wtype(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                    | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                    | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
             panelLp.gravity=Gravity.CENTER;
             // tap anywhere outside the panel (on the game) to dismiss it
