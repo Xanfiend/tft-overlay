@@ -53,6 +53,10 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams patLp = new FrameLayout.LayoutParams(-1, -1);
         frame.addView(pattern, patLp);
 
+        // animated ember layer: slow-drifting glowing particles behind the content
+        EmberView embers = new EmberView(this);
+        frame.addView(embers, new FrameLayout.LayoutParams(-1, -1));
+
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(0x00000000);
 
@@ -100,7 +104,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.51");
+        ver.setText("v1.52");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -357,6 +361,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.52  ·  2026-06-10","Animated app background. The launch screen now has slow-drifting glowing embers floating up behind the content, in the app's blood red, gold and violet palette, with a gentle twinkle. It is built to cost nothing when you are not looking at it: the animation only runs while the launch screen is actually on screen, and stops completely the moment the app goes to the background or the screen closes. The overlay panel in game is untouched, nothing moves behind your board."},
             {"v1.51  ·  2026-06-10","Two changes. First, the real fix for animations. v1.48 enabled hardware drawing but the transitions still looked like a flicker, and the cause turned out to be timing: switching tabs rebuilds the whole panel, and that rebuild takes longer than the animation, so the fade had already finished behind the scenes before the first new frame ever reached the screen. Animations now wait for the new content's first drawn frame before starting, so the panel entrance and tab cross fades actually play. Tab switches also got a subtle slide-up. Second, star levels everywhere in scanning. Units read from the tap popup already had stars; now units recognized by sprite (the ≈ ones, which skip the tap) get their star level too. It is read from the COLOR of the star icons above each unit's health bar: bronze is 1 star, silver is 2, gold is 3. Color was chosen deliberately over sprite size, because size also grows with naturally-big champions and combat effects and would misread them. If the popup text misses the stars on a tapped unit, the bar-icon color fills in as a backup. Star counts show in AUTO SCAN and OPP SCAN results next to each name."},
             {"v1.50  ·  2026-06-10","ADJUST GRID upgrade: row spacing and bench length are now adjustable too. The corner rings shaped the board outline, but the two middle rows always sat at fixed positions between the back and front rows, so they could miss your units even with perfect corners. Each middle row now has its own gold ring you can drag up and down to space the rows exactly right. The bench also had a fixed length tied to the board width; it now has a ring on each end so you can stretch or shrink it to match the real bench slots, and dragging either end up or down moves the whole bench row. Auto Scan, Auto Opp Scan and SHOW DOTS all use the adjusted spacing and bench length. RESET clears the new settings along with the rest of the calibration."},
             {"v1.49  ·  2026-06-10","New way to calibrate: ADJUST GRID. The old calibration asked you to tap four corner units blind, and if a tap was slightly off you would not find out until a scan missed half the board. The new ADJUST GRID button in the SETUP tab shows every scan dot live on top of the game, with gold rings on the four board corners and the bench. Drag the rings until the dots sit exactly on your units, watching all 28 board dots and 9 bench dots move in real time, then tap SAVE. What you see is exactly where the scan will tap, so there is no more guessing. The old TAP TO CALIBRATE and the fine tune percent rows are still there if you prefer them. ADJUST GRID also starts from your current calibration, so you can use it to nudge an almost-right grid instead of redoing it from scratch."},
@@ -499,4 +504,72 @@ public class MainActivity extends Activity {
 
     private boolean canDraw(){ return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this); }
     private void toast(String m){ Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
+
+    // Slow-drifting glowing embers behind the launch screen content. The frame
+    // loop runs only while the view is attached and its window is visible, so it
+    // costs nothing once the screen is closed or the app is in the background.
+    private static class EmberView extends View {
+        private static final int N = 26;
+        private final float[] x = new float[N], y = new float[N], r = new float[N],
+                              spd = new float[N], phase = new float[N];
+        private final int[] clr = new int[N];
+        private final android.graphics.Paint p =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final java.util.Random rnd = new java.util.Random();
+        private boolean running = false;
+        private long lastMs;
+        private final Runnable tick = new Runnable(){ public void run(){
+            if(!running) return;
+            step(); invalidate();
+            postDelayed(this, 33);
+        }};
+        EmberView(android.content.Context c){ super(c); }
+        @Override protected void onSizeChanged(int w, int h, int ow, int oh){
+            if(w>0 && h>0) for(int i=0;i<N;i++) seed(i, true);
+        }
+        private void seed(int i, boolean anywhere){
+            int w=getWidth(), h=getHeight(); if(w==0 || h==0) return;
+            x[i]=rnd.nextFloat()*w;
+            y[i]=anywhere ? rnd.nextFloat()*h : h+20;
+            r[i]=2f+rnd.nextFloat()*5f;
+            spd[i]=(0.02f+rnd.nextFloat()*0.05f)*h/1000f; // px per ms, full climb ~20-50s
+            phase[i]=rnd.nextFloat()*6.283f;
+            int pick=rnd.nextInt(10);
+            clr[i]= pick<5 ? BLOODL : pick<8 ? GOLD : PURPL;
+        }
+        private void step(){
+            long now=android.os.SystemClock.uptimeMillis();
+            long dt=lastMs==0 ? 33 : Math.min(80, now-lastMs);
+            lastMs=now;
+            for(int i=0;i<N;i++){
+                y[i]-=spd[i]*dt;
+                x[i]+=(float)Math.sin(now/1400f+phase[i])*0.35f;
+                if(y[i]<-20) seed(i, false);
+            }
+        }
+        @Override protected void onDraw(android.graphics.Canvas c){
+            long now=android.os.SystemClock.uptimeMillis();
+            for(int i=0;i<N;i++){
+                // twinkle: each ember breathes between 45% and 100% of its brightness
+                float tw=(float)(0.45+0.275*(1+Math.sin(now/700f+phase[i]*2)));
+                p.setColor((clr[i]&0x00FFFFFF)|((int)(60*tw)<<24));
+                c.drawCircle(x[i], y[i], r[i]*2.6f, p); // soft outer glow
+                p.setColor((clr[i]&0x00FFFFFF)|((int)(150*tw)<<24));
+                c.drawCircle(x[i], y[i], r[i], p);
+            }
+        }
+        @Override protected void onAttachedToWindow(){
+            super.onAttachedToWindow();
+            running=true; lastMs=0; post(tick);
+        }
+        @Override protected void onDetachedFromWindow(){
+            running=false; removeCallbacks(tick);
+            super.onDetachedFromWindow();
+        }
+        @Override protected void onWindowVisibilityChanged(int v){
+            super.onWindowVisibilityChanged(v);
+            if(v==VISIBLE && !running){ running=true; lastMs=0; post(tick); }
+            else if(v!=VISIBLE && running){ running=false; removeCallbacks(tick); }
+        }
+    }
 }
