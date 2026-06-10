@@ -32,7 +32,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.50";
+    private static final String APP_VERSION = "v1.51";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -403,20 +403,41 @@ public class OverlayService extends Service {
                 }
             });
             wm.addView(panel,panelLp);
-            // entrance: panel scales and fades in from the floating button
+            // entrance: panel scales and fades in from the floating button. The
+            // animation must start on the panel's FIRST DRAWN FRAME, not now: the
+            // first measure+layout of the full panel tree can take longer than the
+            // animation itself, so an animation started here would already be past
+            // its end when the first frame appears — it would play invisibly and
+            // the panel would just pop in.
             final float targetAlpha=pool.getAlpha();
-            panel.setAlpha(0f); panel.setScaleX(0.92f); panel.setScaleY(0.92f);
-            panel.animate().alpha(targetAlpha).scaleX(1f).scaleY(1f).setDuration(180)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            final View pv=panel;
+            pv.setAlpha(0f); pv.setScaleX(0.92f); pv.setScaleY(0.92f);
+            pv.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
+                public boolean onPreDraw(){
+                    pv.getViewTreeObserver().removeOnPreDrawListener(this);
+                    pv.animate().alpha(targetAlpha).scaleX(1f).scaleY(1f).setDuration(180)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+                    return true;
+                }
+            });
         } else {
             // panel already open: reuse the window, just clear and rebuild content — no flash
             root=(LinearLayout)((ScrollView)panel).getChildAt(0);
             root.removeAllViews();
             panel.setAlpha(pool.getAlpha());
-            // quick cross-fade so tab switches and refreshes feel less abrupt
-            root.setAlpha(0.4f);
-            root.animate().alpha(1f).setDuration(120)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+            // cross-fade the new tab in, starting on its first drawn frame (see the
+            // entrance comment above — starting now would finish before it is visible)
+            final LinearLayout fr=root;
+            fr.setAlpha(0f);
+            fr.setTranslationY(12f);
+            fr.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
+                public boolean onPreDraw(){
+                    fr.getViewTreeObserver().removeOnPreDrawListener(this);
+                    fr.animate().alpha(1f).translationY(0f).setDuration(150)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+                    return true;
+                }
+            });
         }
 
         // header: title + close
@@ -601,7 +622,7 @@ public class OverlayService extends Service {
             asrTv.setTextColor(BONE); asrTv.setTextSize(12); asrTv.setPadding(2,0,2,4); root.addView(asrTv);
             if(anyVisual){
                 TextView visHint=new TextView(this);
-                visHint.setText("★ = read from popup  ·  ≈ = recognized by sprite, no tap needed");
+                visHint.setText("★ = star level  ·  ≈ = recognized by sprite, no tap needed");
                 visHint.setTextColor(DIM); visHint.setTextSize(9); visHint.setPadding(2,0,2,4);
                 root.addView(visHint);
             }
@@ -3073,12 +3094,16 @@ public class OverlayService extends Service {
                 if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
             }
             if(dup) continue;
-            units.add(new int[]{cx,tapY});
+            // star level from the star icons drawn directly above the bar — COLOR
+            // based (bronze/silver/gold), so unit size differences cannot fool it
+            int stars=starsAboveBar(px,zw,zh,cx-zoneLeft,minY-zoneTop,maxY-minY,barW);
+            units.add(new int[]{cx,tapY,stars});
             // log the bar's center pixel color so thresholds stay tunable from logs
             int relX=cx-zoneLeft, relY=(minY+maxY)/2-zoneTop;
             if(relX>=0 && relX<zw && relY>=0 && relY<zh){
                 int pc=px[relY*zw+relX];
                 clrLog.append(" (").append((pc>>16)&0xFF).append(",").append((pc>>8)&0xFF).append(",").append(pc&0xFF).append(")");
+                if(stars>0) clrLog.append(stars).append("★");
             }
         }
         if(units.isEmpty()) return null;
@@ -3086,6 +3111,36 @@ public class OverlayService extends Service {
         java.util.Collections.sort(units,(a,b2)-> a[1]!=b2[1] ? a[1]-b2[1] : a[0]-b2[0]);
         addScanLog(clrLog.toString());
         return units;
+    }
+
+    // Star level read from the star icons that TFT draws directly above each
+    // unit's health bar. Classification is by COLOR ONLY: gold = 3 stars,
+    // silver = 2, bronze = 1. Sprite size grows with star level too, but size
+    // also changes with naturally-large champions and combat buffs, so color is
+    // the only reliable signal. Returns 0 when no clear star color is found
+    // (callers treat 0 as unknown, not as 1 star).
+    private static int starsAboveBar(int[] px,int zw,int zh,int relCx,int relBarTop,int barThick,int barW){
+        int bandH=Math.max(6, barThick*3);
+        int y1=relBarTop-2, y0=Math.max(0, y1-bandH);
+        int x0=Math.max(0, relCx-barW/2), x1=Math.min(zw-1, relCx+barW/2);
+        if(y1<=y0 || x1<=x0 || y1>=zh) return 0;
+        int gold=0, silver=0, bronze=0;
+        for(int y=y0;y<=y1;y++){
+            int base=y*zw;
+            for(int x=x0;x<=x1;x++){
+                int c=px[base+x];
+                int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
+                if(r>=200 && g>=140 && g<r && b<=110 && b*2<r) gold++;
+                else if(r>=150 && g>=150 && b>=150
+                        && Math.abs(r-g)<=35 && Math.abs(g-b)<=45 && Math.abs(r-b)<=45) silver++;
+                else if(r>=110 && r<200 && g*10>=r*4 && g*10<=r*8 && b*2<r) bronze++;
+            }
+        }
+        int minPix=Math.max(4,(x1-x0)/6);
+        if(gold>=minPix && gold>=silver && gold>=bronze) return 3;
+        if(silver>=minPix && silver>=gold && silver>=bronze) return 2;
+        if(bronze>=minPix) return 1;
+        return 0;
     }
 
     // True if the zone-relative scanline at relY is more than 40% bar-colored
@@ -3261,15 +3316,21 @@ public class OverlayService extends Service {
             if(m==null){ toTap.add(u); continue; }
             autoScanVisualCount++;
             autoTapHits++;
-            addScanLog("visual ID: "+m.name+" sim="+(int)(m.sim*100)+"% margin="+(int)(m.margin*100)+"%");
+            // star level detected from the star-icon color above this unit's health bar
+            int uStars = u.length>2 ? u[2] : 0;
+            addScanLog("visual ID: "+m.name+(uStars>0?" "+uStars+"★":"")
+                    +" sim="+(int)(m.sim*100)+"% margin="+(int)(m.margin*100)+"%");
             if(opp){
                 if(!oppScanResults.containsKey(m.name)){
-                    oppScanResults.put(m.name,1);
+                    oppScanResults.put(m.name,Math.max(1,uStars));
                     pool.addOpp(m.name,1);
                 }
             } else {
                 pool.add(m.name,1);
-                autoScanResults.add(m.name+" ≈"); // ≈ marks a visual match
+                StringBuilder entry=new StringBuilder(m.name);
+                for(int i=0;i<uStars;i++) entry.append("★");
+                entry.append(" ≈"); // ≈ marks a visual match
+                autoScanResults.add(entry.toString());
             }
         }
         if(autoScanVisualCount>0) buzz();
@@ -3283,14 +3344,15 @@ public class OverlayService extends Service {
         boolean inBenchPhase=(!autoOppMode && autoTapIndex>=autoTapBoardProbeCount);
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
-            int stars=Math.max(1,r.detectedBoardStars);
+            final int[] probePos = autoTapIndex<autoTapProbes.size() ? autoTapProbes.get(autoTapIndex) : null;
+            // star level: popup OCR first; if it missed the stars, fall back to the
+            // star-icon color read above this unit's health bar during detection
+            int stars=r.detectedBoardStars;
+            if(stars<=0 && probePos!=null && probePos.length>2) stars=probePos[2];
+            if(stars<=0) stars=1;
             buzz();
             autoTapConsecutiveMisses=0;
             autoTapHits++;
-            // learn this champion's board sprite at the confirmed position, so the
-            // next scan can recognize it visually without tapping. Skip when the
-            // popup overlaps the crop area (would contaminate the sprite).
-            final int[] probePos = autoTapIndex<autoTapProbes.size() ? autoTapProbes.get(autoTapIndex) : null;
             final boolean onBoard = !inBenchPhase;
             if(autoOppMode){
                 // opponent scan: record into oppScanResults, increment contest badge
