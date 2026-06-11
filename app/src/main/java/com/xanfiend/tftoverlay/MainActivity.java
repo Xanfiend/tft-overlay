@@ -3,7 +3,9 @@ package com.xanfiend.tftoverlay;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -104,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.52");
+        ver.setText("v1.53");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -361,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.53  ·  2026-06-11","Visual polish pass on every button and panel, in game and on the launch screen. Buttons now have a subtle gradient (lighter at the top, darker at the bottom) instead of a flat colour, so they look like real raised buttons, and they brighten when pressed for clearer touch feedback. The active tab in the overlay now gets a gold underline so it stands out at a glance. The floating sigil button got a soft red glow ring behind it that slowly pulses, like it is breathing. The overlay panel corners are slightly more rounded. None of this changes how anything works, it is purely visual."},
             {"v1.52  ·  2026-06-10","Animated app background. The launch screen now has slow-drifting glowing embers floating up behind the content, in the app's blood red, gold and violet palette, with a gentle twinkle. It is built to cost nothing when you are not looking at it: the animation only runs while the launch screen is actually on screen, and stops completely the moment the app goes to the background or the screen closes. The overlay panel in game is untouched, nothing moves behind your board."},
             {"v1.51  ·  2026-06-10","Two changes. First, the real fix for animations. v1.48 enabled hardware drawing but the transitions still looked like a flicker, and the cause turned out to be timing: switching tabs rebuilds the whole panel, and that rebuild takes longer than the animation, so the fade had already finished behind the scenes before the first new frame ever reached the screen. Animations now wait for the new content's first drawn frame before starting, so the panel entrance and tab cross fades actually play. Tab switches also got a subtle slide-up. Second, star levels everywhere in scanning. Units read from the tap popup already had stars; now units recognized by sprite (the ≈ ones, which skip the tap) get their star level too. It is read from the COLOR of the star icons above each unit's health bar: bronze is 1 star, silver is 2, gold is 3. Color was chosen deliberately over sprite size, because size also grows with naturally-big champions and combat effects and would misread them. If the popup text misses the stars on a tapped unit, the bar-icon color fills in as a backup. Star counts show in AUTO SCAN and OPP SCAN results next to each name."},
             {"v1.50  ·  2026-06-10","ADJUST GRID upgrade: row spacing and bench length are now adjustable too. The corner rings shaped the board outline, but the two middle rows always sat at fixed positions between the back and front rows, so they could miss your units even with perfect corners. Each middle row now has its own gold ring you can drag up and down to space the rows exactly right. The bench also had a fixed length tied to the board width; it now has a ring on each end so you can stretch or shrink it to match the real bench slots, and dragging either end up or down moves the whole bench row. Auto Scan, Auto Opp Scan and SHOW DOTS all use the adjusted spacing and bench length. RESET clears the new settings along with the rest of the calibration."},
@@ -486,10 +489,26 @@ public class MainActivity extends Activity {
         b.setOnClickListener(l); pressFeedback(b); return b;
     }
 
-    private GradientDrawable shape(int fill, int stroke, int radius, int strokeW){
-        GradientDrawable g = new GradientDrawable();
-        g.setCornerRadius(radius); g.setColor(fill); g.setStroke(strokeW, stroke);
+    // subtle vertical gradient (lighter top, darker bottom) with a brightened
+    // pressed state, matching the overlay's button styling
+    private Drawable shape(int fill, int stroke, int radius, int strokeW){
+        GradientDrawable normal=gradFill(fill,stroke,radius,strokeW);
+        GradientDrawable pressed=gradFill(shade(fill,1.35f),stroke,radius,strokeW);
+        StateListDrawable sl=new StateListDrawable();
+        sl.addState(new int[]{android.R.attr.state_pressed}, pressed);
+        sl.addState(new int[]{}, normal);
+        return sl;
+    }
+    private GradientDrawable gradFill(int fill, int stroke, int radius, int strokeW){
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{shade(fill,1.18f), shade(fill,0.85f)});
+        g.setCornerRadius(radius); g.setStroke(strokeW, stroke);
         return g;
+    }
+    private static int shade(int c, float f){
+        int a=(c>>>24)&0xFF, r=(c>>16)&0xFF, gC=(c>>8)&0xFF, b=c&0xFF;
+        r=Math.min(255,Math.round(r*f)); gC=Math.min(255,Math.round(gC*f)); b=Math.min(255,Math.round(b*f));
+        return (a<<24)|(r<<16)|(gC<<8)|b;
     }
 
     private TextView divider(int top, int bot){
