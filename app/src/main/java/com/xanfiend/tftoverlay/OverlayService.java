@@ -7,7 +7,10 @@ import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.widget.FrameLayout;
 import android.os.Build;
 import android.os.IBinder;
 import android.provider.Settings;
@@ -26,13 +29,15 @@ import java.util.List;
 public class OverlayService extends Service {
     private WindowManager wm;
     private View button;
+    private View glowView;
+    private android.animation.ValueAnimator glowAnim;
     private View panel;
     private Pool pool;
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.52";
+    private static final String APP_VERSION = "v1.53";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -196,9 +201,27 @@ public class OverlayService extends Service {
         return Build.VERSION.SDK_INT>=26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                                          : WindowManager.LayoutParams.TYPE_PHONE;
     }
-    private GradientDrawable box(int c,int r,int sc,int sw){
-        GradientDrawable g=new GradientDrawable(); g.setColor(c); g.setCornerRadius(r);
-        if(sw>0) g.setStroke(sw,sc); return g;
+    // subtle vertical gradient (lighter top, darker bottom) on every box, with a
+    // brightened pressed state so buttons visibly react to touch
+    private Drawable box(int c,int r,int sc,int sw){
+        GradientDrawable normal=grad(c,r,sc,sw);
+        GradientDrawable pressed=grad(shade(c,1.35f),r,sc,sw);
+        StateListDrawable sl=new StateListDrawable();
+        sl.addState(new int[]{android.R.attr.state_pressed}, pressed);
+        sl.addState(new int[]{}, normal);
+        return sl;
+    }
+    private GradientDrawable grad(int c,int r,int sc,int sw){
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{shade(c,1.18f), shade(c,0.85f)});
+        g.setCornerRadius(r);
+        if(sw>0) g.setStroke(sw,sc);
+        return g;
+    }
+    private static int shade(int c, float f){
+        int a=(c>>>24)&0xFF, r=(c>>16)&0xFF, gC=(c>>8)&0xFF, b=c&0xFF;
+        r=Math.min(255,Math.round(r*f)); gC=Math.min(255,Math.round(gC*f)); b=Math.min(255,Math.round(b*f));
+        return (a<<24)|(r<<16)|(gC<<8)|b;
     }
     // brief press-down feedback for panel buttons/tabs, without consuming the click
     private void pressFeedback(final View v){
@@ -232,9 +255,37 @@ public class OverlayService extends Service {
         TextView g=new TextView(this); g.setText("\u29BF"); g.setTextColor(BLOODL); g.setTextSize(22); g.setGravity(Gravity.CENTER);
         btnLabel=new TextView(this); btnLabel.setText("SCRY"); btnLabel.setTextColor(GOLD); btnLabel.setTextSize(8);
         btnLabel.setGravity(Gravity.CENTER); btnLabel.setLetterSpacing(0.25f); btnLabel.setPadding(0,2,0,0);
-        c.addView(g); c.addView(btnLabel); button=c;
+        c.addView(g); c.addView(btnLabel);
+
+        // soft radial glow ring behind the sigil, slow pulse so the floating
+        // button feels alive without being distracting
+        FrameLayout fc=new FrameLayout(this);
+        glowView=new View(this);
+        GradientDrawable glowD=new GradientDrawable();
+        glowD.setShape(GradientDrawable.OVAL);
+        glowD.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        glowD.setGradientRadius(85f);
+        glowD.setColors(new int[]{0x66C1121F, 0x00C1121F});
+        glowView.setBackground(glowD);
+        FrameLayout.LayoutParams glp=new FrameLayout.LayoutParams(170,170); glp.gravity=Gravity.CENTER;
+        fc.addView(glowView, glp);
+        FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        clp.gravity=Gravity.CENTER;
+        fc.addView(c, clp);
+        button=fc;
         button.setAlpha(pool.getAlpha());
         button.setScaleX(0f); button.setScaleY(0f);
+
+        glowAnim=android.animation.ValueAnimator.ofFloat(0.4f,1f);
+        glowAnim.setDuration(1500);
+        glowAnim.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        glowAnim.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        glowAnim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener(){
+            public void onAnimationUpdate(android.animation.ValueAnimator a){
+                if(glowView!=null) glowView.setAlpha((Float)a.getAnimatedValue());
+            }
+        });
+        glowAnim.start();
 
         // FLAG_HARDWARE_ACCELERATED is required for windows added from a Service:
         // without it the window renders in software mode and View.animate() skips
@@ -382,7 +433,7 @@ public class OverlayService extends Service {
             ScrollView scroll=new ScrollView(this);
             root=new LinearLayout(this);
             root.setOrientation(LinearLayout.VERTICAL);
-            root.setBackground(box(VOID,8,BLOOD,2));
+            root.setBackground(box(VOID,12,BLOOD,2));
             root.setPadding(22,18,22,18);
             scroll.addView(root);
             panel=scroll;
@@ -460,14 +511,22 @@ public class OverlayService extends Service {
         String[] tabNames={"POOL","ODDS","GUIDE","GOLD","\u2699 SETUP"};
         for(int t=0;t<5;t++){
             final int tm=tabModes[t]; boolean on=mode==tm;
+            LinearLayout tabWrap=new LinearLayout(this); tabWrap.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams twl=new LinearLayout.LayoutParams(0,-2,1f); twl.setMargins(2,0,2,0); tabWrap.setLayoutParams(twl);
             TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(9); tab.setLetterSpacing(0.05f);
             tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,15,0,15);
-            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,1f); tl.setMargins(2,0,2,0); tab.setLayoutParams(tl);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
             pressFeedback(tab);
-            tabs.addView(tab);
+            tabWrap.addView(tab);
+            // gold underline marks the active tab
+            View underline=new View(this);
+            LinearLayout.LayoutParams ul=new LinearLayout.LayoutParams(-1,on?3:0); ul.setMargins(8,3,8,0);
+            underline.setLayoutParams(ul);
+            underline.setBackground(box(on?GOLD:0,2,0,0));
+            tabWrap.addView(underline);
+            tabs.addView(tabWrap);
         }
         root.addView(tabs);
 
@@ -3649,6 +3708,7 @@ public class OverlayService extends Service {
         if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         autoTapHandler.removeCallbacksAndMessages(null);
+        if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         hideCalCaptureView();
         hideGridAdjustView();
         hideProbeDots();
