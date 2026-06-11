@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.55";
+    private static final String APP_VERSION = "v1.56";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -126,6 +126,9 @@ public class OverlayService extends Service {
     private int autoTapConsecutiveMisses = 0;
     private int autoTapBoardProbeCount = 0; // index where bench probes start
     private java.util.List<int[]> autoTapProbes = new java.util.ArrayList<>();
+    // board-probe indices recognized as a duplicate of an already-tapped unit
+    // mid-scan (see applyAutoTapProbeResult) — skipped instead of tapped
+    private java.util.Set<Integer> autoTapSkip = new java.util.HashSet<>();
     // Smart-scan resilience state:
     private boolean autoTapSmartBoard = false;     // board probes came from health-bar detection
     private boolean autoTapSwitchedToGrid = false; // mid-scan grid fallback already used
@@ -2598,6 +2601,7 @@ public class OverlayService extends Service {
         autoTapConsecutiveMisses=0;
         autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
+        autoTapSkip=new java.util.HashSet<>();
         autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudgeStage=0;
         autoTapHits=0; autoScanVisualCount=0;
         autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
@@ -2692,6 +2696,7 @@ public class OverlayService extends Service {
         autoScanGold=-1; autoScanLevel=-1;
         autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
+        autoTapSkip=new java.util.HashSet<>();
         autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudgeStage=0;
         autoTapHits=0; autoScanVisualCount=0;
         autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
@@ -3272,6 +3277,8 @@ public class OverlayService extends Service {
     @SuppressWarnings("NewApi")
     private void autoTapNextProbe(){
         if(!autoScanPending) return;
+        // skip board probes already identified as a duplicate of an earlier tap
+        while(autoTapIndex<autoTapProbes.size() && autoTapSkip.contains(autoTapIndex)) autoTapIndex++;
         if(autoTapIndex>=autoTapProbes.size()){ finishAutoTapScan(); return; }
         // reset miss counter when entering bench phase
         if(autoTapBoardProbeCount>0 && autoTapIndex==autoTapBoardProbeCount){
@@ -3454,6 +3461,12 @@ public class OverlayService extends Service {
                         if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
                             ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
                                     probePos[0],probePos[1],spriteSize,oppMode);
+                            // Duplicate-skip: this same screenshot likely shows other
+                            // copies of the champion just learned (2★/3★ units, or
+                            // multiple 1-cost copies). Check the remaining un-tapped
+                            // board probes against the sprite just learned so those
+                            // copies are recorded now instead of needing their own tap.
+                            checkDuplicateProbes(sourceBmp,spriteSize,oppMode);
                         }
                     }
                     sourceBmp.recycle();
@@ -3520,6 +3533,59 @@ public class OverlayService extends Service {
             }
         }
         advanceAutoTap();
+    }
+
+    // Called from the sprite-learning background thread right after a new board
+    // sprite is saved. Crops the same screenshot at every remaining un-tapped
+    // board probe and matches it against the (now updated) sprite library — any
+    // hit is almost certainly another copy of the champion just confirmed, so it
+    // is recorded immediately and that probe is skipped instead of tapped.
+    private void checkDuplicateProbes(final Bitmap sourceBmp, final int spriteSize, final boolean oppMode){
+        final java.util.List<Integer> dupIdx=new java.util.ArrayList<>();
+        final java.util.List<ChampionTemplates.BoardMatch> dupMatch=new java.util.ArrayList<>();
+        int w=sourceBmp.getWidth(), h=sourceBmp.getHeight();
+        // snapshot mutable scan state — this runs on a background thread while the
+        // main thread may advance/reassign these between probes
+        final java.util.List<int[]> probes=autoTapProbes;
+        final int boardCount=Math.min(autoTapBoardProbeCount, probes.size());
+        final int fromIdx=autoTapIndex+1;
+        for(int i=fromIdx;i<boardCount;i++){
+            if(autoTapSkip.contains(i)) continue;
+            int[] p=probes.get(i);
+            int x0=p[0]-spriteSize/2, y0=p[1]-spriteSize/2;
+            if(x0<0||y0<0||x0+spriteSize>w||y0+spriteSize>h) continue;
+            Bitmap c=Bitmap.createBitmap(sourceBmp,x0,y0,spriteSize,spriteSize);
+            ChampionTemplates.BoardMatch dm=ChampionTemplates.matchBoardSprite(c,oppMode);
+            c.recycle();
+            if(dm!=null){ dupIdx.add(i); dupMatch.add(dm); }
+        }
+        if(dupIdx.isEmpty()) return;
+        autoTapHandler.post(new Runnable(){ public void run(){
+            for(int k=0;k<dupIdx.size();k++){
+                int i=dupIdx.get(k);
+                if(autoTapSkip.contains(i)) continue; // already handled by another duplicate pass
+                ChampionTemplates.BoardMatch dm=dupMatch.get(k);
+                autoTapSkip.add(i);
+                if(i>=probes.size()) continue; // probe list was reassigned mid-scan
+                int[] p=probes.get(i);
+                int dStars=p.length>2?p[2]:0;
+                if(oppMode){
+                    if(!oppScanResults.containsKey(dm.name)){
+                        oppScanResults.put(dm.name,Math.max(1,dStars));
+                        pool.addOpp(dm.name,1);
+                    }
+                } else {
+                    pool.add(dm.name,1);
+                    StringBuilder e=new StringBuilder(dm.name);
+                    for(int s=0;s<dStars;s++) e.append("★");
+                    e.append(" ≈");
+                    autoScanResults.add(e.toString());
+                }
+                autoScanVisualCount++; autoTapHits++;
+                addScanLog("dup visual ID: "+dm.name+" (probe "+(i+1)+")");
+            }
+            buzz();
+        }});
     }
 
     private void finishAutoTapScan(){
