@@ -89,7 +89,7 @@ public class Pool {
         SharedPreferences.Editor e = p.edit()
                 .remove("econ_gold").remove("econ_streak")
                 .remove("xp_cur").remove("xp_need")
-                .remove("stage_round").remove("my_augs")
+                .remove("stage_round").remove("my_augs").remove("hunt_list")
                 .remove("god_1").remove("god_2")
                 .remove("god_picks_1").remove("god_picks_2")
                 .remove("opp_slot_cursor");
@@ -128,12 +128,11 @@ public class Pool {
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }
 
-    // ---- in-game HUD overlay (live gold income + gold-to-level) ----
+    // ---- in-game HUD overlay (two mini numbers: income above gold, gold-to-level above XP) ----
     public boolean getHudEnabled()         { return p.getBoolean("cfg_hud", true); }
     public void    setHudEnabled(boolean h){ p.edit().putBoolean("cfg_hud", h).apply(); }
-    public int  getHudX() { return p.getInt("hud_x", 20); }
-    public int  getHudY() { return p.getInt("hud_y", 80); }
-    public void setHudPos(int x,int y){ p.edit().putInt("hud_x",x).putInt("hud_y",y).apply(); }
+    public int  getHudPos(String key, int def){ return p.getInt(key, def); }
+    public void setHudPos(String key, int v)  { p.edit().putInt(key, v).apply(); }
 
     // ---- economy tracker ----
     public int getGold()       { return p.getInt("econ_gold", 0); }
@@ -203,6 +202,24 @@ public class Pool {
         StringBuilder sb=new StringBuilder();
         for(String a:l){ if(sb.length()>0) sb.append(";"); sb.append(a); }
         p.edit().putString("my_augs", sb.toString()).apply();
+    }
+
+    // ---- hunt list: champions THE HUNT auto-buys from the shop ----
+    public List<String> getHunt(){
+        List<String> l = new ArrayList<>();
+        for(String n : p.getString("hunt_list","").split(";")) if(!n.isEmpty() && !l.contains(n)) l.add(n);
+        return l;
+    }
+    public boolean isHunted(String name){ return getHunt().contains(name); }
+    // returns true if the toggle succeeded (adds are capped at 5 marks)
+    public boolean toggleHunt(String name){
+        List<String> l = getHunt();
+        if(l.contains(name)) l.remove(name);
+        else { if(l.size()>=5) return false; l.add(name); }
+        StringBuilder sb=new StringBuilder();
+        for(String n:l){ if(sb.length()>0) sb.append(";"); sb.append(n); }
+        p.edit().putString("hunt_list", sb.toString()).apply();
+        return true;
     }
 
     // ---- learned champ→traits map ----

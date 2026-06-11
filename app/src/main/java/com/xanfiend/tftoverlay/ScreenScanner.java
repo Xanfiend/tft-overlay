@@ -46,6 +46,7 @@ public class ScreenScanner {
         public int xpCur = -1, xpNeed = -1;  // XP progress "cur/need" from the level button
         public List<String> augments = new ArrayList<>();
         public List<String> shopChampions = new ArrayList<>();
+        public List<int[]> shopChampPos = new ArrayList<>(); // shop strip scan: {cx,cy} per shopChampions entry, crop coords
         public List<String> benchChampions = new ArrayList<>();
         public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
@@ -264,6 +265,66 @@ public class ScreenScanner {
             }
             log(sb.toString());
         }
+        return r;
+    }
+
+    // Hunt-mode shop scan: the caller passes a bitmap already cropped to the shop
+    // strip (full width preserved). Returns every champion name visible on a shop
+    // card together with its tap position (crop coordinates), plus the gold counter
+    // if it falls inside the strip — so the auto-buy loop can budget its purchases.
+    // Recycles the crop. Lean logging — this runs once a second while hunting.
+    void scanShopStrip(Bitmap crop, int fullW, int fullH, ScanCallback cb) {
+        final Bitmap ocrBmp;
+        if (POPUP_OCR_SCALE < 0.99f) {
+            int sw = Math.max(1, Math.round(crop.getWidth()  * POPUP_OCR_SCALE));
+            int sh = Math.max(1, Math.round(crop.getHeight() * POPUP_OCR_SCALE));
+            ocrBmp = Bitmap.createScaledBitmap(crop, sw, sh, true);
+        } else {
+            ocrBmp = crop;
+        }
+        InputImage image = InputImage.fromBitmap(ocrBmp, 0);
+        recognizer().process(image)
+                .addOnSuccessListener(text -> {
+                    ScanResult r = parseShopStrip(text, fullW, POPUP_OCR_SCALE);
+                    if (ocrBmp != crop) ocrBmp.recycle();
+                    crop.recycle();
+                    cb.onResult(r);
+                })
+                .addOnFailureListener(e -> {
+                    if (ocrBmp != crop) ocrBmp.recycle();
+                    crop.recycle();
+                    cb.onError("OCR: " + e.getMessage());
+                });
+    }
+
+    private ScanResult parseShopStrip(Text text, int fullW, float scale) {
+        ScanResult r = new ScanResult();
+        ensureChampArrays();
+        float inv = 1f / scale;
+        int rightHalf = (int) (fullW / 2 * scale);
+        int goldBoxH = 0;
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim();
+            if (raw.isEmpty()) continue;
+            // gold counter: standalone 0-99 in the right half of the strip
+            if (raw.matches("\\d{1,2}") && box.centerX() > rightHalf && box.height() > goldBoxH) {
+                r.gold = Integer.parseInt(raw);
+                goldBoxH = box.height();
+            }
+            String rawNorm = norm(raw);
+            for (int i = 0; i < champNames.length; i++) {
+                String name = champNames[i];
+                if (!r.shopChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                    r.shopChampions.add(name);
+                    r.shopChampPos.add(new int[]{(int)(box.centerX()*inv), (int)(box.centerY()*inv)});
+                    break;
+                }
+            }
+        }
+        if (!r.shopChampions.isEmpty())
+            log("shopStrip: " + r.shopChampions + (r.gold >= 0 ? " gold=" + r.gold : ""));
         return r;
     }
 

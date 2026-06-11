@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.60-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.61-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,10 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.61 - 2026-06-11
+- **THE HUNT (auto-buy)**: hold a champion's name in the GRIMOIRE to mark it as prey (✦, up to 5 marks), then press BEGIN THE HUNT on the POOL tab. The overlay watches your shop ~once a second for 2 minutes and instantly buys any marked champion that appears — reroll freely, the hunt does the buying. Gold-aware (skips buys you can't afford), every purchase is auto-recorded in the pool, tap the sigil to stop. Android's 1-screenshot/second limit means a buy lands within ~1s of the shop showing the champ.
+- **In-game HUD reworked**: now two tiny separate draggable numbers instead of one box — `+Ng` (projected income) to park above the game's gold counter, and `Ng→L` (gold to next level) to park above the XP button. Each remembers its own position.
 
 ### v1.60 - 2026-06-11
 - **In-game HUD**: a small draggable overlay sits on top of TFT itself (separate from the main panel), showing your gold + projected income for next round and exactly how much gold you still need to reach your next level. Updates live as you scry or make manual corrections. Toggle on/off and drag to position from the SETUP tab's IN-GAME HUD section.
