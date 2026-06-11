@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.57");
+        ver.setText("v1.58");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.58  ·  2026-06-11","The overlay is now built around automatic scrying. The POOL tab opens with THE RITE: two big buttons, SCRY MY BOARD (reads your level, gold and every unit in one press) and SCRY THE ENEMY (scouts a foe's board), styled in the app's occult theme. The old Opp Manual tap-it-yourself mode is gone since the automatic enemy scan covers it. The GOLD tab now leads with a SCRY GOLD & LEVEL button; the plus and minus steppers remain only as manual corrections. The champion chips remain under a GRIMOIRE · CORRECTIONS section for fixing the rare scan miss or freeing copies when a player dies, and the level row stays as a manual override (it is set automatically by scanning). Win and loss streak stays manual since the game shows no streak number on screen to read."},
             {"v1.57  ·  2026-06-11","Fixed a bug where Auto Scan's duplicate-copy detection (added in v1.56) could finish recording a unit just after the scan's results screen had already been drawn, so the unit's count silently failed to show up in the pool. The results screen now refreshes itself if one of these late duplicate finds comes in after the scan wrapped up, so every recognized unit is reflected."},
             {"v1.56  ·  2026-06-11","Auto Scan now spots duplicate copies of a champion without tapping them. As soon as a champion is recognized from a tap, the app immediately checks the other untapped units on the board in that same screenshot. If one of them looks like the same champion (same star level position included), it gets recorded right away and the scan skips tapping it. This means boards with 2 star or 3 star units, or several copies of the same 1 cost champion, finish faster with fewer taps."},
             {"v1.55  ·  2026-06-11","Real fix for the tab-switch flicker in the overlay panel. The previous fixes sped up the animation, but the whole panel (background, border, header and tabs) was being faded out and back in on every tab switch, so for one frame the panel had no background at all. That is what showed as a flicker. Now only the body content below the tab row fades when you switch tabs. The panel frame, header and tab row stay fully visible the entire time."},

@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.57";
+    private static final String APP_VERSION = "v1.58";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -591,6 +591,11 @@ public class OverlayService extends Service {
             lvl.addView(b);
         }
         content.addView(lvl);
+        TextView lvlHint=new TextView(this);
+        lvlHint.setText("set by scrying · tap to override");
+        lvlHint.setTextColor(DIM); lvlHint.setTextSize(9); lvlHint.setGravity(Gravity.CENTER);
+        lvlHint.setPadding(0,0,0,4);
+        content.addView(lvlHint);
         }
 
         if(mode==4) buildSettings(content);
@@ -636,55 +641,39 @@ public class OverlayService extends Service {
         chipNames=new String[totalChamps];
         int idx=0;
 
-        // \u25c7 SCAN section
+        // \u26e7 THE RITE \u2014 automatic scrying is the heart of the overlay. One press
+        // reads gold, level and every unit; the chips further down exist only to
+        // amend the rare miss.
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
-        addSecHdr(root, "SCAN", GOLD);
+        addSecHdr(root, "\u26e7 THE RITE", GOLD);
 
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
             String prog=total>0?(done+"/"+total+" hexes"):"starting...";
             String label=autoOppMode
-                    ? ("\u25C9 Auto Opp Scan: "+prog+" \u00b7 tap sigil to stop")
-                    : ("\u29bf Auto Scan: "+prog+" \u00b7 tap sigil to stop");
+                    ? ("\u25C9 Scrying the enemy: "+prog+" \u00b7 tap sigil to stop")
+                    : ("\u29bf Scrying your board: "+prog+" \u00b7 tap sigil to stop");
             TextView asActive=new TextView(this); asActive.setText(label);
             asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
             asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
             root.addView(asActive);
-        } else if(oppScanMode){
-            long rem=oppScanDeadline-System.currentTimeMillis();
-            int remSec=(int)((rem+999)/1000); if(remSec<0) remSec=0;
-            TextView osActive=new TextView(this);
-            osActive.setText("\u25C9 Opp manual: "+remSec+"s \u00b7 tap to stop");
-            osActive.setTextColor(GOLD); osActive.setTextSize(12); osActive.setGravity(Gravity.CENTER);
-            osActive.setBackground(box(BLOOD,6,BLOODL,2)); osActive.setPadding(0,12,0,12);
-            LinearLayout.LayoutParams osal=new LinearLayout.LayoutParams(-1,-2); osal.setMargins(0,0,0,6); osActive.setLayoutParams(osal);
-            osActive.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ stopOppScanMode(); }});
-            root.addView(osActive);
         } else {
-            // row 1: Auto Scan Board  |  Auto Opp Scan
+            // the two scrying rites, side by side: your board and the enemy's
             LinearLayout row1=new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams r1p=new LinearLayout.LayoutParams(-1,-2); r1p.setMargins(0,0,0,4); row1.setLayoutParams(r1p);
 
-            TextView asBtn=new TextView(this); asBtn.setText("\u29bf Auto Scan");
-            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(12); asBtn.setGravity(Gravity.CENTER);
-            asBtn.setTypeface(null, accAvail?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            asBtn.setPadding(8,14,8,14);
-            asBtn.setBackground(box(accAvail?BLOOD:0xFF0D0909,8,accAvail?BLOODL:DIM,accAvail?2:1));
+            LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD","level \u00b7 gold \u00b7 every unit",
+                    accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
-            pressFeedback(asBtn);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startAutoTapScan();
             }});
 
-            TextView aoBtn=new TextView(this); aoBtn.setText("\u25C9 Auto Opp Scan");
-            aoBtn.setTextColor(accAvail?BONE:ASH); aoBtn.setTextSize(12); aoBtn.setGravity(Gravity.CENTER);
-            aoBtn.setTypeface(null, accAvail?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            aoBtn.setPadding(8,14,8,14);
-            aoBtn.setBackground(box(accAvail?CARD:0xFF0D0909,8,accAvail?GOLD:DIM,accAvail?2:1));
+            LinearLayout aoBtn=ritualBtn("\u25C9 SCRY THE ENEMY","scout a foe's board",
+                    accAvail?CARD:0xFF0D0909, accAvail?GOLD:DIM, accAvail);
             LinearLayout.LayoutParams aol=new LinearLayout.LayoutParams(0,-2,1f); aol.setMargins(3,0,0,0); aoBtn.setLayoutParams(aol);
-            pressFeedback(aoBtn);
             aoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startAutoOppScan();
@@ -693,18 +682,10 @@ public class OverlayService extends Service {
             row1.addView(asBtn); row1.addView(aoBtn);
             root.addView(row1);
 
-            // row 2: Opp Board (manual fallback \u2014 smaller, secondary style)
-            TextView osBtn=new TextView(this); osBtn.setText("\u25C9 Opp Manual  (tap each unit yourself \u00b7 30s)");
-            osBtn.setTextColor(accAvail?ASH:DIM); osBtn.setTextSize(10); osBtn.setGravity(Gravity.CENTER);
-            osBtn.setPadding(8,8,8,8);
-            osBtn.setBackground(box(0xFF0D0909,8,accAvail?DIM:0xFF1A0C0E,1));
-            LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(-1,-2); osl.setMargins(0,0,0,6); osBtn.setLayoutParams(osl);
-            pressFeedback(osBtn);
-            osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
-                startOppScanMode();
-            }});
-            root.addView(osBtn);
+            TextView autoHint=new TextView(this);
+            autoHint.setText("\u2726  the rite reads gold, level and every unit by itself \u2014 nothing to type");
+            autoHint.setTextColor(DIM); autoHint.setTextSize(9); autoHint.setGravity(Gravity.CENTER);
+            autoHint.setPadding(2,0,2,6); root.addView(autoHint);
 
             if(!accAvail){
                 TextView accHint=new TextView(this); accHint.setText("Enable Accessibility in SETUP tab to use scan features");
@@ -714,7 +695,7 @@ public class OverlayService extends Service {
 
         // auto scan results
         if(!autoScanResults.isEmpty()){
-        addSecHdr(root, "AUTO SCAN", GOLD);
+        addSecHdr(root, "REVEALED · YOUR BOARD", GOLD);
             if(autoScanGold>=0||autoScanLevel>=0){
                 StringBuilder glSb=new StringBuilder();
                 if(autoScanLevel>=0) glSb.append("Lv ").append(autoScanLevel);
@@ -743,7 +724,7 @@ public class OverlayService extends Service {
 
         // opponent scan results
         if(!oppScanResults.isEmpty()){
-        addSecHdr(root, "OPP SCAN", GOLD);
+        addSecHdr(root, "REVEALED · ENEMY", GOLD);
             StringBuilder osrSb=new StringBuilder();
             for(java.util.Map.Entry<String,Integer> e:oppScanResults.entrySet()){
                 if(osrSb.length()>0) osrSb.append(" \u00b7 ");
@@ -755,11 +736,14 @@ public class OverlayService extends Service {
             root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }}));
         }
 
-        // how-to card
+        // \u2720 GRIMOIRE \u2014 the manual chips. The rite records everything by itself;
+        // these remain only to amend the rare miss (a unit the scry could not
+        // read, or freeing copies when a player dies).
+        addSecHdr(root, "\u2720 GRIMOIRE \u00B7 CORRECTIONS", GOLD);
         LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
         howCard.setBackground(box(CARD,8,EDGE,1)); howCard.setPadding(14,11,14,11);
         LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
-        String[] howItems={"Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting"};
+        String[] howItems={"The rite records all \u2014 touch these only to amend it","Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting"};
         for(String h:howItems){
             TextView hv=new TextView(this); hv.setText("\u2726  "+h);
             hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,2,0,2); hv.setLineSpacing(2,1f); howCard.addView(hv);
@@ -805,6 +789,24 @@ public class OverlayService extends Service {
         done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.setMargins(0,14,0,0); done.setLayoutParams(dl);
         root.addView(done);
+    }
+
+    // A big two-line "rite" button: bold title over a small subtitle. These are
+    // the primary controls of the overlay — everything else is correction.
+    private LinearLayout ritualBtn(String title, String subtitle, int bg, int border, boolean enabled){
+        LinearLayout btn=new LinearLayout(this); btn.setOrientation(LinearLayout.VERTICAL);
+        btn.setGravity(Gravity.CENTER); btn.setPadding(8,16,8,14);
+        btn.setBackground(box(bg,8,border,enabled?2:1));
+        TextView t=new TextView(this); t.setText(title);
+        t.setTextColor(enabled?BONE:ASH); t.setTextSize(13); t.setGravity(Gravity.CENTER);
+        t.setTypeface(null, enabled?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+        btn.addView(t);
+        TextView s=new TextView(this); s.setText(subtitle);
+        s.setTextColor(enabled?ASH:DIM); s.setTextSize(9); s.setGravity(Gravity.CENTER);
+        s.setPadding(0,3,0,0);
+        btn.addView(s);
+        pressFeedback(btn);
+        return btn;
     }
 
     // Builds one champ cell: [ chip: name(+1) | count(-1) ][ opp badge ]
@@ -1164,22 +1166,17 @@ public class OverlayService extends Service {
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
         int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
 
-        // gold header row with inline scan shortcut
-        LinearLayout econHdrRow=new LinearLayout(this); econHdrRow.setOrientation(LinearLayout.HORIZONTAL);
-        econHdrRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams ehrp=new LinearLayout.LayoutParams(-1,-2); ehrp.setMargins(0,4,0,8); econHdrRow.setLayoutParams(ehrp);
+        // ⛧ the rite comes first: one press reads gold and level off the screen
+        LinearLayout econScry=ritualBtn("⛧ SCRY GOLD & LEVEL","read from the screen — nothing to type",
+                BLOOD, BLOODL, true);
+        LinearLayout.LayoutParams esl=new LinearLayout.LayoutParams(-1,-2); esl.setMargins(0,4,0,10); econScry.setLayoutParams(esl);
+        econScry.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
+        root.addView(econScry);
+
         TextView gh=new TextView(this); gh.setText("◇ GOLD");
         gh.setTextColor(GOLD); gh.setTextSize(11); gh.setTypeface(null,android.graphics.Typeface.BOLD);
-        gh.setLetterSpacing(0.1f); gh.setPadding(2,0,0,0);
-        gh.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-        econHdrRow.addView(gh);
-        TextView econScanBtn=new TextView(this); econScanBtn.setText("⦿ scan");
-        econScanBtn.setTextColor(ASH); econScanBtn.setTextSize(10); econScanBtn.setGravity(Gravity.CENTER);
-        econScanBtn.setBackground(box(CARD,5,EDGE,1)); econScanBtn.setPadding(18,7,18,7);
-        pressFeedback(econScanBtn);
-        econScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
-        econHdrRow.addView(econScanBtn);
-        root.addView(econHdrRow);
+        gh.setLetterSpacing(0.1f); gh.setPadding(2,0,0,8);
+        root.addView(gh);
 
         LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
@@ -1219,7 +1216,7 @@ public class OverlayService extends Service {
         }});
         goldRow.addView(gMinus); goldRow.addView(econGoldTv); goldRow.addView(gPlus);
         root.addView(goldRow);
-        TextView goldHint=new TextView(this); goldHint.setText("tap ±1  ·  hold to repeat");
+        TextView goldHint=new TextView(this); goldHint.setText("manual correction  ·  tap ±1  ·  hold to repeat");
         goldHint.setTextColor(DIM); goldHint.setTextSize(9); goldHint.setPadding(2,2,2,0); root.addView(goldHint);
 
         // interest info
@@ -1278,6 +1275,8 @@ public class OverlayService extends Service {
         root.addView(econBonusTv);
         TextView streakScale=new TextView(this); streakScale.setText("2+ streak = +1g  ·  4+ = +2g  ·  6+ = +3g");
         streakScale.setTextColor(DIM); streakScale.setTextSize(10); streakScale.setPadding(2,2,2,0); root.addView(streakScale);
+        TextView streakWhy=new TextView(this); streakWhy.setText("streak has no on-screen number to scry — set it by hand");
+        streakWhy.setTextColor(DIM); streakWhy.setTextSize(9); streakWhy.setPadding(2,2,2,0); root.addView(streakWhy);
 
         // expected income card
         LinearLayout incCard=new LinearLayout(this); incCard.setOrientation(LinearLayout.VERTICAL);
