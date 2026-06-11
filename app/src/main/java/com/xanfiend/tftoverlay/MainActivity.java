@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.54");
+        ver.setText("v1.55");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.55  ·  2026-06-11","Real fix for the tab-switch flicker in the overlay panel. The previous fixes sped up the animation, but the whole panel (background, border, header and tabs) was being faded out and back in on every tab switch, so for one frame the panel had no background at all. That is what showed as a flicker. Now only the body content below the tab row fades when you switch tabs. The panel frame, header and tab row stay fully visible the entire time."},
             {"v1.54  ·  2026-06-11","Overlay redesign pass, focused on making the in-game panel prettier and easier to use. Every section header now has a small diamond, bold gold lettering and a thin line that fades out to the right, so sections are easy to spot while scrolling. The panel header shows the app sigil and the version, and the tabs now show an icon above their name so each tab is recognizable at a glance. The Auto Scan button is now a proper big red button and Auto Opp Scan got a gold border, since those are the two things you press most. The tiny clear, copy and scan text links everywhere were replaced with real bordered buttons that are much easier to hit mid-game. In the ODDS tab the per-shop percent is now color coded: green means a good roll chance, gold means okay, plain means thin. Scan buttons and chips also got the press-down animation everywhere."},
             {"v1.53  ·  2026-06-11","Visual polish pass on every button and panel, in game and on the launch screen. Buttons now have a subtle gradient (lighter at the top, darker at the bottom) instead of a flat colour, so they look like real raised buttons, and they brighten when pressed for clearer touch feedback. The active tab in the overlay now gets a gold underline so it stands out at a glance. The floating sigil button got a soft red glow ring behind it that slowly pulses, like it is breathing. The overlay panel corners are slightly more rounded. None of this changes how anything works, it is purely visual."},
             {"v1.52  ·  2026-06-10","Animated app background. The launch screen now has slow-drifting glowing embers floating up behind the content, in the app's blood red, gold and violet palette, with a gentle twinkle. It is built to cost nothing when you are not looking at it: the animation only runs while the launch screen is actually on screen, and stops completely the moment the app goes to the background or the screen closes. The overlay panel in game is untouched, nothing moves behind your board."},
