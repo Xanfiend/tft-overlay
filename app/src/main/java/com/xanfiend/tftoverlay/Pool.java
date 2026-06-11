@@ -128,6 +128,13 @@ public class Pool {
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }
 
+    // ---- in-game HUD overlay (live gold income + gold-to-level) ----
+    public boolean getHudEnabled()         { return p.getBoolean("cfg_hud", true); }
+    public void    setHudEnabled(boolean h){ p.edit().putBoolean("cfg_hud", h).apply(); }
+    public int  getHudX() { return p.getInt("hud_x", 20); }
+    public int  getHudY() { return p.getInt("hud_y", 80); }
+    public void setHudPos(int x,int y){ p.edit().putInt("hud_x",x).putInt("hud_y",y).apply(); }
+
     // ---- economy tracker ----
     public int getGold()       { return p.getInt("econ_gold", 0); }
     public void setGold(int g) { p.edit().putInt("econ_gold", Math.max(0, g)).apply(); }
