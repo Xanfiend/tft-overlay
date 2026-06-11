@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.53";
+    private static final String APP_VERSION = "v1.54";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -222,6 +222,34 @@ public class OverlayService extends Service {
         int a=(c>>>24)&0xFF, r=(c>>16)&0xFF, gC=(c>>8)&0xFF, b=c&0xFF;
         r=Math.min(255,Math.round(r*f)); gC=Math.min(255,Math.round(gC*f)); b=Math.min(255,Math.round(b*f));
         return (a<<24)|(r<<16)|(gC<<8)|b;
+    }
+    // section header: small diamond glyph + bold colored label + a thin rule that
+    // fades out to the right, so sections read at a glance while scrolling
+    private void addSecHdr(LinearLayout root, String text, int color){
+        LinearLayout h=new LinearLayout(this); h.setOrientation(LinearLayout.HORIZONTAL);
+        h.setGravity(Gravity.CENTER_VERTICAL); h.setPadding(2,12,0,7);
+        TextView t=new TextView(this); t.setText("◇ "+text);
+        t.setTextColor(color); t.setTextSize(11); t.setTypeface(null,android.graphics.Typeface.BOLD);
+        t.setLetterSpacing(0.12f);
+        h.addView(t);
+        View rule=new View(this);
+        GradientDrawable rg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{(color&0x00FFFFFF)|0x77000000, color&0x00FFFFFF});
+        LinearLayout.LayoutParams rl=new LinearLayout.LayoutParams(0,2,1f); rl.setMargins(10,3,2,0);
+        rule.setLayoutParams(rl); rule.setBackground(rg);
+        h.addView(rule);
+        root.addView(h);
+    }
+    // small low-emphasis action chip (e.g. the "clear" links under scan results):
+    // a real bordered button with a comfortable tap target instead of bare text
+    private TextView miniChip(String text, View.OnClickListener l){
+        TextView c=new TextView(this); c.setText(text);
+        c.setTextColor(ASH); c.setTextSize(10); c.setGravity(Gravity.CENTER);
+        c.setBackground(box(CARD,5,EDGE,1)); c.setPadding(26,8,26,8);
+        LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-2,-2); cl.setMargins(2,2,0,10);
+        c.setLayoutParams(cl);
+        c.setOnClickListener(l); pressFeedback(c);
+        return c;
     }
     // brief press-down feedback for panel buttons/tabs, without consuming the click
     private void pressFeedback(final View v){
@@ -493,30 +521,37 @@ public class OverlayService extends Service {
 
         // header: title + close
         LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
+        // app sigil anchors the brand in the corner of every tab
+        TextView sigil=new TextView(this); sigil.setText("\u29bf");
+        sigil.setTextColor(BLOODL); sigil.setTextSize(16); sigil.setPadding(0,0,10,0);
         TextView title=new TextView(this);
         title.setText(mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        TextView verTv=new TextView(this); verTv.setText(APP_VERSION);
+        verTv.setTextColor(DIM); verTv.setTextSize(9); verTv.setPadding(0,0,12,0);
         TextView close=new TextView(this); close.setText("\u2715"); close.setTextColor(BONE); close.setTextSize(18);
         close.setGravity(Gravity.CENTER); close.setBackground(box(BLOOD,6,BLOODL,2)); close.setPadding(22,14,22,14);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         pressFeedback(close);
-        head.addView(title); head.addView(close);
+        head.addView(sigil); head.addView(title); head.addView(verTv); head.addView(close);
         root.addView(head);
 
         // tab row \u2014 ordered by in-game frequency of use
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
         int[] tabModes={0,1,2,3,4}; // Pool | Odds | Guide | Gold | Setup
-        String[] tabNames={"POOL","ODDS","GUIDE","GOLD","\u2699 SETUP"};
+        String[] tabGlyphs={"\u25a6","\u2738","\u229e","\u00a7","\u2699"};
+        String[] tabNames={"POOL","ODDS","GUIDE","GOLD","SETUP"};
         for(int t=0;t<5;t++){
             final int tm=tabModes[t]; boolean on=mode==tm;
             LinearLayout tabWrap=new LinearLayout(this); tabWrap.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams twl=new LinearLayout.LayoutParams(0,-2,1f); twl.setMargins(2,0,2,0); tabWrap.setLayoutParams(twl);
-            TextView tab=new TextView(this); tab.setText(tabNames[t]); tab.setGravity(Gravity.CENTER);
+            TextView tab=new TextView(this); tab.setText(tabGlyphs[t]+"\n"+tabNames[t]); tab.setGravity(Gravity.CENTER);
             tab.setTextColor(on?BONE:ASH); tab.setTextSize(9); tab.setLetterSpacing(0.05f);
+            tab.setLineSpacing(2,1f);
             tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-            tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,15,0,15);
+            tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,11,0,11);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
             pressFeedback(tab);
             tabWrap.addView(tab);
@@ -586,9 +621,7 @@ public class OverlayService extends Service {
 
         // \u25c7 SCAN section
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
-        TextView scanSecHdr=new TextView(this); scanSecHdr.setText("\u25c7 SCAN");
-        scanSecHdr.setTextColor(GOLD); scanSecHdr.setTextSize(11); scanSecHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        scanSecHdr.setLetterSpacing(0.1f); scanSecHdr.setPadding(2,4,0,6); root.addView(scanSecHdr);
+        addSecHdr(root, "SCAN", GOLD);
 
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
@@ -617,20 +650,24 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams r1p=new LinearLayout.LayoutParams(-1,-2); r1p.setMargins(0,0,0,4); row1.setLayoutParams(r1p);
 
             TextView asBtn=new TextView(this); asBtn.setText("\u29bf Auto Scan");
-            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(11); asBtn.setGravity(Gravity.CENTER);
-            asBtn.setPadding(8,12,8,12);
-            asBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            asBtn.setTextColor(accAvail?BONE:ASH); asBtn.setTextSize(12); asBtn.setGravity(Gravity.CENTER);
+            asBtn.setTypeface(null, accAvail?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            asBtn.setPadding(8,14,8,14);
+            asBtn.setBackground(box(accAvail?BLOOD:0xFF0D0909,8,accAvail?BLOODL:DIM,accAvail?2:1));
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
+            pressFeedback(asBtn);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startAutoTapScan();
             }});
 
             TextView aoBtn=new TextView(this); aoBtn.setText("\u25C9 Auto Opp Scan");
-            aoBtn.setTextColor(accAvail?BONE:ASH); aoBtn.setTextSize(11); aoBtn.setGravity(Gravity.CENTER);
-            aoBtn.setPadding(8,12,8,12);
-            aoBtn.setBackground(box(accAvail?CARD:0xFF0D0909,6,accAvail?EDGE:DIM,1));
+            aoBtn.setTextColor(accAvail?BONE:ASH); aoBtn.setTextSize(12); aoBtn.setGravity(Gravity.CENTER);
+            aoBtn.setTypeface(null, accAvail?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+            aoBtn.setPadding(8,14,8,14);
+            aoBtn.setBackground(box(accAvail?CARD:0xFF0D0909,8,accAvail?GOLD:DIM,accAvail?2:1));
             LinearLayout.LayoutParams aol=new LinearLayout.LayoutParams(0,-2,1f); aol.setMargins(3,0,0,0); aoBtn.setLayoutParams(aol);
+            pressFeedback(aoBtn);
             aoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startAutoOppScan();
@@ -643,8 +680,9 @@ public class OverlayService extends Service {
             TextView osBtn=new TextView(this); osBtn.setText("\u25C9 Opp Manual  (tap each unit yourself \u00b7 30s)");
             osBtn.setTextColor(accAvail?ASH:DIM); osBtn.setTextSize(10); osBtn.setGravity(Gravity.CENTER);
             osBtn.setPadding(8,8,8,8);
-            osBtn.setBackground(box(0xFF0D0909,6,accAvail?DIM:0xFF1A0C0E,1));
+            osBtn.setBackground(box(0xFF0D0909,8,accAvail?DIM:0xFF1A0C0E,1));
             LinearLayout.LayoutParams osl=new LinearLayout.LayoutParams(-1,-2); osl.setMargins(0,0,0,6); osBtn.setLayoutParams(osl);
+            pressFeedback(osBtn);
             osBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
                 startOppScanMode();
@@ -659,9 +697,7 @@ public class OverlayService extends Service {
 
         // auto scan results
         if(!autoScanResults.isEmpty()){
-            TextView asrHdr=new TextView(this); asrHdr.setText("◇ AUTO SCAN");
-            asrHdr.setTextColor(GOLD); asrHdr.setTextSize(11); asrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-            asrHdr.setLetterSpacing(0.1f); asrHdr.setPadding(2,4,0,4); root.addView(asrHdr);
+        addSecHdr(root, "AUTO SCAN", GOLD);
             if(autoScanGold>=0||autoScanLevel>=0){
                 StringBuilder glSb=new StringBuilder();
                 if(autoScanLevel>=0) glSb.append("Lv ").append(autoScanLevel);
@@ -685,17 +721,12 @@ public class OverlayService extends Service {
                 visHint.setTextColor(DIM); visHint.setTextSize(9); visHint.setPadding(2,0,2,4);
                 root.addView(visHint);
             }
-            TextView clearAsr=new TextView(this); clearAsr.setText("clear");
-            clearAsr.setTextColor(ASH); clearAsr.setTextSize(10); clearAsr.setPadding(2,0,2,8);
-            clearAsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }});
-            root.addView(clearAsr);
+            root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }}));
         }
 
         // opponent scan results
         if(!oppScanResults.isEmpty()){
-            TextView osrHdr=new TextView(this); osrHdr.setText("\u25c7 OPP SCAN");
-            osrHdr.setTextColor(GOLD); osrHdr.setTextSize(11); osrHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-            osrHdr.setLetterSpacing(0.1f); osrHdr.setPadding(2,4,0,4); root.addView(osrHdr);
+        addSecHdr(root, "OPP SCAN", GOLD);
             StringBuilder osrSb=new StringBuilder();
             for(java.util.Map.Entry<String,Integer> e:oppScanResults.entrySet()){
                 if(osrSb.length()>0) osrSb.append(" \u00b7 ");
@@ -704,29 +735,24 @@ public class OverlayService extends Service {
             }
             TextView osrTv=new TextView(this); osrTv.setText(osrSb.toString());
             osrTv.setTextColor(BONE); osrTv.setTextSize(12); osrTv.setPadding(2,0,2,4); root.addView(osrTv);
-            TextView clearOsr=new TextView(this); clearOsr.setText("clear");
-            clearOsr.setTextColor(ASH); clearOsr.setTextSize(10); clearOsr.setPadding(2,0,2,8);
-            clearOsr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }});
-            root.addView(clearOsr);
+            root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }}));
         }
 
         // how-to card
         LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
-        howCard.setBackground(box(CARD,6,EDGE,1)); howCard.setPadding(12,10,12,10);
+        howCard.setBackground(box(CARD,8,EDGE,1)); howCard.setPadding(14,11,14,11);
         LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
-        String[] howItems={"Tap name = +1 copy seen","Tap count badge = \u22121 copy","Tap \u25C9 badge = +1 player contesting"};
+        String[] howItems={"Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting"};
         for(String h:howItems){
-            TextView hv=new TextView(this); hv.setText(h);
-            hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,1,0,1); howCard.addView(hv);
+            TextView hv=new TextView(this); hv.setText("\u2726  "+h);
+            hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,2,0,2); hv.setLineSpacing(2,1f); howCard.addView(hv);
         }
         root.addView(howCard);
 
         // RECENT: the champs you've tapped this game, for instant re-tapping
         java.util.List<String> rec = pool.recentList();
         if(!rec.isEmpty()){
-            TextView rlbl=new TextView(this); rlbl.setText("\u25C7 RECENT");
-            rlbl.setTextColor(GOLD); rlbl.setTextSize(11); rlbl.setTypeface(null, android.graphics.Typeface.BOLD);
-            rlbl.setLetterSpacing(0.1f); rlbl.setPadding(2,4,0,5); root.addView(rlbl);
+        addSecHdr(root, "RECENT", GOLD);
 
             LinearLayout rrow=null;
             for(int j=0;j<rec.size();j++){
@@ -745,10 +771,7 @@ public class OverlayService extends Service {
         }
 
         for(int cost=1;cost<=5;cost++){
-            TextView lbl=new TextView(this); lbl.setText("\u25C7 "+cost+"-COST");
-            lbl.setTextColor(COSTC[cost]); lbl.setTextSize(11); lbl.setTypeface(null, android.graphics.Typeface.BOLD);
-            lbl.setLetterSpacing(0.1f);
-            lbl.setPadding(2,10,0,5); root.addView(lbl);
+        addSecHdr(root, cost+"-COST", COSTC[cost]);
 
             LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
@@ -900,9 +923,7 @@ public class OverlayService extends Service {
         lbl.setTextColor(DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
 
         // ---- tier-grouped augment list ----
-        TextView ah=new TextView(this); ah.setText("◇ AUGMENTS");
-        ah.setTextColor(GOLD); ah.setTextSize(11); ah.setTypeface(null, android.graphics.Typeface.BOLD);
-        ah.setLetterSpacing(0.1f); ah.setPadding(2,4,0,6); root.addView(ah);
+        addSecHdr(root, "AUGMENTS", GOLD);
 
         String[] tiers   = {"S",   "A",    "B",  "C"};
         int[]    tierClr = {GOLD, GREEN,   ASH,  DIM};
@@ -949,9 +970,7 @@ public class OverlayService extends Service {
         root.addView(adiv);
 
         // comp priorities
-        TextView h1=new TextView(this); h1.setText("\u25C7 COMP PRIORITIES");
-        h1.setTextColor(GOLD); h1.setTextSize(11); h1.setTypeface(null, android.graphics.Typeface.BOLD);
-        h1.setLetterSpacing(0.1f); h1.setPadding(2,4,0,6); root.addView(h1);
+        addSecHdr(root, "COMP PRIORITIES", GOLD);
         for(String[] c : AugmentData.COMP_PRIORITIES){
             LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
             row.setBackground(box(CARD,6,EDGE,1)); row.setPadding(12,9,12,9);
@@ -962,18 +981,14 @@ public class OverlayService extends Service {
         }
 
         // exclusions
-        TextView h2=new TextView(this); h2.setText("\u25C7 KEY EXCLUSIONS");
-        h2.setTextColor(GOLD); h2.setTextSize(11); h2.setTypeface(null, android.graphics.Typeface.BOLD);
-        h2.setLetterSpacing(0.1f); h2.setPadding(2,14,0,6); root.addView(h2);
+        addSecHdr(root, "KEY EXCLUSIONS", GOLD);
         for(String ex : AugmentData.EXCLUSIONS){
             TextView e=new TextView(this); e.setText("\u2022  "+ex);
             e.setTextColor(BONE); e.setTextSize(11); e.setLineSpacing(3,1f); e.setPadding(2,0,2,5); root.addView(e);
         }
 
         // mechanics
-        TextView h3=new TextView(this); h3.setText("\u25C7 MECHANICS");
-        h3.setTextColor(GOLD); h3.setTextSize(11); h3.setTypeface(null, android.graphics.Typeface.BOLD);
-        h3.setLetterSpacing(0.1f); h3.setPadding(2,14,0,6); root.addView(h3);
+        addSecHdr(root, "MECHANICS", GOLD);
         for(String m : AugmentData.MECHANICS){
             TextView mv=new TextView(this); mv.setText("\u2022  "+m);
             mv.setTextColor(ASH); mv.setTextSize(11); mv.setLineSpacing(3,1f); mv.setPadding(2,0,2,5); root.addView(mv);
@@ -987,7 +1002,7 @@ public class OverlayService extends Service {
     private void buildSummary(LinearLayout root){
         if(pool.isEmpty()){
             LinearLayout emptyCard=new LinearLayout(this); emptyCard.setOrientation(LinearLayout.VERTICAL);
-            emptyCard.setBackground(box(CARD,6,EDGE,1)); emptyCard.setPadding(16,14,16,14);
+            emptyCard.setBackground(box(CARD,8,EDGE,1)); emptyCard.setPadding(18,16,18,16);
             LinearLayout.LayoutParams ecl=new LinearLayout.LayoutParams(-1,-2); ecl.setMargins(0,4,0,0); emptyCard.setLayoutParams(ecl);
             TextView emptyTitle=new TextView(this); emptyTitle.setText("\u29BF  Nothing tracked yet");
             emptyTitle.setTextColor(BONE); emptyTitle.setTextSize(14); emptyTitle.setTypeface(null,android.graphics.Typeface.BOLD);
@@ -1015,9 +1030,7 @@ public class OverlayService extends Service {
         pinTip.setTextColor(DIM); pinTip.setTextSize(9); pinTip.setPadding(2,0,2,8); root.addView(pinTip);
 
         // bench-thinning: junk units held shrink the pool and nudge odds up
-        TextView thinLbl=new TextView(this); thinLbl.setText("\u25C7 JUNK ON BENCH (thins the pool)");
-        thinLbl.setTextColor(GOLD); thinLbl.setTextSize(10); thinLbl.setTypeface(null, android.graphics.Typeface.BOLD);
-        thinLbl.setLetterSpacing(0.1f); thinLbl.setPadding(2,12,0,4); root.addView(thinLbl);
+        addSecHdr(root, "JUNK ON BENCH (thins the pool)", GOLD);
         LinearLayout thinRow=new LinearLayout(this); thinRow.setOrientation(LinearLayout.HORIZONTAL);
         for(int co=1;co<=5;co++){
             final int fcost=co; int jv=pool.getJunk(co);
@@ -1086,7 +1099,9 @@ public class OverlayService extends Service {
             double perRoll = rem<=0 ? 0 : rerollChance(name)*100.0;
             TextView pct=new TextView(this);
             pct.setText(rem<=0 ? "--" : "~"+roundBand((int)Math.round(perRoll))+"%");
-            pct.setTextColor(rem<=0?DIM:BONE); pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
+            // color tells the story at a glance: green = good roll, gold = ok, bone = thin
+            pct.setTextColor(rem<=0?DIM:(perRoll>=50?GREEN:perRoll>=25?GOLD:BONE));
+            pct.setTextSize(17); pct.setTypeface(null, android.graphics.Typeface.BOLD); pct.setGravity(Gravity.CENTER);
             TextView pl=new TextView(this); pl.setText(rem<=0?"gone":"per shop"); pl.setTextColor(ASH); pl.setTextSize(9); pl.setGravity(Gravity.CENTER);
             vbox.addView(pct); vbox.addView(pl); card.addView(vbox);
 
@@ -1141,9 +1156,10 @@ public class OverlayService extends Service {
         gh.setLetterSpacing(0.1f); gh.setPadding(2,0,0,0);
         gh.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         econHdrRow.addView(gh);
-        TextView econScanBtn=new TextView(this); econScanBtn.setText("scan");
-        econScanBtn.setTextColor(ASH); econScanBtn.setTextSize(10);
-        econScanBtn.setPadding(12,4,4,4);
+        TextView econScanBtn=new TextView(this); econScanBtn.setText("⦿ scan");
+        econScanBtn.setTextColor(ASH); econScanBtn.setTextSize(10); econScanBtn.setGravity(Gravity.CENTER);
+        econScanBtn.setBackground(box(CARD,5,EDGE,1)); econScanBtn.setPadding(18,7,18,7);
+        pressFeedback(econScanBtn);
         econScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ triggerScan(); }});
         econHdrRow.addView(econScanBtn);
         root.addView(econHdrRow);
@@ -1219,9 +1235,7 @@ public class OverlayService extends Service {
         iRow.addView(ladder); root.addView(iRow);
 
         // streak row
-        TextView sh=new TextView(this); sh.setText("◇ STREAK");
-        sh.setTextColor(GOLD); sh.setTextSize(11); sh.setTypeface(null, android.graphics.Typeface.BOLD);
-        sh.setLetterSpacing(0.1f); sh.setPadding(2,14,0,8); root.addView(sh);
+        addSecHdr(root, "STREAK", GOLD);
 
         LinearLayout streakRow=new LinearLayout(this); streakRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView sL=makeAdjBtn("L", BLOOD, BONE);
@@ -1373,9 +1387,7 @@ public class OverlayService extends Service {
         tdiv.setTextColor(EDGE); tdiv.setTextSize(9); tdiv.setGravity(Gravity.CENTER); tdiv.setPadding(0,14,0,4);
         root.addView(tdiv);
 
-        TextView trH=new TextView(this); trH.setText("◇ TRAITS");
-        trH.setTextColor(GOLD); trH.setTextSize(11); trH.setTypeface(null, android.graphics.Typeface.BOLD);
-        trH.setLetterSpacing(0.1f); trH.setPadding(2,4,0,6); root.addView(trH);
+        addSecHdr(root, "TRAITS", GOLD);
 
         for(String[] tr : TraitData.TRAITS){
             LinearLayout tRow=new LinearLayout(this); tRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -1430,9 +1442,7 @@ public class OverlayService extends Service {
                 && TFTAccessibilityService.enabledInSettings(this);
 
         // ◇ PERMISSIONS
-        TextView permHdr=new TextView(this); permHdr.setText("◇ PERMISSIONS");
-        permHdr.setTextColor(GOLD); permHdr.setTextSize(11); permHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        permHdr.setLetterSpacing(0.1f); permHdr.setPadding(2,4,0,6); root.addView(permHdr);
+        addSecHdr(root, "PERMISSIONS", GOLD);
 
         LinearLayout accCard=new LinearLayout(this); accCard.setOrientation(LinearLayout.VERTICAL);
         accCard.setBackground(box(CARD,6,accEnabled?GREEN:EDGE,accEnabled?2:1)); accCard.setPadding(12,10,12,10);
@@ -1489,9 +1499,7 @@ public class OverlayService extends Service {
         }
 
         // ◇ SCAN
-        TextView scanHdr=new TextView(this); scanHdr.setText("◇ SCAN");
-        scanHdr.setTextColor(GOLD); scanHdr.setTextSize(11); scanHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        scanHdr.setLetterSpacing(0.1f); scanHdr.setPadding(2,4,0,6); root.addView(scanHdr);
+        addSecHdr(root, "SCAN", GOLD);
 
         scanStatusTv=new TextView(this);
         scanStatusTv.setText(lastScanStatus.isEmpty()?"tap Scan to auto-fill gold, level & augments":lastScanStatus);
@@ -1517,9 +1525,11 @@ public class OverlayService extends Service {
         logHdr.setLetterSpacing(0.1f); logHdr.setPadding(2,0,0,0);
         LinearLayout.LayoutParams lhtp=new LinearLayout.LayoutParams(0,-2,1f); logHdr.setLayoutParams(lhtp);
         logHdrRow.addView(logHdr);
-        TextView copyLogBtn=new TextView(this); copyLogBtn.setText("copy");
-        copyLogBtn.setTextColor(ASH); copyLogBtn.setTextSize(10);
-        copyLogBtn.setPadding(12,4,4,4);
+        TextView copyLogBtn=new TextView(this); copyLogBtn.setText("⎘ copy");
+        copyLogBtn.setTextColor(ASH); copyLogBtn.setTextSize(10); copyLogBtn.setGravity(Gravity.CENTER);
+        copyLogBtn.setBackground(box(CARD,5,EDGE,1)); copyLogBtn.setPadding(18,7,18,7);
+        LinearLayout.LayoutParams cplp=new LinearLayout.LayoutParams(-2,-2); cplp.setMargins(0,0,6,0); copyLogBtn.setLayoutParams(cplp);
+        pressFeedback(copyLogBtn);
         copyLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             StringBuilder sb=new StringBuilder();
             synchronized(scanLog){ for(String l:scanLog) sb.append(l).append("\n"); }
@@ -1528,9 +1538,10 @@ public class OverlayService extends Service {
             Toast.makeText(OverlayService.this,"Log copied to clipboard",Toast.LENGTH_SHORT).show();
         }});
         logHdrRow.addView(copyLogBtn);
-        TextView clearLogBtn=new TextView(this); clearLogBtn.setText("clear");
-        clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10);
-        clearLogBtn.setPadding(6,4,4,4);
+        TextView clearLogBtn=new TextView(this); clearLogBtn.setText("✕ clear");
+        clearLogBtn.setTextColor(ASH); clearLogBtn.setTextSize(10); clearLogBtn.setGravity(Gravity.CENTER);
+        clearLogBtn.setBackground(box(CARD,5,EDGE,1)); clearLogBtn.setPadding(18,7,18,7);
+        pressFeedback(clearLogBtn);
         clearLogBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             clearScanLog(); mode=4; showPanel();
         }});
@@ -1575,9 +1586,7 @@ public class OverlayService extends Service {
         root.addView(logBox);
 
         // ◇ TEMPLATES
-        TextView tplHdr=new TextView(this); tplHdr.setText("◇ TEMPLATES");
-        tplHdr.setTextColor(GOLD); tplHdr.setTextSize(11); tplHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        tplHdr.setLetterSpacing(0.1f); tplHdr.setPadding(2,14,0,4); root.addView(tplHdr);
+        addSecHdr(root, "TEMPLATES", GOLD);
         int tplCount=ChampionTemplates.templateCount();
         TextView tplCountTv=new TextView(this);
         tplCountTv.setText(tplCount==0
@@ -1602,9 +1611,7 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams sdl=new LinearLayout.LayoutParams(-1,-2); sdl.setMargins(0,14,0,14); scanDiv.setLayoutParams(sdl);
         root.addView(scanDiv);
 
-        TextView hdr=new TextView(this); hdr.setText("◇ TRANSPARENCY");
-        hdr.setTextColor(GOLD); hdr.setTextSize(11); hdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdr.setLetterSpacing(0.1f); hdr.setPadding(2,4,0,6); root.addView(hdr);
+        addSecHdr(root, "TRANSPARENCY", GOLD);
 
         int alphaPct=Math.round(pool.getAlpha()*100);
         final TextView alphaLabel=new TextView(this);
@@ -1633,9 +1640,7 @@ public class OverlayService extends Service {
         });
         root.addView(alphaBar);
 
-        TextView hdr2=new TextView(this); hdr2.setText("◇ HAPTIC");
-        hdr2.setTextColor(GOLD); hdr2.setTextSize(11); hdr2.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdr2.setLetterSpacing(0.1f); hdr2.setPadding(2,18,0,6); root.addView(hdr2);
+        addSecHdr(root, "HAPTIC", GOLD);
 
         boolean curHaptic=pool.getHaptic();
         LinearLayout hRow=new LinearLayout(this); hRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -1655,9 +1660,7 @@ public class OverlayService extends Service {
         }
         root.addView(hRow);
 
-        TextView hdr3=new TextView(this); hdr3.setText("◇ OPEN TAB");
-        hdr3.setTextColor(GOLD); hdr3.setTextSize(11); hdr3.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdr3.setLetterSpacing(0.1f); hdr3.setPadding(2,18,0,6); root.addView(hdr3);
+        addSecHdr(root, "OPEN TAB", GOLD);
 
         int curStart=pool.getStartTab();
         String[] stLabels={"smart","always pool"}; int[] stVals={0,1};
@@ -1677,9 +1680,7 @@ public class OverlayService extends Service {
         }
         root.addView(stRow);
 
-        TextView hdr4=new TextView(this); hdr4.setText("◇ POSITION");
-        hdr4.setTextColor(GOLD); hdr4.setTextSize(11); hdr4.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdr4.setLetterSpacing(0.1f); hdr4.setPadding(2,18,0,6); root.addView(hdr4);
+        addSecHdr(root, "POSITION", GOLD);
 
         TextView resetPos=new TextView(this); resetPos.setText("Reset button position");
         resetPos.setTextColor(BONE); resetPos.setTextSize(12); resetPos.setGravity(Gravity.CENTER);
@@ -1692,9 +1693,7 @@ public class OverlayService extends Service {
         }});
         root.addView(resetPos);
 
-        TextView hdr5=new TextView(this); hdr5.setText("◇ SMART SCAN");
-        hdr5.setTextColor(GOLD); hdr5.setTextSize(11); hdr5.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdr5.setLetterSpacing(0.1f); hdr5.setPadding(2,18,0,6); root.addView(hdr5);
+        addSecHdr(root, "SMART SCAN", GOLD);
 
         TextView ssInfo=new TextView(this);
         ssInfo.setText("Auto Scan finds units by their health bar and taps the exact spot, so calibration barely matters. Turn off to tap the calibrated grid instead.");
@@ -1718,9 +1717,7 @@ public class OverlayService extends Service {
         }
         root.addView(ssRow);
 
-        TextView hdrVid=new TextView(this); hdrVid.setText("◇ INSTANT VISUAL ID");
-        hdrVid.setTextColor(GOLD); hdrVid.setTextSize(11); hdrVid.setTypeface(null,android.graphics.Typeface.BOLD);
-        hdrVid.setLetterSpacing(0.1f); hdrVid.setPadding(2,18,0,6); root.addView(hdrVid);
+        addSecHdr(root, "INSTANT VISUAL ID", GOLD);
 
         TextView vidInfo=new TextView(this);
         int sprites=ChampionTemplates.boardTemplateCount();
@@ -1754,9 +1751,7 @@ public class OverlayService extends Service {
         root.addView(calDiv);
 
         String calMode = isPortrait ? "PORTRAIT" : "LANDSCAPE";
-        TextView calHdr=new TextView(this); calHdr.setText("◇ CALIBRATE SCAN  (" + calMode + ")");
-        calHdr.setTextColor(GOLD); calHdr.setTextSize(11); calHdr.setTypeface(null,android.graphics.Typeface.BOLD);
-        calHdr.setLetterSpacing(0.1f); calHdr.setPadding(2,4,0,4); root.addView(calHdr);
+        addSecHdr(root, "CALIBRATE SCAN  (" + calMode + ")", GOLD);
 
         TextView calInfo=new TextView(this);
         calInfo.setText("Optional when Smart Scan is on — Auto Scan finds units by their health bars and does not use these positions. Calibration only sets the grid used as a fallback. Tap SHOW DOTS to see what Smart Scan actually detects.");
