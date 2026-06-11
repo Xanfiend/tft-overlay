@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.60";
+    private static final String APP_VERSION = "v1.61";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -72,10 +72,10 @@ public class OverlayService extends Service {
     // floating button layout params promoted to field so buildSettings() can update alpha/position
     private WindowManager.LayoutParams btnLp;
 
-    // ---- in-game HUD: small persistent overlay showing live gold income + gold-to-level ----
-    private View hudView;
-    private WindowManager.LayoutParams hudLp;
-    private TextView hudGoldTv, hudLevelTv;
+    // ---- in-game HUD: two tiny draggable numbers, meant to sit right above the
+    // game's own gold counter and XP/level button ----
+    private TextView hudGoldView, hudXpView;
+    private WindowManager.LayoutParams hudGoldLp, hudXpLp;
     private final android.os.Handler hudHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable hudTick;
     // panel layout params promoted for flash-free in-place refresh
@@ -95,6 +95,15 @@ public class OverlayService extends Service {
     private final android.os.Handler boardHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable boardPollRunnable;
     private Runnable boardCountdownRunnable;
+
+    // hunt mode: polls the shop strip ~once a second (screenshot rate limit) and
+    // auto-buys any marked champion the moment it appears in the shop
+    private boolean huntMode = false;
+    private long huntDeadline = 0;
+    private boolean huntBusy = false; // a buy-tap sequence is in flight; skip captures
+    private final java.util.List<String> huntBuys = new java.util.ArrayList<>();
+    private final java.util.Map<String,Long> huntCooldown = new java.util.HashMap<>();
+    private Runnable huntPollRunnable, huntCountdownRunnable;
 
     // opponent scan mode: same polling but routes into opponent tracking + records star levels
     private boolean oppScanMode = false;
@@ -368,6 +377,7 @@ public class OverlayService extends Service {
                     showCloseTarget(false);
                     if(moved){ snapButtonToEdge(); return true; }
                     if(!moved){
+                        if(huntMode){ stopHuntMode(); return true; }
                         if(oppScanMode){ stopOppScanMode(); return true; }
                         if(boardScanMode){ stopBoardScanMode(); return true; }
                         if(autoScanPending){ finishAutoTapScan(); return true; }
@@ -390,49 +400,22 @@ public class OverlayService extends Service {
             .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
     }
 
-    // Small persistent HUD: shows live gold + projected income/round and gold
-    // needed to hit the next level, both derived from values already tracked by
-    // scans/manual corrections (no extra OCR or polling needed). Draggable like
-    // the main sigil; position persists across restarts.
+    // In-game HUD: two tiny independent numbers, each draggable, meant to be
+    // parked directly above the game's own counters — the gold one shows the
+    // projected income next round, the XP one shows the gold still needed to
+    // reach the next level. Both derive from values already tracked by scans
+    // and manual corrections (no extra OCR or polling).
     private void addHud(){
-        if(hudView!=null) return;
-        LinearLayout c=new LinearLayout(this); c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(box(0xE6160B0D,8,GOLD,1)); c.setPadding(12,8,12,8);
-        hudGoldTv=new TextView(this); hudGoldTv.setTextColor(GOLD); hudGoldTv.setTextSize(11);
-        hudGoldTv.setTypeface(null,android.graphics.Typeface.BOLD); hudGoldTv.setLetterSpacing(0.04f);
-        hudLevelTv=new TextView(this); hudLevelTv.setTextColor(BONE); hudLevelTv.setTextSize(10);
-        hudLevelTv.setPadding(0,2,0,0);
-        c.addView(hudGoldTv); c.addView(hudLevelTv);
-        hudView=c;
-        hudView.setAlpha(pool.getAlpha());
-
-        hudLp=new WindowManager.LayoutParams(-2,-2,wtype(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
-        hudLp.gravity=Gravity.TOP|Gravity.START;
-        hudLp.x=pool.getHudX(); hudLp.y=pool.getHudY();
-
-        hudView.setOnTouchListener(new View.OnTouchListener(){
-            int ix,iy; float tx,ty;
-            public boolean onTouch(View v, MotionEvent e){
-                int a=e.getAction();
-                if(a==MotionEvent.ACTION_DOWN){
-                    ix=hudLp.x; iy=hudLp.y; tx=e.getRawX(); ty=e.getRawY();
-                    return true;
-                } else if(a==MotionEvent.ACTION_MOVE){
-                    int dx=(int)(e.getRawX()-tx), dy=(int)(e.getRawY()-ty);
-                    hudLp.x=ix+dx; hudLp.y=iy+dy;
-                    try{ wm.updateViewLayout(hudView,hudLp); }catch(Exception ex){}
-                    return true;
-                } else if(a==MotionEvent.ACTION_UP){
-                    pool.setHudPos(hudLp.x, hudLp.y);
-                    return true;
-                }
-                return false;
-            }
-        });
-
-        try{ wm.addView(hudView, hudLp); }catch(Exception e){}
+        if(hudGoldView!=null) return;
+        android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
+        // defaults: roughly above where TFT draws gold (bottom center-right)
+        // and the XP/level button (bottom left); the user drags them into place
+        hudGoldLp=makeHudLp("hud_gx","hud_gy", dm.widthPixels*62/100, dm.heightPixels*72/100);
+        hudXpLp  =makeHudLp("hud_xx","hud_xy", dm.widthPixels*4/100,  dm.heightPixels*72/100);
+        hudGoldView=makeHudMini(GOLD, hudGoldLp, "hud_gx","hud_gy");
+        hudXpView  =makeHudMini(BONE, hudXpLp,   "hud_xx","hud_xy");
+        try{ wm.addView(hudGoldView, hudGoldLp); }catch(Exception e){}
+        try{ wm.addView(hudXpView, hudXpLp); }catch(Exception e){}
         refreshHud();
 
         hudTick=new Runnable(){ public void run(){
@@ -441,19 +424,55 @@ public class OverlayService extends Service {
         }};
         hudHandler.postDelayed(hudTick, 3000);
     }
+    private WindowManager.LayoutParams makeHudLp(String kx, String ky, int defX, int defY){
+        WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-2,-2,wtype(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+        lp.gravity=Gravity.TOP|Gravity.START;
+        lp.x=pool.getHudPos(kx,defX); lp.y=pool.getHudPos(ky,defY);
+        return lp;
+    }
+    private TextView makeHudMini(int color, final WindowManager.LayoutParams lp,
+                                 final String kx, final String ky){
+        final TextView t=new TextView(this);
+        t.setTextColor(color); t.setTextSize(10);
+        t.setTypeface(null,android.graphics.Typeface.BOLD);
+        t.setBackground(box(0xCC0B0709,10,color,1));
+        t.setPadding(12,4,12,4);
+        t.setAlpha(pool.getAlpha());
+        t.setOnTouchListener(new View.OnTouchListener(){
+            int ix,iy; float tx,ty;
+            public boolean onTouch(View v, MotionEvent e){
+                int a=e.getAction();
+                if(a==MotionEvent.ACTION_DOWN){
+                    ix=lp.x; iy=lp.y; tx=e.getRawX(); ty=e.getRawY();
+                    return true;
+                } else if(a==MotionEvent.ACTION_MOVE){
+                    lp.x=ix+(int)(e.getRawX()-tx); lp.y=iy+(int)(e.getRawY()-ty);
+                    try{ wm.updateViewLayout(t,lp); }catch(Exception ex){}
+                    return true;
+                } else if(a==MotionEvent.ACTION_UP){
+                    pool.setHudPos(kx,lp.x); pool.setHudPos(ky,lp.y);
+                    return true;
+                }
+                return false;
+            }
+        });
+        return t;
+    }
     private void removeHud(){
         if(hudTick!=null){ hudHandler.removeCallbacks(hudTick); hudTick=null; }
-        try{ if(hudView!=null) wm.removeView(hudView); }catch(Exception e){}
-        hudView=null; hudGoldTv=null; hudLevelTv=null;
+        try{ if(hudGoldView!=null) wm.removeView(hudGoldView); }catch(Exception e){}
+        try{ if(hudXpView!=null) wm.removeView(hudXpView); }catch(Exception e){}
+        hudGoldView=null; hudXpView=null;
     }
-    // recompute HUD text from current pool state — gold income projection and
-    // gold needed to reach the next level use the same math as the GOLD tab
+    // recompute HUD text from current pool state — income projection and
+    // gold-to-next-level use the same math as the GOLD tab
     private void refreshHud(){
-        if(hudGoldTv==null) return;
+        if(hudGoldView==null) return;
         int gold=pool.getGold();
-        int streak=pool.getStreak();
-        int income=Pool.expectedIncome(gold, streak);
-        hudGoldTv.setText("⛧ "+gold+"g  →  +"+income+"g/rnd");
+        int income=Pool.expectedIncome(gold, pool.getStreak());
+        hudGoldView.setText("+"+income+"g");
 
         int lvl=pool.getLevel();
         int xpNeed=pool.getXpNeed();
@@ -461,11 +480,7 @@ public class OverlayService extends Service {
         int trustedNeed=Pool.xpToNext(lvl);
         int into=(xpNeed==trustedNeed && xpCur>=0) ? xpCur : 0;
         int goldToLvl=Pool.goldToNextLevel(lvl, into);
-        if(trustedNeed<=0){
-            hudLevelTv.setText("Lv"+lvl+" — max");
-        } else {
-            hudLevelTv.setText("Lv"+lvl+" → "+goldToLvl+"g for Lv"+(lvl+1));
-        }
+        hudXpView.setText(trustedNeed<=0 ? "max" : goldToLvl+"g→"+(lvl+1));
     }
 
     // After a drag, glide the floating button to the nearest screen edge so it
@@ -810,6 +825,36 @@ public class OverlayService extends Service {
             row1.addView(asBtn); row1.addView(aoBtn);
             root.addView(row1);
 
+            // THE HUNT \u2014 shop watcher / auto-buy
+            final java.util.List<String> huntList=pool.getHunt();
+            if(huntMode){
+                TextView huntActive=new TextView(this);
+                huntActive.setText("\u2726 The hunt is on \u2014 marked champs are bought on sight \u00b7 tap sigil to stop");
+                huntActive.setTextColor(GOLD); huntActive.setTextSize(12); huntActive.setGravity(Gravity.CENTER);
+                huntActive.setBackground(box(BLOOD,6,GOLD,2)); huntActive.setPadding(0,12,0,12);
+                LinearLayout.LayoutParams hal=new LinearLayout.LayoutParams(-1,-2); hal.setMargins(0,0,0,4); huntActive.setLayoutParams(hal);
+                root.addView(huntActive);
+            } else {
+                String huntSub=huntList.isEmpty()
+                        ? "hold a champ's name below to mark prey"
+                        : "auto-buys: "+joinNames(huntList);
+                LinearLayout huntBtn=ritualBtn("\u2726 BEGIN THE HUNT \u00b7 AUTO-BUY",huntSub,
+                        accAvail&&!huntList.isEmpty()?0xFF1A1400:0xFF0D0909,
+                        accAvail&&!huntList.isEmpty()?GOLD:DIM, accAvail&&!huntList.isEmpty());
+                LinearLayout.LayoutParams hbl=new LinearLayout.LayoutParams(-1,-2); hbl.setMargins(0,0,0,4); huntBtn.setLayoutParams(hbl);
+                huntBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                    startHuntMode();
+                }});
+                root.addView(huntBtn);
+            }
+            if(!huntBuys.isEmpty()){
+                TextView hb=new TextView(this);
+                hb.setText("\u2726 hunted down: "+joinNames(huntBuys));
+                hb.setTextColor(GOLD); hb.setTextSize(10); hb.setPadding(2,0,2,4);
+                root.addView(hb);
+            }
+
             TextView autoHint=new TextView(this);
             autoHint.setText("\u2726  the rite reads gold, level and every unit by itself \u2014 nothing to type");
             autoHint.setTextColor(DIM); autoHint.setTextSize(9); autoHint.setGravity(Gravity.CENTER);
@@ -915,7 +960,7 @@ public class OverlayService extends Service {
         LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
         howCard.setBackground(box(CARD,8,EDGE,1)); howCard.setPadding(14,11,14,11);
         LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
-        String[] howItems={"The rite records all \u2014 touch these only to amend it","Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting"};
+        String[] howItems={"The rite records all \u2014 touch these only to amend it","Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting","Hold a name = mark \u2726 prey for THE HUNT (auto-buy)"};
         for(String h:howItems){
             TextView hv=new TextView(this); hv.setText("\u2726  "+h);
             hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,2,0,2); hv.setLineSpacing(2,1f); howCard.addView(hv);
@@ -1001,6 +1046,21 @@ public class OverlayService extends Service {
         nameTv.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){ pool.add(name,1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
         });
+        // hold a name to mark/unmark it as prey for THE HUNT (auto-buy)
+        nameTv.setOnLongClickListener(new View.OnLongClickListener(){
+            public boolean onLongClick(View v){
+                if(!pool.toggleHunt(name)){
+                    Toast.makeText(OverlayService.this,"The hunt tracks at most 5 marks",Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                buzz();
+                Toast.makeText(OverlayService.this,
+                    pool.isHunted(name)?("✦ "+name+" marked — THE HUNT will buy it on sight")
+                                       :(name+" unmarked"),Toast.LENGTH_SHORT).show();
+                showPanel(); // refresh the hunt button subtitle + chip mark
+                return true;
+            }
+        });
         countTv.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){ pool.add(name,-1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
         });
@@ -1031,7 +1091,7 @@ public class OverlayService extends Service {
         if(seen>0){
             // active: cost-colored, name on left, tappable count box on right
             chip.setBackground(box(COSTC[cost],6,0xFFFFFFFF,2));
-            nameTv.setText(name);
+            nameTv.setText((pool.isHunted(name)?"✦ ":"")+name);
             nameTv.setTextColor(0xFF000000);
             nameTv.setTypeface(null, android.graphics.Typeface.BOLD);
             nameTv.setTextSize(15);
@@ -1051,8 +1111,8 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-2,-2); countTv.setLayoutParams(clp);
         } else {
             // inactive: just the name, full width, tap to +1
-            chip.setBackground(box(CARD,6,EDGE,1));
-            nameTv.setText(name);
+            chip.setBackground(box(CARD,6,pool.isHunted(name)?GOLD:EDGE,1));
+            nameTv.setText((pool.isHunted(name)?"✦ ":"")+name);
             nameTv.setTextColor(BONE);
             nameTv.setTypeface(null, android.graphics.Typeface.NORMAL);
             nameTv.setTextSize(15);
@@ -2069,7 +2129,8 @@ public class OverlayService extends Service {
                 pool.setAlpha(av);
                 button.setAlpha(av);
                 if(panel!=null) panel.setAlpha(av);
-                if(hudView!=null) hudView.setAlpha(av);
+                if(hudGoldView!=null) hudGoldView.setAlpha(av);
+                if(hudXpView!=null) hudXpView.setAlpha(av);
                 alphaLabel.setText((progress+20)+"%");
             }
             public void onStartTrackingTouch(android.widget.SeekBar bar){}
@@ -2100,7 +2161,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "IN-GAME HUD", GOLD);
 
         TextView hudHint=new TextView(this);
-        hudHint.setText("Small overlay showing gold + projected income/round and gold needed for your next level. Drag it anywhere on screen.");
+        hudHint.setText("Two tiny numbers to park over the game's own counters: +Ng (projected income, drag it above your gold) and Ng→L (gold to next level, drag it above the XP button).");
         hudHint.setTextColor(DIM); hudHint.setTextSize(10); hudHint.setPadding(2,0,0,8); root.addView(hudHint);
 
         boolean curHud=pool.getHudEnabled();
@@ -4166,6 +4227,144 @@ public class OverlayService extends Service {
         }
     }
 
+    // ---- THE HUNT: shop watcher / auto-buy ----
+    // Polls the shop strip once a second (the hard screenshot rate limit) and
+    // taps any marked champion's shop card the moment it appears. The player
+    // rerolls by hand; the hunt does the buying. Stops on sigil tap or after
+    // the 2-minute window.
+    private void startHuntMode(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
+            return;
+        }
+        if(pool.getHunt().isEmpty()){
+            Toast.makeText(this,"Mark a champion first — hold its name in the GRIMOIRE",Toast.LENGTH_LONG).show();
+            return;
+        }
+        huntMode=true;
+        huntBusy=false;
+        huntDeadline=System.currentTimeMillis()+120000;
+        huntBuys.clear();
+        huntCooldown.clear();
+        closePanel();
+        addScanLog("hunt: started 120s window, marks="+pool.getHunt());
+        Toast.makeText(this,"⛧ The hunt begins — reroll freely, marked champs are bought for you. Tap the sigil to stop.",Toast.LENGTH_LONG).show();
+
+        huntCountdownRunnable=new Runnable(){ public void run(){
+            if(!huntMode) return;
+            long rem=huntDeadline-System.currentTimeMillis();
+            if(rem<=0){ stopHuntMode(); return; }
+            if(btnLabel!=null) btnLabel.setText("HUNT "+((int)((rem+999)/1000)));
+            boardHandler.postDelayed(this,500);
+        }};
+        boardHandler.post(huntCountdownRunnable);
+
+        huntPollRunnable=new Runnable(){ public void run(){
+            if(!huntMode) return;
+            if(!huntBusy) huntShopScan();
+            boardHandler.postDelayed(this, MIN_SHOT_GAP_MS+80);
+        }};
+        boardHandler.postDelayed(huntPollRunnable, 600);
+    }
+
+    private void stopHuntMode(){
+        huntMode=false;
+        if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
+        if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        buzzDone();
+        addScanLog("hunt: stopped, bought "+huntBuys.size()+" "+huntBuys);
+        refreshHud();
+        mode=0; showPanel();
+    }
+
+    @SuppressWarnings("NewApi")
+    private void huntShopScan(){
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null){ stopHuntMode(); return; }
+        long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
+        if(sinceShot<MIN_SHOT_GAP_MS) return; // poll loop will come back around
+        try{
+            lastShotMs=android.os.SystemClock.uptimeMillis();
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        if(!huntMode) return;
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            hb.close();
+                            Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hw.recycle();
+                            int sw=full.getWidth(), sh=full.getHeight();
+                            boolean portrait=sh>sw;
+                            // same shop band the full scan uses
+                            final int cropTop=portrait? sh*70/100 : sh*65/100;
+                            int cropBot=portrait? sh*90/100 : sh*85/100;
+                            Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
+                            full.recycle();
+                            new ScreenScanner(OverlayService.this,null).scanShopStrip(crop,sw,sh,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){ handleHuntResult(r,cropTop); }
+                                    public void onError(String msg){ addScanLog("hunt OCR err: "+msg); }
+                                });
+                        }catch(Exception e){ addScanLog("ERR hunt scan: "+e.getMessage()); }
+                    }
+                    @Override public void onFailure(int errorCode){ /* rate-limited shot — next poll retries */ }
+                });
+        }catch(Exception e){ addScanLog("ERR huntShopScan: "+e.getMessage()); }
+    }
+
+    private void handleHuntResult(ScreenScanner.ScanResult r, final int cropTop){
+        if(!huntMode) return;
+        // keep gold (and the HUD) live while hunting — the strip includes the counter
+        if(r.gold>=0){ pool.setGold(r.gold); refreshHud(); }
+        long now=System.currentTimeMillis();
+        int budget=r.gold; // -1 = unknown, buy on faith
+        final java.util.List<String> toBuy=new java.util.ArrayList<>();
+        final java.util.List<int[]> tapAt=new java.util.ArrayList<>();
+        for(int i=0;i<r.shopChampions.size();i++){
+            String name=r.shopChampions.get(i);
+            if(!pool.isHunted(name)) continue;
+            Long cd=huntCooldown.get(name);
+            if(cd!=null && now<cd) continue; // just bought — card may be stale in this frame
+            int cost=Pool.costOf(name);
+            if(budget>=0 && budget<cost){ addScanLog("hunt: "+name+" seen but only "+budget+"g"); continue; }
+            if(budget>=0) budget-=cost;
+            toBuy.add(name);
+            tapAt.add(r.shopChampPos.get(i));
+        }
+        if(toBuy.isEmpty()) return;
+        huntBusy=true;
+        huntBuyNext(toBuy, tapAt, 0, cropTop);
+    }
+
+    private void huntBuyNext(final java.util.List<String> names, final java.util.List<int[]> pos,
+                             final int idx, final int cropTop){
+        if(!huntMode || idx>=names.size()){ huntBusy=false; return; }
+        final String name=names.get(idx);
+        int[] pt=pos.get(idx);
+        addScanLog("hunt: buying "+name+" @"+pt[0]+","+(cropTop+pt[1]));
+        dispatchTap(pt[0], cropTop+pt[1], new Runnable(){ public void run(){
+            huntCooldown.put(name, System.currentTimeMillis()+2500);
+            huntBuys.add(name);
+            pool.add(name,1); // a bought copy leaves the pool
+            buzz();
+            if(btnLabel!=null){
+                btnLabel.setText("+"+name.split(" ")[0]);
+                boardHandler.postDelayed(new Runnable(){ public void run(){
+                    if(huntMode&&btnLabel!=null){
+                        long rem=huntDeadline-System.currentTimeMillis();
+                        if(rem>0) btnLabel.setText("HUNT "+((int)((rem+999)/1000)));
+                    }
+                }},1200);
+            }
+            boardHandler.postDelayed(new Runnable(){ public void run(){
+                huntBuyNext(names,pos,idx+1,cropTop);
+            }},200);
+        }});
+    }
+
     private void startOppScanMode(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
@@ -4266,11 +4465,14 @@ public class OverlayService extends Service {
             btnLp.y = Math.min(btnLp.y, dm.heightPixels - 150);
             try{ wm.updateViewLayout(button, btnLp); }catch(Exception e){}
         }
-        if(hudView != null && hudLp != null){
+        if(hudGoldView != null){
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-            hudLp.x = Math.min(hudLp.x, dm.widthPixels - 100);
-            hudLp.y = Math.min(hudLp.y, dm.heightPixels - 100);
-            try{ wm.updateViewLayout(hudView, hudLp); }catch(Exception e){}
+            hudGoldLp.x = Math.min(hudGoldLp.x, dm.widthPixels - 100);
+            hudGoldLp.y = Math.min(hudGoldLp.y, dm.heightPixels - 100);
+            hudXpLp.x = Math.min(hudXpLp.x, dm.widthPixels - 100);
+            hudXpLp.y = Math.min(hudXpLp.y, dm.heightPixels - 100);
+            try{ wm.updateViewLayout(hudGoldView, hudGoldLp); }catch(Exception e){}
+            try{ wm.updateViewLayout(hudXpView, hudXpLp); }catch(Exception e){}
         }
     }
 
@@ -4281,6 +4483,8 @@ public class OverlayService extends Service {
         if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
         if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
+        if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
+        if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
         autoTapHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         hideCalCaptureView();
