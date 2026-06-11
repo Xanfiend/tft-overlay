@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.54-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.55-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -220,16 +220,9 @@ The app only needs the "draw over other apps" permission to show the overlay on 
 
 ## ✦ Changelog
 
-### v1.54 - 2026-06-11
-- Overlay redesign pass. Section headers now have gold lettering with a thin fading line, so sections are easy to spot while scrolling.
-- Tabs show an icon above their name. The panel header shows the app sigil and version.
-- Auto Scan is now a big red button and Auto Opp Scan has a gold border. The tiny clear, copy and scan text links were replaced with real buttons that are easier to hit mid-game.
-- In the ODDS tab the per-shop percent is color coded: green means a good roll chance, gold means okay.
-
-### v1.53 - 2026-06-11
-- Visual polish pass on every button and panel, in game and on the launch screen.
-- Buttons now have a subtle gradient instead of a flat color, and they brighten when pressed.
-- The active tab in the overlay gets a gold underline. The floating sigil button got a soft pulsing glow ring behind it. Panel corners are slightly more rounded.
+### v1.55 - 2026-06-11
+- Real fix for the tab-switch flicker. The whole panel (including its background and border) was being faded out and back in on every tab switch, so for one frame the panel had no background at all, which looked like a flicker.
+- Now only the body content below the tab row fades when you switch tabs. The panel frame, header and tab row stay put and never disappear.
 
 ### v1.52 - 2026-06-10
 - Animated app background. The launch screen now has slow-drifting glowing embers floating up behind the content, with a gentle twinkle, in the app's red, gold and violet colors.
