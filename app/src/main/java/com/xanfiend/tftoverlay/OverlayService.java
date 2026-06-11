@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.59";
+    private static final String APP_VERSION = "v1.60";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -71,6 +71,13 @@ public class OverlayService extends Service {
 
     // floating button layout params promoted to field so buildSettings() can update alpha/position
     private WindowManager.LayoutParams btnLp;
+
+    // ---- in-game HUD: small persistent overlay showing live gold income + gold-to-level ----
+    private View hudView;
+    private WindowManager.LayoutParams hudLp;
+    private TextView hudGoldTv, hudLevelTv;
+    private final android.os.Handler hudHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable hudTick;
     // panel layout params promoted for flash-free in-place refresh
     private WindowManager.LayoutParams panelLp;
     // screen scanning — result delivered from ScanPermActivity via static callbacks
@@ -205,6 +212,7 @@ public class OverlayService extends Service {
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
+        if(pool.getHudEnabled()) addHud();
         new Thread(new Runnable(){ public void run(){ ChampionTemplates.load(OverlayService.this); }}).start();
     }
     @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
@@ -380,6 +388,84 @@ public class OverlayService extends Service {
         wm.addView(button, btnLp);
         button.animate().scaleX(1f).scaleY(1f).setDuration(280)
             .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
+    }
+
+    // Small persistent HUD: shows live gold + projected income/round and gold
+    // needed to hit the next level, both derived from values already tracked by
+    // scans/manual corrections (no extra OCR or polling needed). Draggable like
+    // the main sigil; position persists across restarts.
+    private void addHud(){
+        if(hudView!=null) return;
+        LinearLayout c=new LinearLayout(this); c.setOrientation(LinearLayout.VERTICAL);
+        c.setBackground(box(0xE6160B0D,8,GOLD,1)); c.setPadding(12,8,12,8);
+        hudGoldTv=new TextView(this); hudGoldTv.setTextColor(GOLD); hudGoldTv.setTextSize(11);
+        hudGoldTv.setTypeface(null,android.graphics.Typeface.BOLD); hudGoldTv.setLetterSpacing(0.04f);
+        hudLevelTv=new TextView(this); hudLevelTv.setTextColor(BONE); hudLevelTv.setTextSize(10);
+        hudLevelTv.setPadding(0,2,0,0);
+        c.addView(hudGoldTv); c.addView(hudLevelTv);
+        hudView=c;
+        hudView.setAlpha(pool.getAlpha());
+
+        hudLp=new WindowManager.LayoutParams(-2,-2,wtype(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+        hudLp.gravity=Gravity.TOP|Gravity.START;
+        hudLp.x=pool.getHudX(); hudLp.y=pool.getHudY();
+
+        hudView.setOnTouchListener(new View.OnTouchListener(){
+            int ix,iy; float tx,ty;
+            public boolean onTouch(View v, MotionEvent e){
+                int a=e.getAction();
+                if(a==MotionEvent.ACTION_DOWN){
+                    ix=hudLp.x; iy=hudLp.y; tx=e.getRawX(); ty=e.getRawY();
+                    return true;
+                } else if(a==MotionEvent.ACTION_MOVE){
+                    int dx=(int)(e.getRawX()-tx), dy=(int)(e.getRawY()-ty);
+                    hudLp.x=ix+dx; hudLp.y=iy+dy;
+                    try{ wm.updateViewLayout(hudView,hudLp); }catch(Exception ex){}
+                    return true;
+                } else if(a==MotionEvent.ACTION_UP){
+                    pool.setHudPos(hudLp.x, hudLp.y);
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        try{ wm.addView(hudView, hudLp); }catch(Exception e){}
+        refreshHud();
+
+        hudTick=new Runnable(){ public void run(){
+            refreshHud();
+            hudHandler.postDelayed(this, 3000);
+        }};
+        hudHandler.postDelayed(hudTick, 3000);
+    }
+    private void removeHud(){
+        if(hudTick!=null){ hudHandler.removeCallbacks(hudTick); hudTick=null; }
+        try{ if(hudView!=null) wm.removeView(hudView); }catch(Exception e){}
+        hudView=null; hudGoldTv=null; hudLevelTv=null;
+    }
+    // recompute HUD text from current pool state — gold income projection and
+    // gold needed to reach the next level use the same math as the GOLD tab
+    private void refreshHud(){
+        if(hudGoldTv==null) return;
+        int gold=pool.getGold();
+        int streak=pool.getStreak();
+        int income=Pool.expectedIncome(gold, streak);
+        hudGoldTv.setText("⛧ "+gold+"g  →  +"+income+"g/rnd");
+
+        int lvl=pool.getLevel();
+        int xpNeed=pool.getXpNeed();
+        int xpCur=pool.getXpCur();
+        int trustedNeed=Pool.xpToNext(lvl);
+        int into=(xpNeed==trustedNeed && xpCur>=0) ? xpCur : 0;
+        int goldToLvl=Pool.goldToNextLevel(lvl, into);
+        if(trustedNeed<=0){
+            hudLevelTv.setText("Lv"+lvl+" — max");
+        } else {
+            hudLevelTv.setText("Lv"+lvl+" → "+goldToLvl+"g for Lv"+(lvl+1));
+        }
     }
 
     // After a drag, glide the floating button to the nearest screen edge so it
@@ -592,7 +678,7 @@ public class OverlayService extends Service {
             boolean on=lv==level;
             b.setBackground(box(on?BLOOD:CARD,5,on?BLOODL:EDGE,on?2:1));
             b.setTextColor(on?BONE:ASH); if(on) b.setTypeface(null, android.graphics.Typeface.BOLD);
-            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ level=lv; pool.setLevel(lv); showPanel(); } });
+            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ level=lv; pool.setLevel(lv); refreshHud(); showPanel(); } });
             LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(0,-2,1f); bl.setMargins(2,0,2,0); b.setLayoutParams(bl);
             lvl.addView(b);
         }
@@ -665,7 +751,7 @@ public class OverlayService extends Service {
             pressFeedback(ngYes);
             ngYes.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 pool.reset(); autoScanResults.clear(); oppScanResults.clear();
-                newGameHint=false; lastOppSlot=0; buzz(); showPanel();
+                newGameHint=false; lastOppSlot=0; buzz(); refreshHud(); showPanel();
             }});
             ng.addView(ngYes);
             TextView ngNo=new TextView(this); ngNo.setText("\u2715");
@@ -1338,7 +1424,7 @@ public class OverlayService extends Service {
 
         Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
         wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL); wipe.setTextSize(13);
-        wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); showPanel(); } });
+        wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); refreshHud(); showPanel(); } });
         LinearLayout.LayoutParams wl=new LinearLayout.LayoutParams(-1,-2); wl.setMargins(0,12,0,0); wipe.setLayoutParams(wl);
         root.addView(wipe);
         TextView credit=new TextView(this); credit.setText("@xanfiend"); credit.setTextColor(DIM); credit.setTextSize(10); credit.setGravity(Gravity.CENTER);
@@ -1554,6 +1640,7 @@ public class OverlayService extends Service {
     }
 
     private void refreshEcon(){
+        refreshHud();
         if(econGoldTv==null) return;
         int gold=pool.getGold(); int streak=pool.getStreak();
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
@@ -1982,6 +2069,7 @@ public class OverlayService extends Service {
                 pool.setAlpha(av);
                 button.setAlpha(av);
                 if(panel!=null) panel.setAlpha(av);
+                if(hudView!=null) hudView.setAlpha(av);
                 alphaLabel.setText((progress+20)+"%");
             }
             public void onStartTrackingTouch(android.widget.SeekBar bar){}
@@ -2008,6 +2096,33 @@ public class OverlayService extends Service {
             hRow.addView(btn);
         }
         root.addView(hRow);
+
+        addSecHdr(root, "IN-GAME HUD", GOLD);
+
+        TextView hudHint=new TextView(this);
+        hudHint.setText("Small overlay showing gold + projected income/round and gold needed for your next level. Drag it anywhere on screen.");
+        hudHint.setTextColor(DIM); hudHint.setTextSize(10); hudHint.setPadding(2,0,0,8); root.addView(hudHint);
+
+        boolean curHud=pool.getHudEnabled();
+        LinearLayout hudRow=new LinearLayout(this); hudRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams hudRowLp=new LinearLayout.LayoutParams(-1,-2); hudRowLp.setMargins(0,0,0,14); hudRow.setLayoutParams(hudRowLp);
+        String[] hudLabels={"ON","OFF"}; boolean[] hudVals={true,false};
+        for(int i=0;i<2;i++){
+            final boolean hv=hudVals[i];
+            TextView btn=new TextView(this); btn.setText(hudLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curHud==hv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setHudEnabled(hv);
+                if(hv) addHud(); else removeHud();
+                showPanel();
+            }});
+            hudRow.addView(btn);
+        }
+        root.addView(hudRow);
 
         addSecHdr(root, "OPEN TAB", GOLD);
 
@@ -2890,6 +3005,7 @@ public class OverlayService extends Service {
         if(r.level>=2 && r.level<=4 && !pool.isEmpty()) newGameHint=true;
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
+        refreshHud();
         mode=4; showPanel();
     }
 
@@ -3967,6 +4083,7 @@ public class OverlayService extends Service {
             if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
             // stale-game heuristic, same as the quick scan path
             if(autoScanLevel>=2 && autoScanLevel<=4 && !pool.isEmpty() && autoTapHits>0) newGameHint=true;
+            refreshHud();
         } else if(!oppScanResults.isEmpty()){
             // file this enemy board into the next opponent slot (cycles 1-7) so
             // scouting the lobby is just repeated SCRY THE ENEMY presses
@@ -4149,6 +4266,12 @@ public class OverlayService extends Service {
             btnLp.y = Math.min(btnLp.y, dm.heightPixels - 150);
             try{ wm.updateViewLayout(button, btnLp); }catch(Exception e){}
         }
+        if(hudView != null && hudLp != null){
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            hudLp.x = Math.min(hudLp.x, dm.widthPixels - 100);
+            hudLp.y = Math.min(hudLp.y, dm.heightPixels - 100);
+            try{ wm.updateViewLayout(hudView, hudLp); }catch(Exception e){}
+        }
     }
 
     @Override public void onDestroy(){
@@ -4165,6 +4288,7 @@ public class OverlayService extends Service {
         hideProbeDots();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
+        removeHud();
         closePanel();
     }
     @Override public IBinder onBind(Intent i){ return null; }
