@@ -21,7 +21,8 @@ public final class ItemData {
         "Sparring Gloves",  // 6
         "Spatula",          // 7
         "Tear of the Goddess", // 8
-        "Negatron Cloak"    // 9
+        "Negatron Cloak",   // 9
+        "Frying Pan"        // 10 — second emblem maker alongside Spatula
     };
 
     // Short display names for the item-builder chips
@@ -35,10 +36,11 @@ public final class ItemData {
         "Gloves",
         "Spat",
         "Tear",
-        "Negat."
+        "Negat.",
+        "Pan"
     };
 
-    public static final String[][] COMBOS = new String[10][10];
+    public static final String[][] COMBOS = new String[11][11];
 
     static {
         // ---- B.F. Sword (1) ----
@@ -103,6 +105,19 @@ public final class ItemData {
 
         // ---- Negatron Cloak (9) ----
         set(9, 9, "Dragon's Claw");
+
+        // ---- Frying Pan (10) — emblem maker, like Spatula ----
+        // Set-specific emblem outcomes; generic names until verified per set.
+        set(10, 1,  "B.F. Pan Emblem");
+        set(10, 2,  "Chain Pan Emblem");
+        set(10, 3,  "Belt Pan Emblem");
+        set(10, 4,  "Rod Pan Emblem");
+        set(10, 5,  "Bow Pan Emblem");
+        set(10, 6,  "Gloves Pan Emblem");
+        set(10, 7,  "Tactician's Toolkit");
+        set(10, 8,  "Tear Pan Emblem");
+        set(10, 9,  "Negat. Pan Emblem");
+        set(10, 10, "Tactician's Wok");
     }
 
     private static void set(int i, int j, String name) {

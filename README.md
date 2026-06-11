@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.58-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.59-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,15 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.59 - 2026-06-11
+- **Rolldown forecast**: every tracked champ on the ODDS tab shows P(≥1/≥2/≥3 copies) for rolling your current gold, Monte-Carlo simulated over the real shop process, plus average gold to the first copy.
+- **One-press self scry**: now also reads XP progress and the stage-round, alongside level, gold and every unit.
+- **LEVELING & STAGE FORECAST cards** on the GOLD tab: exact gold to next level from scanned XP, loss-damage estimate per stage, Realm of Gods / PvE reminders.
+- **Per-opponent boards**: each enemy scry files automatically as OPP 1–7 with remembered champs and stars.
+- **Learned synergies**: the overlay learns champ→traits from scry popups and shows active trait counts with next breakpoints.
+- **Realm of Gods tracker** (GUIDE tab), **scanned augments remembered** (AUGMENTS tab), **new-game reset banner**, **bench scan auto-fills junk counters**, **Frying Pan** in the item builder.
+- Econ corrections: asymmetric win/loss streak gold + win gold in expected income; Set 17 bag sizes (29/22/18/10/9) and corrected level 8–9 shop odds.
 
 ### v1.58 - 2026-06-11
 - The overlay is now automatic-first, in full occult dress. The POOL tab opens with **THE RITE**: ⛧ SCRY MY BOARD (level, gold and every unit in one press) and SCRY THE ENEMY (scout a foe's board). The Opp Manual tap-it-yourself mode was removed — the automatic enemy scan replaces it.
