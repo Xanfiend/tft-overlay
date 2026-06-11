@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.56";
+    private static final String APP_VERSION = "v1.57";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -118,6 +118,9 @@ public class OverlayService extends Service {
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
+    // bumped on every (re)start; lets late-arriving background work (duplicate-skip
+    // visual ID) detect whether it still belongs to the scan that's running/just finished
+    private int autoScanGeneration = 0;
     private boolean autoOppMode = false;    // when true, results route to oppScanResults
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoScanGold = -1;
@@ -2593,6 +2596,7 @@ public class OverlayService extends Service {
             return;
         }
         autoScanPending=true;
+        autoScanGeneration++;
         autoOppMode=false;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1;
@@ -2691,6 +2695,7 @@ public class OverlayService extends Service {
             return;
         }
         autoScanPending=true;
+        autoScanGeneration++;
         autoOppMode=true;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1; autoScanLevel=-1;
@@ -3446,6 +3451,7 @@ public class OverlayService extends Service {
                 final android.graphics.Rect bounds=r.detectedPopupBounds;
                 final boolean oppMode=autoOppMode;
                 final int spriteSize=Math.max(48, autoTapScreenH*9/100);
+                final int gen=autoScanGeneration;
                 new Thread(new Runnable(){ public void run(){
                     // popup-portrait template (legacy board-vision path, own board only)
                     if(!oppMode) ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
@@ -3466,7 +3472,7 @@ public class OverlayService extends Service {
                             // multiple 1-cost copies). Check the remaining un-tapped
                             // board probes against the sprite just learned so those
                             // copies are recorded now instead of needing their own tap.
-                            checkDuplicateProbes(sourceBmp,spriteSize,oppMode);
+                            checkDuplicateProbes(sourceBmp,spriteSize,oppMode,gen);
                         }
                     }
                     sourceBmp.recycle();
@@ -3540,7 +3546,7 @@ public class OverlayService extends Service {
     // board probe and matches it against the (now updated) sprite library — any
     // hit is almost certainly another copy of the champion just confirmed, so it
     // is recorded immediately and that probe is skipped instead of tapped.
-    private void checkDuplicateProbes(final Bitmap sourceBmp, final int spriteSize, final boolean oppMode){
+    private void checkDuplicateProbes(final Bitmap sourceBmp, final int spriteSize, final boolean oppMode, final int gen){
         final java.util.List<Integer> dupIdx=new java.util.ArrayList<>();
         final java.util.List<ChampionTemplates.BoardMatch> dupMatch=new java.util.ArrayList<>();
         int w=sourceBmp.getWidth(), h=sourceBmp.getHeight();
@@ -3561,6 +3567,8 @@ public class OverlayService extends Service {
         }
         if(dupIdx.isEmpty()) return;
         autoTapHandler.post(new Runnable(){ public void run(){
+            if(gen!=autoScanGeneration) return; // a new scan started; these results are stale
+            boolean any=false;
             for(int k=0;k<dupIdx.size();k++){
                 int i=dupIdx.get(k);
                 if(autoTapSkip.contains(i)) continue; // already handled by another duplicate pass
@@ -3583,8 +3591,13 @@ public class OverlayService extends Service {
                 }
                 autoScanVisualCount++; autoTapHits++;
                 addScanLog("dup visual ID: "+dm.name+" (probe "+(i+1)+")");
+                any=true;
             }
+            if(!any) return;
             buzz();
+            // if the scan already finished and its results panel is showing, refresh
+            // it now so this late-arriving duplicate is reflected in the pool/results
+            if(!autoScanPending && panel!=null && mode==0) showPanel();
         }});
     }
 
