@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.54";
+    private static final String APP_VERSION = "v1.55";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -455,6 +455,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
+        boolean reuse=panel!=null;
         LinearLayout root;
         if(panel==null){
             // first open: create the window and add to WindowManager
@@ -500,23 +501,13 @@ public class OverlayService extends Service {
                 }
             });
         } else {
-            // panel already open: reuse the window, just clear and rebuild content — no flash
+            // panel already open: reuse the window, just clear and rebuild content — no flash.
+            // root itself keeps the panel background/border and is never faded — only the
+            // per-tab body (built into "content" below) cross-fades, so the panel frame
+            // never disappears for a frame when switching tabs.
             root=(LinearLayout)((ScrollView)panel).getChildAt(0);
             root.removeAllViews();
             panel.setAlpha(pool.getAlpha());
-            // cross-fade the new tab in, starting on its first drawn frame (see the
-            // entrance comment above — starting now would finish before it is visible)
-            final LinearLayout fr=root;
-            fr.setAlpha(0f);
-            fr.setTranslationY(12f);
-            fr.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
-                public boolean onPreDraw(){
-                    fr.getViewTreeObserver().removeOnPreDrawListener(this);
-                    fr.animate().alpha(1f).translationY(0f).setDuration(150)
-                        .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-                    return true;
-                }
-            });
         }
 
         // header: title + close
@@ -565,11 +556,17 @@ public class OverlayService extends Service {
         }
         root.addView(tabs);
 
+        // body content for the active tab \u2014 wrapped in its own container so it can
+        // cross-fade in on tab switches without touching root's background/border
+        // or the header/tab row (which would otherwise flicker in and out)
+        final LinearLayout content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        root.addView(content);
+
         // occult divider under the header
         TextView div=new TextView(this);
         div.setText("\u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766 \u00b7 \u22c6 \u00b7 \u2766");
         div.setTextColor(EDGE); div.setTextSize(9); div.setGravity(Gravity.CENTER); div.setPadding(0,8,0,2);
-        root.addView(div);
+        content.addView(div);
 
         // level row (4-10) -- only relevant for pool/odds tabs
         if(mode<=1){
@@ -587,15 +584,29 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(0,-2,1f); bl.setMargins(2,0,2,0); b.setLayoutParams(bl);
             lvl.addView(b);
         }
-        root.addView(lvl);
+        content.addView(lvl);
         }
 
-        if(mode==4) buildSettings(root);
-        else if(mode==3) buildEconomy(root);
-        else if(mode==2) buildGuide(root);
-        else if(mode==1) buildSummary(root);
-        else buildGrid(root);
+        if(mode==4) buildSettings(content);
+        else if(mode==3) buildEconomy(content);
+        else if(mode==2) buildGuide(content);
+        else if(mode==1) buildSummary(content);
+        else buildGrid(content);
 
+        if(reuse){
+            // cross-fade the new tab's body in, starting on its first drawn frame \u2014
+            // starting now would finish before this frame is even visible
+            content.setAlpha(0f);
+            content.setTranslationY(12f);
+            content.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
+                public boolean onPreDraw(){
+                    content.getViewTreeObserver().removeOnPreDrawListener(this);
+                    content.animate().alpha(1f).translationY(0f).setDuration(150)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+                    return true;
+                }
+            });
+        }
     }
 
     private double rerollChance(String name){
