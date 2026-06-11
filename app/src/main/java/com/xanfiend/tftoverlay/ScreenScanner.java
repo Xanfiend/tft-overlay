@@ -42,12 +42,15 @@ public class ScreenScanner {
     public static class ScanResult {
         public int gold = -1;
         public int level = -1;
+        public String stageRound = "";       // e.g. "3-2" from the round indicator ("" = not seen)
+        public int xpCur = -1, xpNeed = -1;  // XP progress "cur/need" from the level button
         public List<String> augments = new ArrayList<>();
         public List<String> shopChampions = new ArrayList<>();
         public List<String> benchChampions = new ArrayList<>();
         public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
         public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
+        public List<String> popupTraits = new ArrayList<>(); // trait names visible in the unit popup
         public android.graphics.Rect detectedPopupBounds = null; // popup scan: bounding rect of all popup-zone blocks
         public List<String> autoChampions = new ArrayList<>(); // auto board scan: all champion names found
         public List<BoardUnit> boardUnits = new ArrayList<>();  // board vision: template-matched units
@@ -237,7 +240,20 @@ public class ScreenScanner {
                 int s = countStars(block.getText());
                 if (s > r.detectedBoardStars) r.detectedBoardStars = s;
             }
-            log("popup unit: " + r.detectedBoardUnit + (r.detectedBoardStars > 0 ? " " + r.detectedBoardStars + "★" : ""));
+            // trait names appear in small text under the unit name — learn them
+            for (Text.TextBlock block : text.getTextBlocks()) {
+                android.graphics.Rect b = block.getBoundingBox();
+                if (b == null || b.centerX() < popLeft) continue;
+                String raw = block.getText();
+                for (String[] tr : TraitData.TRAITS) {
+                    String tName = tr[0];
+                    if (!r.popupTraits.contains(tName) && fuzzyMatch(raw, tName)) {
+                        r.popupTraits.add(tName);
+                    }
+                }
+            }
+            log("popup unit: " + r.detectedBoardUnit + (r.detectedBoardStars > 0 ? " " + r.detectedBoardStars + "★" : "")
+                    + (r.popupTraits.isEmpty() ? "" : " traits=" + r.popupTraits));
         } else if (r.detectedPopupBounds != null) {
             // popup appeared but no champion matched — log the raw text blocks to aid debugging
             StringBuilder sb = new StringBuilder("popup no-match text:");
@@ -386,6 +402,33 @@ public class ScreenScanner {
                 r.level = Integer.parseInt(raw);
             }
 
+            // stage-round indicator: "3-2" style, top strip of the screen
+            if (r.stageRound.isEmpty() && cy < topEnd) {
+                java.util.regex.Matcher sm = java.util.regex.Pattern
+                        .compile("\\b([1-9])-([1-7])\\b").matcher(raw);
+                if (sm.find()) {
+                    r.stageRound = sm.group(1) + "-" + sm.group(2);
+                    log("stage round: " + r.stageRound + " from \"" + raw + "\"");
+                }
+            }
+
+            // XP progress: "cur/need" near the level button, top-left.
+            // Validate need against the XP table so score fractions don't match.
+            if (r.xpNeed < 0 && cy < topEnd && cx < leftHalf) {
+                java.util.regex.Matcher xm = java.util.regex.Pattern
+                        .compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b").matcher(raw);
+                if (xm.find()) {
+                    int cur = Integer.parseInt(xm.group(1));
+                    int need = Integer.parseInt(xm.group(2));
+                    boolean valid = false;
+                    for (int x : SetData.XP_TO_NEXT) if (x == need) { valid = true; break; }
+                    if (valid && cur <= need) {
+                        r.xpCur = cur; r.xpNeed = need;
+                        log("xp: " + cur + "/" + need + " from \"" + raw + "\"");
+                    }
+                }
+            }
+
             // augments: full-screen match
             for (AugmentData.AugmentEntry aug : AugmentData.AUGMENTS) {
                 if (!r.augments.contains(aug.name) && fuzzyMatch(raw, aug.name)) {
@@ -449,6 +492,8 @@ public class ScreenScanner {
         StringBuilder sb = new StringBuilder();
         if (r.gold >= 0) sb.append(r.gold).append("g");
         if (r.level >= 0) { if (sb.length() > 0) sb.append(" · "); sb.append("Lv").append(r.level); }
+        if (!r.stageRound.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.stageRound); }
+        if (r.xpNeed > 0) { if (sb.length() > 0) sb.append(" · "); sb.append("xp ").append(r.xpCur).append("/").append(r.xpNeed); }
         if (!r.augments.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.augments.size()).append(r.augments.size() == 1 ? " aug" : " augs"); }
         if (!r.shopChampions.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.shopChampions.size()).append(r.shopChampions.size() == 1 ? " shop champ" : " shop champs"); }
         if (!r.benchChampions.isEmpty()) { if (sb.length() > 0) sb.append(" · "); sb.append(r.benchChampions.size()).append(r.benchChampions.size() == 1 ? " bench" : " bench"); }
@@ -542,6 +587,26 @@ public class ScreenScanner {
             }
             if (r.detectedBoardStars > 0)
                 log("popup stars: " + r.detectedBoardStars + " for " + r.detectedBoardUnit);
+        }
+
+        // Trait sweep — the popup lists the unit's traits under its name in small
+        // text (no height filter). This is how the overlay learns champ→traits.
+        if (!r.detectedBoardUnit.isEmpty()) {
+            for (Text.TextBlock block : text.getTextBlocks()) {
+                android.graphics.Rect box = block.getBoundingBox();
+                if (box == null) continue;
+                int cy = box.centerY(), cx = box.centerX();
+                if (cy < popTop || cy > popBot || cx < popLeft) continue;
+                String raw = block.getText();
+                for (String[] tr : TraitData.TRAITS) {
+                    String tName = tr[0];
+                    if (!r.popupTraits.contains(tName) && fuzzyMatch(raw, tName)) {
+                        r.popupTraits.add(tName);
+                    }
+                }
+            }
+            if (!r.popupTraits.isEmpty())
+                log("popup traits: " + r.popupTraits + " for " + r.detectedBoardUnit);
         }
         return r;
     }

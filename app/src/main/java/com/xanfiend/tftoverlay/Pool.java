@@ -86,7 +86,15 @@ public class Pool {
 
     public void reset(){
         seen.clear(); opp.clear(); recent.clear(); clearJunk();
-        p.edit().remove("econ_gold").remove("econ_streak").apply();
+        SharedPreferences.Editor e = p.edit()
+                .remove("econ_gold").remove("econ_streak")
+                .remove("xp_cur").remove("xp_need")
+                .remove("stage_round").remove("my_augs")
+                .remove("god_1").remove("god_2")
+                .remove("god_picks_1").remove("god_picks_2")
+                .remove("opp_slot_cursor");
+        for(int s=1;s<=7;s++) e.remove("oppboard"+s);
+        e.apply();
         save();
     }
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
@@ -131,16 +139,117 @@ public class Pool {
     // Pure math helpers — static for easy unit testing and use without a Pool instance.
     public static int interest(int gold)       { return Math.min(5, gold / 10); }
     public static int toNextBracket(int gold)  { return (gold / 10 + 1) * 10 - gold; }
+    // Streak gold is asymmetric in live TFT:
+    //   win streaks:  +1 at 3-4 wins, +2 at 5, +3 at 6+
+    //   loss streaks: +1 at 2-3 losses, +2 at 4, +3 at 5+
     public static int streakBonus(int streak)  {
-        int abs = Math.abs(streak);
-        if (abs >= 6) return 3;
+        if (streak > 0) {
+            if (streak >= 6) return 3;
+            if (streak >= 5) return 2;
+            if (streak >= 3) return 1;
+            return 0;
+        }
+        int abs = -streak;
+        if (abs >= 5) return 3;
         if (abs >= 4) return 2;
         if (abs >= 2) return 1;
         return 0;
     }
+    // Expected income next round, assuming the current streak holds.
+    // Winning a PvP round also pays +1g, so a held win streak includes it.
     public static int expectedIncome(int gold, int streak) {
-        return 5 + interest(gold) + streakBonus(streak);
+        return 5 + interest(gold) + streakBonus(streak) + (streak > 0 ? 1 : 0);
     }
+
+    // ---- XP / leveling ----
+    public static int xpToNext(int level){
+        if (level < 1 || level >= SetData.XP_TO_NEXT.length) return 0;
+        return SetData.XP_TO_NEXT[level];
+    }
+    // Gold to buy the rest of the XP to the next level (4g = 4 XP, sold in 4s).
+    // xpInto = XP already accumulated into the current level (0 if unknown).
+    public static int goldToNextLevel(int level, int xpInto){
+        int need = xpToNext(level);
+        if (need <= 0) return 0;
+        int rem = Math.max(0, need - Math.max(0, xpInto));
+        return ((rem + 3) / 4) * 4;
+    }
+    // last scanned XP progress: "cur/need" read from the level button, -1 = unknown
+    public int getXpCur() { return p.getInt("xp_cur", -1); }
+    public int getXpNeed(){ return p.getInt("xp_need", -1); }
+    public void setXp(int cur, int need){ p.edit().putInt("xp_cur", cur).putInt("xp_need", need).apply(); }
+
+    // ---- stage/round, as last scanned ("3-2", "" = unknown) ----
+    public String getStageRound(){ return p.getString("stage_round", ""); }
+    public void setStageRound(String s){ p.edit().putString("stage_round", s==null?"":s).apply(); }
+
+    // ---- my augments, as scanned ----
+    public List<String> getMyAugments(){
+        List<String> l = new ArrayList<>();
+        for(String a : p.getString("my_augs","").split(";")) if(!a.isEmpty() && !l.contains(a)) l.add(a);
+        return l;
+    }
+    public void addMyAugment(String name){
+        List<String> l = getMyAugments();
+        if(l.contains(name) || l.size()>=4) return;
+        l.add(name);
+        StringBuilder sb=new StringBuilder();
+        for(String a:l){ if(sb.length()>0) sb.append(";"); sb.append(a); }
+        p.edit().putString("my_augs", sb.toString()).apply();
+    }
+
+    // ---- learned champ→traits map ----
+    // The overlay learns each champion's traits from the unit popup the first
+    // time it's scried (the popup lists them under the name). Persists across
+    // games — traits don't change mid-set.
+    public List<String> traitsOf(String champ){
+        List<String> l = new ArrayList<>();
+        for(String t : p.getString("traits_"+champ,"").split(",")) if(!t.isEmpty()) l.add(t);
+        return l;
+    }
+    public void learnTraits(String champ, List<String> traits){
+        if(traits==null || traits.isEmpty()) return;
+        StringBuilder sb=new StringBuilder();
+        for(String t:traits){ if(sb.length()>0) sb.append(","); sb.append(t); }
+        p.edit().putString("traits_"+champ, sb.toString()).apply();
+    }
+
+    // ---- per-opponent boards (slots 1-7) ----
+    // format per slot: "name|stars;name|stars;..."
+    public Map<String,Integer> getOppBoard(int slot){
+        Map<String,Integer> m = new HashMap<>();
+        for(String part : p.getString("oppboard"+slot,"").split(";")){
+            if(part.isEmpty()) continue;
+            String[] kv = part.split("\\|");
+            if(kv.length>=1 && !kv[0].isEmpty()){
+                int st=1;
+                if(kv.length>=2){ try{ st=Integer.parseInt(kv[1]); }catch(Exception e){} }
+                m.put(kv[0], st);
+            }
+        }
+        return m;
+    }
+    public void setOppBoard(int slot, Map<String,Integer> board){
+        StringBuilder sb=new StringBuilder();
+        for(Map.Entry<String,Integer> e : board.entrySet()){
+            sb.append(e.getKey()).append("|").append(e.getValue()).append(";");
+        }
+        p.edit().putString("oppboard"+slot, sb.toString()).apply();
+    }
+    public void clearOppBoard(int slot){ p.edit().remove("oppboard"+slot).apply(); }
+    // cycling slot assignment so repeated enemy scries file under OPP 1..7
+    public int nextOppSlot(){
+        int s = p.getInt("opp_slot_cursor", 0) % 7 + 1;
+        p.edit().putInt("opp_slot_cursor", s).apply();
+        return s;
+    }
+
+    // ---- god/boon tracker (set 17 Realm mechanic) ----
+    // godA/godB = the two gods in this game ("" = unset); picks = offerings taken
+    public String getGod(int which){ return p.getString("god_"+which, ""); }
+    public void setGod(int which, String name){ p.edit().putString("god_"+which, name==null?"":name).apply(); }
+    public int getGodPicks(int which){ return p.getInt("god_picks_"+which, 0); }
+    public void setGodPicks(int which, int n){ p.edit().putInt("god_picks_"+which, Math.max(0,Math.min(3,n))).apply(); }
 
     // ---- scan calibration: probe grid percentages ----
     // top = BACK-row hex-center Y, bot = FRONT-row hex-center Y (the probe grid lays
@@ -233,6 +342,10 @@ public class Pool {
     public void addJunk(int cost, int n){
         int v = Math.max(0, getJunk(cost)+n);
         p.edit().putInt("junk"+cost, v).apply();
+    }
+    // absolute setter — used by the bench scan to auto-fill counts
+    public void setJunk(int cost, int n){
+        p.edit().putInt("junk"+cost, Math.max(0,n)).apply();
     }
     public void clearJunk(){
         SharedPreferences.Editor e = p.edit();
