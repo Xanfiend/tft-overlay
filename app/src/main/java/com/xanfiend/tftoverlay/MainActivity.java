@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.56");
+        ver.setText("v1.57");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.57  ·  2026-06-11","Fixed a bug where Auto Scan's duplicate-copy detection (added in v1.56) could finish recording a unit just after the scan's results screen had already been drawn, so the unit's count silently failed to show up in the pool. The results screen now refreshes itself if one of these late duplicate finds comes in after the scan wrapped up, so every recognized unit is reflected."},
             {"v1.56  ·  2026-06-11","Auto Scan now spots duplicate copies of a champion without tapping them. As soon as a champion is recognized from a tap, the app immediately checks the other untapped units on the board in that same screenshot. If one of them looks like the same champion (same star level position included), it gets recorded right away and the scan skips tapping it. This means boards with 2 star or 3 star units, or several copies of the same 1 cost champion, finish faster with fewer taps."},
             {"v1.55  ·  2026-06-11","Real fix for the tab-switch flicker in the overlay panel. The previous fixes sped up the animation, but the whole panel (background, border, header and tabs) was being faded out and back in on every tab switch, so for one frame the panel had no background at all. That is what showed as a flicker. Now only the body content below the tab row fades when you switch tabs. The panel frame, header and tab row stay fully visible the entire time."},
             {"v1.54  ·  2026-06-11","Overlay redesign pass, focused on making the in-game panel prettier and easier to use. Every section header now has a small diamond, bold gold lettering and a thin line that fades out to the right, so sections are easy to spot while scrolling. The panel header shows the app sigil and the version, and the tabs now show an icon above their name so each tab is recognizable at a glance. The Auto Scan button is now a proper big red button and Auto Opp Scan got a gold border, since those are the two things you press most. The tiny clear, copy and scan text links everywhere were replaced with real bordered buttons that are much easier to hit mid-game. In the ODDS tab the per-shop percent is now color coded: green means a good roll chance, gold means okay, plain means thin. Scan buttons and chips also got the press-down animation everywhere."},
