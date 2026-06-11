@@ -37,21 +37,20 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.58";
+    private static final String APP_VERSION = "v1.59";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
     private int guideTab = 0;
+    // god tracker: which slot (1/2) is currently showing the god picker, 0 = none
+    private int godPickSlot = 0;
     // probe dots overlay: shows all scan tap positions over TFT for calibration
     private View probeDotsView = null;
     private final android.os.Handler probeDotsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
-    private static final int[][] ODDS = {
-        {0,0,0,0,0},{100,0,0,0,0},{100,0,0,0,0},{75,25,0,0,0},
-        {55,30,15,0,0},{45,33,20,2,0},{30,40,25,5,0},{19,30,40,10,1},
-        {17,24,32,24,3},{15,18,25,30,12},{5,10,20,40,25}
-    };
+    // Shop odds live in SetData so set updates stay one-file
+    private static final int[][] ODDS = SetData.ODDS;
     private static final int VOID=0xF20B0709, BLOOD=0xFF8B1A1A, BLOODL=0xFFC1121F,
         BONE=0xFFE0D5C0, ASH=0xFF7A6B60, CARD=0xFF16100F, EDGE=0xFF3A2024,
         GOLD=0xFFC9A227, GREEN=0xFF5FA046, DIM=0xFF564044;
@@ -125,6 +124,13 @@ public class OverlayService extends Service {
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoScanGold = -1;
     private int autoScanLevel = -1;
+    private int autoScanXpCur = -1, autoScanXpNeed = -1; // XP progress from the same OCR pass
+    private String autoScanStage = "";                    // stage-round from the same OCR pass
+    // set when a scan suggests the previous game's data is stale (level 2-4
+    // seen while the pool still has entries) — POOL tab shows a reset banner
+    private boolean newGameHint = false;
+    // opponent slot the most recent enemy scry was filed under (for the UI note)
+    private int lastOppSlot = 0;
     private int autoTapIndex = 0;
     private int autoTapConsecutiveMisses = 0;
     private int autoTapBoardProbeCount = 0; // index where bench probes start
@@ -641,11 +647,47 @@ public class OverlayService extends Service {
         chipNames=new String[totalChamps];
         int idx=0;
 
+        // \u2609 new-game banner: a scan saw level 2-4 while the pool still holds
+        // last game's data \u2014 offer the reset instead of silently poisoning odds
+        if(newGameHint){
+            LinearLayout ng=new LinearLayout(this); ng.setOrientation(LinearLayout.HORIZONTAL);
+            ng.setGravity(Gravity.CENTER_VERTICAL);
+            ng.setBackground(box(0xFF1A1400,8,GOLD,2)); ng.setPadding(12,10,12,10);
+            LinearLayout.LayoutParams ngl=new LinearLayout.LayoutParams(-1,-2); ngl.setMargins(0,0,0,8); ng.setLayoutParams(ngl);
+            TextView ngTv=new TextView(this);
+            ngTv.setText("\u2609 New game? The pool still holds last game's data.");
+            ngTv.setTextColor(GOLD); ngTv.setTextSize(11);
+            ngTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            ng.addView(ngTv);
+            TextView ngYes=new TextView(this); ngYes.setText("RESET");
+            ngYes.setTextColor(BONE); ngYes.setTextSize(11); ngYes.setTypeface(null,android.graphics.Typeface.BOLD);
+            ngYes.setBackground(box(BLOOD,6,BLOODL,2)); ngYes.setPadding(18,8,18,8);
+            pressFeedback(ngYes);
+            ngYes.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.reset(); autoScanResults.clear(); oppScanResults.clear();
+                newGameHint=false; lastOppSlot=0; buzz(); showPanel();
+            }});
+            ng.addView(ngYes);
+            TextView ngNo=new TextView(this); ngNo.setText("\u2715");
+            ngNo.setTextColor(ASH); ngNo.setTextSize(13); ngNo.setPadding(16,8,6,8);
+            ngNo.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                newGameHint=false; showPanel();
+            }});
+            ng.addView(ngNo);
+            root.addView(ng);
+        }
+
         // \u26e7 THE RITE \u2014 automatic scrying is the heart of the overlay. One press
         // reads gold, level and every unit; the chips further down exist only to
         // amend the rare miss.
         boolean accAvail=Build.VERSION.SDK_INT>=31&&TFTAccessibilityService.instance!=null;
         addSecHdr(root, "\u26e7 THE RITE", GOLD);
+        if(!pool.getStageRound().isEmpty()){
+            TextView stTv=new TextView(this);
+            stTv.setText("last scryed at stage "+pool.getStageRound());
+            stTv.setTextColor(DIM); stTv.setTextSize(9); stTv.setPadding(2,0,2,4);
+            root.addView(stTv);
+        }
 
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
@@ -733,7 +775,51 @@ public class OverlayService extends Service {
             }
             TextView osrTv=new TextView(this); osrTv.setText(osrSb.toString());
             osrTv.setTextColor(BONE); osrTv.setTextSize(12); osrTv.setPadding(2,0,2,4); root.addView(osrTv);
+            if(lastOppSlot>0){
+                TextView filed=new TextView(this);
+                filed.setText("filed as OPP "+lastOppSlot+" — scry the next enemy board to file OPP "+(lastOppSlot%7+1));
+                filed.setTextColor(DIM); filed.setTextSize(9); filed.setPadding(2,0,2,2); root.addView(filed);
+            }
             root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }}));
+        }
+
+        // ◉ ENEMIES REMEMBERED — one line per scouted opponent board (slots 1-7).
+        // Scry each enemy in turn during scouting; boards stack up here.
+        {
+            boolean anyOpp=false;
+            for(int s=1;s<=7;s++) if(!pool.getOppBoard(s).isEmpty()){ anyOpp=true; break; }
+            if(anyOpp){
+                addSecHdr(root, "◉ ENEMIES REMEMBERED", GOLD);
+                for(int s=1;s<=7;s++){
+                    final int slot=s;
+                    java.util.Map<String,Integer> board=pool.getOppBoard(s);
+                    if(board.isEmpty()) continue;
+                    LinearLayout orow=new LinearLayout(this); orow.setOrientation(LinearLayout.HORIZONTAL);
+                    orow.setGravity(Gravity.CENTER_VERTICAL);
+                    orow.setBackground(box(CARD,6,EDGE,1)); orow.setPadding(10,8,10,8);
+                    LinearLayout.LayoutParams orl=new LinearLayout.LayoutParams(-1,-2); orl.setMargins(0,0,0,4); orow.setLayoutParams(orl);
+                    TextView oId=new TextView(this); oId.setText("OPP "+slot);
+                    oId.setTextColor(GOLD); oId.setTextSize(10); oId.setTypeface(null,android.graphics.Typeface.BOLD);
+                    oId.setPadding(0,0,10,0); orow.addView(oId);
+                    StringBuilder ob=new StringBuilder();
+                    for(java.util.Map.Entry<String,Integer> e:board.entrySet()){
+                        if(ob.length()>0) ob.append(" · ");
+                        ob.append(e.getKey());
+                        for(int st=0;st<e.getValue();st++) ob.append("★");
+                    }
+                    TextView oTv=new TextView(this); oTv.setText(ob.toString());
+                    oTv.setTextColor(BONE); oTv.setTextSize(10);
+                    oTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                    orow.addView(oTv);
+                    TextView oClr=new TextView(this); oClr.setText("✕");
+                    oClr.setTextColor(ASH); oClr.setTextSize(12); oClr.setPadding(10,4,4,4);
+                    oClr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                        pool.clearOppBoard(slot); showPanel();
+                    }});
+                    orow.addView(oClr);
+                    root.addView(orow);
+                }
+            }
         }
 
         // \u2720 GRIMOIRE \u2014 the manual chips. The rite records everything by itself;
@@ -935,11 +1021,62 @@ public class OverlayService extends Service {
         return Math.round(pct/5f)*5; // nearest 5%
     }
 
+    // extracts the champion name from an auto-scan results entry
+    // (entries are "Name" + "★"*stars + optional " ≈" visual-ID marker)
+    private static String scanEntryName(String entry){
+        int cut=entry.indexOf('★');
+        String n=cut>=0?entry.substring(0,cut):entry;
+        return n.replace(" ≈","").trim();
+    }
+
+    private static String joinNames(java.util.List<String> l){
+        StringBuilder sb=new StringBuilder();
+        for(String s:l){ if(sb.length()>0) sb.append(", "); sb.append(s); }
+        return sb.toString();
+    }
+
+    // next trait breakpoint at or above count, from TraitData ("2 / 4 / 6 / 9").
+    // 0 = trait unknown or already at/above the top breakpoint.
+    private static int nextBreakpoint(String trait, int count){
+        for(String[] tr : TraitData.TRAITS){
+            if(!tr[0].equals(trait)) continue;
+            int best=0;
+            for(String part : tr[1].split("/")){
+                try{
+                    int bp=Integer.parseInt(part.trim());
+                    if(bp>=count){ best=bp; break; }
+                }catch(Exception e){}
+            }
+            return best;
+        }
+        return 0;
+    }
+
     // AUGMENTS TAB: per-augment tier list + comp priorities + exclusions + mechanics.
     private void buildAugments(LinearLayout root){
         // set label
         TextView lbl=new TextView(this); lbl.setText(AugmentData.SET_LABEL);
         lbl.setTextColor(DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
+
+        // ✦ YOUR AUGMENTS — remembered from scans that spotted them on screen
+        java.util.List<String> mine=pool.getMyAugments();
+        if(!mine.isEmpty()){
+            addSecHdr(root, "YOUR AUGMENTS", GOLD);
+            LinearLayout myCard=new LinearLayout(this); myCard.setOrientation(LinearLayout.VERTICAL);
+            myCard.setBackground(box(CARD,6,GOLD,2)); myCard.setPadding(12,10,12,10);
+            LinearLayout.LayoutParams mcl=new LinearLayout.LayoutParams(-1,-2); mcl.setMargins(0,2,0,10); myCard.setLayoutParams(mcl);
+            for(String a:mine){
+                String tier=""; String comps="";
+                for(AugmentData.AugmentEntry ae:AugmentData.AUGMENTS){
+                    if(ae.name.equals(a)){ tier=ae.tier; comps=ae.comps; break; }
+                }
+                TextView at=new TextView(this);
+                at.setText((tier.isEmpty()?"":("["+tier+"]  "))+a+(comps.isEmpty()?"":("  ·  "+comps)));
+                at.setTextColor(BONE); at.setTextSize(11); at.setPadding(0,2,0,2);
+                myCard.addView(at);
+            }
+            root.addView(myCard);
+        }
 
         // ---- tier-grouped augment list ----
         addSecHdr(root, "AUGMENTS", GOLD);
@@ -1064,9 +1201,53 @@ public class OverlayService extends Service {
             thinRow.addView(jb);
         }
         root.addView(thinRow);
-        TextView thinHint=new TextView(this); thinHint.setText("tap +1 junk of a cost, long-press \u22121");
+        TextView thinHint=new TextView(this); thinHint.setText("tap +1 junk of a cost, long-press \u22121 \u00b7 auto-filled by scrying your bench");
         thinHint.setTextColor(DIM); thinHint.setTextSize(9); thinHint.setPadding(2,4,2,10); root.addView(thinHint);
 
+        // \u2726 SYNERGIES \u2014 computed from your last board scry, using the champ\u2192trait
+        // mapping the overlay learns from unit popups. Unknown until scryed once.
+        if(!autoScanResults.isEmpty()){
+            java.util.LinkedHashMap<String,Integer> traitCounts=new java.util.LinkedHashMap<>();
+            java.util.List<String> unlearned=new java.util.ArrayList<>();
+            java.util.Set<String> boardNames=new java.util.LinkedHashSet<>();
+            for(String e:autoScanResults) boardNames.add(scanEntryName(e));
+            for(String n:boardNames){
+                java.util.List<String> ts=pool.traitsOf(n);
+                if(ts.isEmpty()){ if(!unlearned.contains(n)) unlearned.add(n); continue; }
+                for(String t:ts){
+                    Integer c=traitCounts.get(t);
+                    traitCounts.put(t, c==null?1:c+1);
+                }
+            }
+            if(!traitCounts.isEmpty() || !unlearned.isEmpty()){
+                addSecHdr(root, "SYNERGIES \u00b7 LAST SCRY", GOLD);
+                if(!traitCounts.isEmpty()){
+                    StringBuilder syn=new StringBuilder();
+                    for(java.util.Map.Entry<String,Integer> e:traitCounts.entrySet()){
+                        int next=nextBreakpoint(e.getKey(), e.getValue());
+                        if(syn.length()>0) syn.append("   ");
+                        syn.append(e.getKey()).append(" ").append(e.getValue());
+                        if(next>0) syn.append("/").append(next);
+                    }
+                    TextView synTv=new TextView(this); synTv.setText(syn.toString());
+                    synTv.setTextColor(BONE); synTv.setTextSize(12); synTv.setLineSpacing(4,1f);
+                    synTv.setPadding(2,0,2,2); root.addView(synTv);
+                }
+                if(!unlearned.isEmpty()){
+                    TextView un=new TextView(this);
+                    un.setText("traits not yet learned: "+joinNames(unlearned)+" \u2014 scry them once with a tap");
+                    un.setTextColor(DIM); un.setTextSize(9); un.setPadding(2,2,2,8); root.addView(un);
+                }
+            }
+        }
+
+        // tier totals (pool remaining per cost, minus junk) for the rolldown sim
+        int[] tierTotal=new int[6];
+        for(int co=1;co<=5;co++){
+            int t=0; for(String n:Pool.CHAMPS[co]) t+=pool.remaining(n);
+            t-=pool.getJunk(co); tierTotal[co]=Math.max(0,t);
+        }
+        int rollGold=Math.min(60, pool.getGold());
 
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
@@ -1108,6 +1289,21 @@ public class OverlayService extends Service {
             if(feas!=null){
                 TextView f=new TextView(this); f.setText(feas);
                 f.setTextColor(rem < (9 - 0) ? GOLD : ASH); f.setTextSize(10); mid.addView(f);
+            }
+            // ⛧ rolldown forecast: P(finding 1/2/3 copies) spending current gold.
+            // Monte Carlo over the real shop process, so the shrinking pool and
+            // tier totals are modeled exactly.
+            if(rem>0 && rollGold>=2 && level>=1 && level<=10 && tierTotal[co]>0){
+                double[] hc=RollMath.hitChances(level, co, Math.min(rem,tierTotal[co]), tierTotal[co], rollGold, 3);
+                StringBuilder rd=new StringBuilder(rollGold+"g rolldown:");
+                rd.append("  ≥1 ").append(Math.round(hc[0]*100)).append("%");
+                if(rem>=2) rd.append("  ≥2 ").append(Math.round(hc[1]*100)).append("%");
+                if(rem>=3) rd.append("  ≥3 ").append(Math.round(hc[2]*100)).append("%");
+                int eg=RollMath.expectedGoldToFirst(level, co, Math.min(rem,tierTotal[co]), tierTotal[co], 80);
+                if(eg>0) rd.append("  ·  1st ≈").append(eg).append("g");
+                TextView rdTv=new TextView(this); rdTv.setText(rd.toString());
+                rdTv.setTextColor(hc[0]>=0.7?GREEN:hc[0]>=0.4?GOLD:ASH); rdTv.setTextSize(10);
+                mid.addView(rdTv);
             }
             card.addView(mid);
 
@@ -1286,9 +1482,66 @@ public class OverlayService extends Service {
         icH.setTextColor(ASH); icH.setTextSize(10); icH.setLetterSpacing(0.08f); incCard.addView(icH);
         econIncomeTv=new TextView(this); econIncomeTv.setText(income+"g");
         econIncomeTv.setTextColor(GOLD); econIncomeTv.setTextSize(28); econIncomeTv.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(econIncomeTv);
-        econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
+        econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak"+(streak>0?"  +  1g win":""));
         econBreakTv.setTextColor(ASH); econBreakTv.setTextSize(11); incCard.addView(econBreakTv);
         root.addView(incCard);
+
+        // ✦ LEVELING — gold to the next level, from the XP the scry read off the
+        // level button (worst case if XP progress is unknown). 4g buys 4 XP.
+        addSecHdr(root, "LEVELING", GOLD);
+        LinearLayout lvCard=new LinearLayout(this); lvCard.setOrientation(LinearLayout.VERTICAL);
+        lvCard.setBackground(box(CARD,6,EDGE,1)); lvCard.setPadding(14,12,14,12);
+        LinearLayout.LayoutParams lvl2=new LinearLayout.LayoutParams(-1,-2); lvl2.setMargins(0,4,0,0); lvCard.setLayoutParams(lvl2);
+        int xpCur=pool.getXpCur(), xpNeed=pool.getXpNeed();
+        int xpTable=Pool.xpToNext(level);
+        // trust the scanned "need" only when it matches the current level's table row
+        int into = (xpNeed==xpTable && xpCur>=0) ? xpCur : 0;
+        if(level>=10 || xpTable<=0){
+            TextView lt=new TextView(this); lt.setText("Level "+level+" — max");
+            lt.setTextColor(BONE); lt.setTextSize(14); lt.setTypeface(null,android.graphics.Typeface.BOLD);
+            lvCard.addView(lt);
+        } else {
+            int g=Pool.goldToNextLevel(level, into);
+            TextView lt=new TextView(this);
+            lt.setText("Lv "+level+" → "+(level+1)+":  "+g+"g");
+            lt.setTextColor(GOLD); lt.setTextSize(18); lt.setTypeface(null,android.graphics.Typeface.BOLD);
+            lvCard.addView(lt);
+            TextView ld=new TextView(this);
+            ld.setText(into>0
+                ? ("xp "+into+"/"+xpTable+" (scryed)  ·  4g = 4 xp  ·  +2 xp passive each round")
+                : ("xp 0/"+xpTable+" assumed — scry to read your real xp  ·  4g = 4 xp"));
+            ld.setTextColor(ASH); ld.setTextSize(10); lvCard.addView(ld);
+            // roll-vs-level nudge using current gold
+            TextView lr=new TextView(this);
+            if(gold>=g+10) lr.setText("you can level AND keep "+(gold-g)+"g — leveling is cheap here");
+            else if(gold>=g) lr.setText("leveling now spends down to "+(gold-g)+"g");
+            else lr.setText((g-gold)+"g short of the level-up");
+            lr.setTextColor(DIM); lr.setTextSize(10); lr.setPadding(0,4,0,0); lvCard.addView(lr);
+        }
+        root.addView(lvCard);
+
+        // ✦ STAGE FORECAST — last scryed round, what a loss costs, what's coming
+        String stage=pool.getStageRound();
+        if(!stage.isEmpty()){
+            addSecHdr(root, "STAGE "+stage, GOLD);
+            LinearLayout stCard=new LinearLayout(this); stCard.setOrientation(LinearLayout.VERTICAL);
+            stCard.setBackground(box(CARD,6,EDGE,1)); stCard.setPadding(14,12,14,12);
+            LinearLayout.LayoutParams stl=new LinearLayout.LayoutParams(-1,-2); stl.setMargins(0,4,0,0); stCard.setLayoutParams(stl);
+            int stg=0, rnd=0;
+            try{ String[] sr=stage.split("-"); stg=Integer.parseInt(sr[0]); rnd=Integer.parseInt(sr[1]); }catch(Exception e){}
+            int base=SetData.STAGE_BASE_DMG[Math.min(stg, SetData.STAGE_BASE_DMG.length-1)];
+            TextView dmg=new TextView(this);
+            dmg.setText("a loss costs ~"+base+" HP + 1 per surviving enemy unit");
+            dmg.setTextColor(BONE); dmg.setTextSize(12); stCard.addView(dmg);
+            String coming;
+            if(stg>=2 && stg<=4 && rnd==3)      coming="⛧ Realm of Gods NEXT round ("+stg+"-4) — know your pick";
+            else if(stg>=2 && stg<=4 && rnd<3)  coming="Realm of Gods at "+stg+"-4 · PvE at "+stg+"-7";
+            else if(rnd<7)                       coming="PvE round at "+stg+"-7";
+            else                                 coming="new stage next round — base damage rises";
+            TextView nx=new TextView(this); nx.setText(coming);
+            nx.setTextColor(rnd==3&&stg<=4?GOLD:ASH); nx.setTextSize(11); nx.setPadding(0,4,0,0); stCard.addView(nx);
+            root.addView(stCard);
+        }
 
         // reset econ button (resets only gold+streak, not pool)
         Button resetEcon=new Button(this); resetEcon.setText("RESET ECON"); resetEcon.setAllCaps(false);
@@ -1339,8 +1592,8 @@ public class OverlayService extends Service {
         hint.setText("Tap two components to see what they make");
         hint.setTextColor(DIM); hint.setTextSize(10); hint.setPadding(2,0,2,8); root.addView(hint);
 
-        // 9 component chips in two rows (5 + 4)
-        int[][] rows={{1,2,3,4,5},{6,7,8,9}};
+        // 10 component chips in two rows of 5 (Frying Pan joins Spatula)
+        int[][] rows={{1,2,3,4,5},{6,7,8,9,10}};
         for(int[] row : rows){
             LinearLayout r=new LinearLayout(this); r.setPadding(0,0,0,4);
             for(int i : row){
@@ -1425,6 +1678,7 @@ public class OverlayService extends Service {
 
     // ---- GUIDE TAB: sub-tabs for Augments and Items reference ----
     private void buildGuide(LinearLayout root){
+        buildGodTracker(root);
         // sub-tab row
         LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
         String[] gtNames={"AUGMENTS","ITEMS"};
@@ -1441,6 +1695,85 @@ public class OverlayService extends Service {
         root.addView(gtRow);
         if(guideTab==0) buildAugments(root);
         else buildItems(root);
+    }
+
+    // ⛧ REALM OF GODS tracker (Set 17 mechanic). Two gods appear per game in the
+    // Realm (replaces carousels at 2-4 / 3-4 / 4-4); favoring one with 2+ offering
+    // picks earns their Boon armory at 4-7. Track your two gods and your picks.
+    private void buildGodTracker(LinearLayout root){
+        addSecHdr(root, "⛧ REALM OF GODS", GOLD);
+        for(int slot=1;slot<=2;slot++){
+            final int fs=slot;
+            String god=pool.getGod(slot);
+            if(godPickSlot==slot){
+                // picker open for this slot: 9 god chips in 3 rows
+                TextView pk=new TextView(this); pk.setText("choose god "+(slot==1?"I":"II")+":");
+                pk.setTextColor(ASH); pk.setTextSize(10); pk.setPadding(2,2,2,2); root.addView(pk);
+                LinearLayout grow=null;
+                for(int g=0;g<SetData.GODS.length;g++){
+                    if(g%3==0){ grow=new LinearLayout(this); root.addView(grow); }
+                    final String gn=SetData.GODS[g];
+                    TextView gc=new TextView(this); gc.setText(gn);
+                    gc.setTextColor(BONE); gc.setTextSize(11); gc.setGravity(Gravity.CENTER);
+                    gc.setBackground(box(CARD,6,EDGE,1)); gc.setPadding(0,10,0,10);
+                    LinearLayout.LayoutParams gcl=new LinearLayout.LayoutParams(0,-2,1f); gcl.setMargins(2,2,2,2); gc.setLayoutParams(gcl);
+                    pressFeedback(gc);
+                    gc.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                        pool.setGod(fs, gn); godPickSlot=0; buzz(); showPanel();
+                    }});
+                    grow.addView(gc);
+                }
+            } else {
+                LinearLayout gr=new LinearLayout(this); gr.setOrientation(LinearLayout.HORIZONTAL);
+                gr.setGravity(Gravity.CENTER_VERTICAL);
+                gr.setBackground(box(CARD,6,god.isEmpty()?EDGE:GOLD,god.isEmpty()?1:2)); gr.setPadding(10,8,10,8);
+                LinearLayout.LayoutParams grl=new LinearLayout.LayoutParams(-1,-2); grl.setMargins(0,0,0,4); gr.setLayoutParams(grl);
+                TextView gl=new TextView(this);
+                gl.setText(god.isEmpty()?("god "+(slot==1?"I":"II")+": tap to set"):god);
+                gl.setTextColor(god.isEmpty()?ASH:BONE); gl.setTextSize(12);
+                gl.setTypeface(null, god.isEmpty()?android.graphics.Typeface.NORMAL:android.graphics.Typeface.BOLD);
+                gl.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                gl.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    godPickSlot=fs; showPanel();
+                }});
+                gr.addView(gl);
+                if(!god.isEmpty()){
+                    int picks=pool.getGodPicks(slot);
+                    TextView pc=new TextView(this);
+                    StringBuilder ps=new StringBuilder("picks ");
+                    for(int i=0;i<3;i++) ps.append(i<picks?"⛧":"·");
+                    pc.setText(ps.toString());
+                    pc.setTextColor(picks>=2?GOLD:ASH); pc.setTextSize(12);
+                    pc.setPadding(8,4,8,4);
+                    pc.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                        pool.setGodPicks(fs, pool.getGodPicks(fs)+1); buzz(); showPanel();
+                    }});
+                    pc.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
+                        pool.setGodPicks(fs, pool.getGodPicks(fs)-1); buzz(); showPanel(); return true;
+                    }});
+                    gr.addView(pc);
+                    TextView gx=new TextView(this); gx.setText("✕");
+                    gx.setTextColor(ASH); gx.setTextSize(12); gx.setPadding(10,4,4,4);
+                    gx.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                        pool.setGod(fs,""); pool.setGodPicks(fs,0); showPanel();
+                    }});
+                    gr.addView(gx);
+                }
+                root.addView(gr);
+            }
+        }
+        int p1=pool.getGodPicks(1), p2=pool.getGodPicks(2);
+        TextView boon=new TextView(this);
+        if(p1>=2 || p2>=2){
+            String favored=p1>=p2?pool.getGod(1):pool.getGod(2);
+            boon.setText("✦ "+favored+" is favored — Boon armory comes at 4-7");
+            boon.setTextColor(GOLD);
+        } else {
+            boon.setText("offerings at 2-4 / 3-4 / 4-4 · favor one god 2+ times for their Boon at 4-7");
+            boon.setTextColor(DIM);
+        }
+        boon.setTextSize(9); boon.setPadding(2,2,2,10);
+        root.addView(boon);
     }
 
     // Used by scan buttons when accessibility is unavailable: tell the user the
@@ -2533,6 +2866,10 @@ public class OverlayService extends Service {
     private void applyScanResult(ScreenScanner.ScanResult r){
         if(r.gold>=0) pool.setGold(r.gold);
         if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
+        if(!r.stageRound.isEmpty()) pool.setStageRound(r.stageRound);
+        if(r.xpNeed>0) pool.setXp(r.xpCur, r.xpNeed);
+        // scanned augments are mine — remember them for the AUGMENTS tab
+        for(String a : r.augments) pool.addMyAugment(a);
         // Report shop champions in status but don't auto-mark them —
         // seeing a unit in the shop doesn't mean it was bought from the pool.
         // The debug log shows which names were detected so the user can verify.
@@ -2540,9 +2877,17 @@ public class OverlayService extends Service {
             addScanLog("shop champs found: "+r.shopChampions.toString());
             if(!r.starLevels.isEmpty()) addScanLog("star levels: "+r.starLevels.toString());
         }
+        // bench scan auto-fills the junk counters (bench units thin the pool);
+        // the ODDS-tab steppers stay available to correct it
         if(!r.benchChampions.isEmpty()){
             addScanLog("bench champs: "+r.benchChampions.toString());
+            int[] perCost=new int[6];
+            for(String b : r.benchChampions){ int c=Pool.costOf(b); if(c>=1&&c<=5) perCost[c]++; }
+            for(int c=1;c<=5;c++) if(perCost[c]>0) pool.setJunk(c, perCost[c]);
         }
+        // new-game heuristic: a scan showing level 2-4 while the pool still has
+        // lots of tracked copies almost certainly means the last game ended
+        if(r.level>=2 && r.level<=4 && !pool.isEmpty()) newGameHint=true;
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         mode=4; showPanel();
@@ -2600,6 +2945,7 @@ public class OverlayService extends Service {
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1;
         autoScanLevel=-1;
+        autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
         autoTapIndex=0;
         autoTapConsecutiveMisses=0;
         autoTapBoardProbeCount=0;
@@ -2672,7 +3018,11 @@ public class OverlayService extends Service {
                                     public void onResult(ScreenScanner.ScanResult r){
                                         autoScanGold=r.gold;
                                         autoScanLevel=r.level;
-                                        addScanLog("auto-tap: gold="+r.gold+" level="+r.level);
+                                        autoScanXpCur=r.xpCur; autoScanXpNeed=r.xpNeed;
+                                        autoScanStage=r.stageRound;
+                                        addScanLog("auto-tap: gold="+r.gold+" level="+r.level
+                                                +(r.xpNeed>0?(" xp="+r.xpCur+"/"+r.xpNeed):"")
+                                                +(r.stageRound.isEmpty()?"":(" stage "+r.stageRound)));
                                         autoTapNextProbe();
                                     }
                                     public void onError(String msg){
@@ -2698,6 +3048,7 @@ public class OverlayService extends Service {
         autoOppMode=true;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1; autoScanLevel=-1;
+        autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
         autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
         autoTapProbes=new java.util.ArrayList<>();
         autoTapSkip=new java.util.HashSet<>();
@@ -3429,6 +3780,9 @@ public class OverlayService extends Service {
             buzz();
             autoTapConsecutiveMisses=0;
             autoTapHits++;
+            // the popup lists the unit's traits — learn the champ→trait mapping
+            // (persists across games; powers the SYNERGIES card on the ODDS tab)
+            if(!r.popupTraits.isEmpty()) pool.learnTraits(name, r.popupTraits);
             final boolean onBoard = !inBenchPhase;
             if(autoOppMode){
                 // opponent scan: record into oppScanResults, increment contest badge
@@ -3605,8 +3959,21 @@ public class OverlayService extends Service {
         autoTapHandler.removeCallbacksAndMessages(null);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         if(!autoOppMode){
+            // one self-scry commits everything: gold, level, XP, stage (champs
+            // were committed per probe as they were identified)
             if(autoScanGold>=0) pool.setGold(autoScanGold);
             if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
+            if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
+            if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
+            // stale-game heuristic, same as the quick scan path
+            if(autoScanLevel>=2 && autoScanLevel<=4 && !pool.isEmpty() && autoTapHits>0) newGameHint=true;
+        } else if(!oppScanResults.isEmpty()){
+            // file this enemy board into the next opponent slot (cycles 1-7) so
+            // scouting the lobby is just repeated SCRY THE ENEMY presses
+            int slot=pool.nextOppSlot();
+            pool.setOppBoard(slot, new java.util.LinkedHashMap<>(oppScanResults));
+            lastOppSlot=slot;
+            addScanLog("auto-opp: filed as OPP "+slot);
         }
         long tookMs=autoScanStartMs>0 ? android.os.SystemClock.uptimeMillis()-autoScanStartMs : 0;
         int found=autoOppMode?oppScanResults.size():autoScanResults.size();

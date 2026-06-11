@@ -26,8 +26,34 @@ public final class SetData {
     public static final String SET_NAME = "Set 17 - Space Gods";
 
     // Pool sizes by cost: [unused, 1-cost, 2-cost, 3-cost, 4-cost, 5-cost]
-    // These have been stable across many sets. Only change if Riot does.
-    public static final int[] SIZE = {0, 30, 25, 18, 10, 9};
+    // Set 17 bag sizes: 29 / 22 / 18 / 10 / 9 (smaller 1c/2c bags than the
+    // classic 30/25). Verify against the patch notes when a new set drops.
+    public static final int[] SIZE = {0, 29, 22, 18, 10, 9};
+
+    // Shop odds per level: row = player level (0-10), columns = 1c..5c, percent.
+    // Set 17 values; verify rows 7-10 each set, Riot tunes these often.
+    public static final int[][] ODDS = {
+        {0,0,0,0,0},{100,0,0,0,0},{100,0,0,0,0},{75,25,0,0,0},
+        {55,30,15,0,0},{45,33,20,2,0},{30,40,25,5,0},{19,30,40,10,1},
+        {18,25,32,22,3},{10,20,25,35,10},{5,10,20,40,25}
+    };
+
+    // XP needed to advance FROM each level (index = current level).
+    // Buying XP is always 4 gold for 4 XP; passive +2 XP per round.
+    // Standard recent-set values — verify per set.
+    public static final int[] XP_TO_NEXT = {0, 2, 2, 6, 10, 20, 36, 48, 80, 84, 0};
+    public static final int PASSIVE_XP_PER_ROUND = 2;
+
+    // Base player damage on a round loss, by stage (index = stage, stage 7+ uses
+    // the last entry). Total damage = base + 1 per surviving enemy unit.
+    public static final int[] STAGE_BASE_DMG = {0, 0, 2, 5, 8, 10, 12, 17};
+
+    // Set 17 mechanic: 2 of these 9 gods appear per game in the Realm (replaces
+    // carousels at 2-4 / 3-4 / 4-4). Picking one god's offerings 2+ times earns
+    // their Boon armory at 4-7 plus recurring loot afterwards.
+    public static final String[] GODS = {
+        "Ahri","AurelionSol","Ekko","Evelynn","Kayle","Soraka","Thresh","Varus","Yasuo"
+    };
 
     // Champions grouped by cost. Index 0 stays empty.
     public static final String[][] CHAMPS = {
