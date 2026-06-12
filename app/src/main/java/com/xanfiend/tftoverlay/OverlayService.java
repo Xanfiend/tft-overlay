@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.62";
+    private static final String APP_VERSION = "v1.63";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -78,6 +78,7 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams hudGoldLp, hudXpLp;
     private final android.os.Handler hudHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable hudTick;
+    private android.animation.ValueAnimator hudGoldGlowAnim, hudXpGlowAnim;
     // panel layout params promoted for flash-free in-place refresh
     private WindowManager.LayoutParams panelLp;
     // screen scanning — result delivered from ScanPermActivity via static callbacks
@@ -113,6 +114,14 @@ public class OverlayService extends Service {
     private android.media.ImageReader huntReader;
     private boolean huntFast = false;    // fast capture pipeline is live
     private boolean huntOcrBusy = false; // an OCR pass is in flight; skip frames
+
+    // fast scan: an optional, persistent MediaProjection capture (separate from
+    // the hunt's) that Board Scan / Opp Scan use instead of the 1/sec
+    // accessibility screenshot when the user has enabled it in Settings.
+    private android.media.projection.MediaProjection scanProjection;
+    private android.hardware.display.VirtualDisplay scanVd;
+    private android.media.ImageReader scanReader;
+    private boolean scanFastReady = false;
 
     // opponent scan mode: same polling but routes into opponent tracking + records star levels
     private boolean oppScanMode = false;
@@ -417,14 +426,16 @@ public class OverlayService extends Service {
     private void addHud(){
         if(hudGoldView!=null) return;
         android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
-        // defaults: roughly above where TFT draws gold (bottom center-right)
+        // defaults: roughly above where TFT draws gold (bottom-right corner)
         // and the XP/level button (bottom left); the user drags them into place
-        hudGoldLp=makeHudLp("hud_gx","hud_gy", dm.widthPixels*62/100, dm.heightPixels*72/100);
-        hudXpLp  =makeHudLp("hud_xx","hud_xy", dm.widthPixels*4/100,  dm.heightPixels*72/100);
+        hudGoldLp=makeHudLp("hud_gx","hud_gy", dm.widthPixels*84/100, dm.heightPixels*85/100);
+        hudXpLp  =makeHudLp("hud_xx","hud_xy", dm.widthPixels*4/100,  dm.heightPixels*85/100);
         hudGoldView=makeHudMini(GOLD, hudGoldLp, "hud_gx","hud_gy");
         hudXpView  =makeHudMini(BONE, hudXpLp,   "hud_xx","hud_xy");
         try{ wm.addView(hudGoldView, hudGoldLp); }catch(Exception e){}
         try{ wm.addView(hudXpView, hudXpLp); }catch(Exception e){}
+        hudGoldGlowAnim=pulseGlow(hudGoldView, GOLD);
+        hudXpGlowAnim=pulseGlow(hudXpView, BONE);
         refreshHud();
 
         hudTick=new Runnable(){ public void run(){
@@ -446,8 +457,23 @@ public class OverlayService extends Service {
         final TextView t=new TextView(this);
         t.setTextColor(color); t.setTextSize(10);
         t.setTypeface(null,android.graphics.Typeface.BOLD);
-        t.setBackground(box(0xCC0B0709,10,color,1));
-        t.setPadding(12,4,12,4);
+        // glowing outline: a soft halo ring sits behind the pill, inset slightly
+        // smaller so the halo peeks out around every edge, then pulses
+        GradientDrawable glow=new GradientDrawable();
+        glow.setShape(GradientDrawable.RECTANGLE);
+        glow.setCornerRadius(16f);
+        glow.setColor(0x00000000);
+        glow.setStroke(10,(color&0x00FFFFFF)|0x55000000);
+        GradientDrawable pill=new GradientDrawable();
+        pill.setShape(GradientDrawable.RECTANGLE);
+        pill.setCornerRadius(10f);
+        pill.setColor(0xCC0B0709);
+        pill.setStroke(3,color);
+        android.graphics.drawable.LayerDrawable ld=new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{glow,pill});
+        ld.setLayerInset(1,6,6,6,6);
+        t.setBackground(ld);
+        t.setPadding(18,10,18,10);
         t.setAlpha(pool.getAlpha());
         t.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty;
@@ -471,9 +497,29 @@ public class OverlayService extends Service {
     }
     private void removeHud(){
         if(hudTick!=null){ hudHandler.removeCallbacks(hudTick); hudTick=null; }
+        if(hudGoldGlowAnim!=null){ hudGoldGlowAnim.cancel(); hudGoldGlowAnim=null; }
+        if(hudXpGlowAnim!=null){ hudXpGlowAnim.cancel(); hudXpGlowAnim=null; }
         try{ if(hudGoldView!=null) wm.removeView(hudGoldView); }catch(Exception e){}
         try{ if(hudXpView!=null) wm.removeView(hudXpView); }catch(Exception e){}
         hudGoldView=null; hudXpView=null;
+    }
+    // slow pulse on the halo layer (layer 0) of a makeHudMini() background —
+    // mirrors the floating sigil's glowAnim but only fades the outer ring
+    private android.animation.ValueAnimator pulseGlow(final View v, final int color){
+        final android.graphics.drawable.LayerDrawable ld=(android.graphics.drawable.LayerDrawable)v.getBackground();
+        final GradientDrawable glow=(GradientDrawable)ld.getDrawable(0);
+        android.animation.ValueAnimator anim=android.animation.ValueAnimator.ofInt(0x33,0xAA);
+        anim.setDuration(1400);
+        anim.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        anim.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        anim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener(){
+            public void onAnimationUpdate(android.animation.ValueAnimator a){
+                int alpha=(Integer)a.getAnimatedValue();
+                glow.setStroke(10,(color&0x00FFFFFF)|(alpha<<24));
+            }
+        });
+        anim.start();
+        return anim;
     }
     // recompute HUD text from current pool state — income projection and
     // gold-to-next-level use the same math as the GOLD tab
@@ -2251,6 +2297,38 @@ public class OverlayService extends Service {
         }
         root.addView(ssRow);
 
+        addSecHdr(root, "FAST SCAN", GOLD);
+
+        TextView fsInfo=new TextView(this);
+        fsInfo.setText(scanFastReady
+            ? "Active — Board Scan and Opp Scan poll the live screen recording instantly, with no 1-second wait between checks."
+            : "Keeps a screen-recording permission alive so Board Scan and Opp Scan poll instantly instead of waiting on the screenshot rate limit. One-time permission prompt; off by default.");
+        fsInfo.setTextColor(scanFastReady?GREEN:ASH); fsInfo.setTextSize(10); fsInfo.setPadding(2,0,0,6); root.addView(fsInfo);
+
+        LinearLayout fsRow=new LinearLayout(this); fsRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams fsRowLp=new LinearLayout.LayoutParams(-1,-2); fsRowLp.setMargins(0,0,0,14); fsRow.setLayoutParams(fsRowLp);
+        String[] fsLabels={"ON","OFF"}; boolean[] fsVals={true,false};
+        for(int i=0;i<2;i++){
+            final boolean fv=fsVals[i];
+            TextView btn=new TextView(this); btn.setText(fsLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(scanFastReady==fv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(fv && !scanFastReady){
+                    closePanel();
+                    startFastScanSetup();
+                } else if(!fv && scanFastReady){
+                    releaseScanCapture();
+                    showPanel();
+                }
+            }});
+            fsRow.addView(btn);
+        }
+        root.addView(fsRow);
+
         addSecHdr(root, "INSTANT VISUAL ID", GOLD);
 
         TextView vidInfo=new TextView(this);
@@ -3105,7 +3183,7 @@ public class OverlayService extends Service {
             if(!boardScanMode) return;
             if(System.currentTimeMillis()>=boardScanDeadline){ stopBoardScanMode(); return; }
             triggerPopupScan();
-            boardHandler.postDelayed(this,2500);
+            boardHandler.postDelayed(this,scanFastReady?900:2500);
         }};
         boardHandler.postDelayed(boardPollRunnable,600);
     }
@@ -4173,6 +4251,17 @@ public class OverlayService extends Service {
 
     @SuppressWarnings("NewApi")
     private void triggerPopupScan(){
+        // fast scan enabled: pull a frame from the live capture, no rate limit,
+        // no accessibility round-trip. Falls through to the accessibility
+        // screenshot if a frame isn't ready yet (capture still warming up).
+        if(scanFastReady){
+            Bitmap fast=captureScanFrame();
+            if(fast!=null){
+                addScanLog("board scan: fast frame");
+                processPopupBitmap(fast);
+                return;
+            }
+        }
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null){ addScanLog("board scan: svc null"); return; }
         addScanLog("board scan: popup screenshot");
@@ -4186,26 +4275,32 @@ public class OverlayService extends Service {
                             hb.close();
                             Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
-                            final Bitmap bmpForTemplate=bmp.copy(Bitmap.Config.ARGB_8888,false);
-                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
-                                new ScreenScanner.ScanCallback(){
-                                    public void onResult(ScreenScanner.ScanResult r){
-                                        if(oppScanMode) applyOppPopupScanResult(r,bmpForTemplate);
-                                        else if(boardScanMode) applyPopupScanResult(r,bmpForTemplate);
-                                        else { bmpForTemplate.recycle(); if(debugScanPending){
-                                            debugScanPending=false;
-                                            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
-                                                mode=4; showPanel();
-                                            }}, 500);
-                                        }}
-                                    }
-                                    public void onError(String msg){ bmpForTemplate.recycle(); addScanLog("board scan OCR err: "+msg); }
-                                }, ScreenScanner.MODE_POPUP);
+                            processPopupBitmap(bmp);
                         }catch(Exception e){ addScanLog("ERR board scan: "+e.getMessage()); }
                     }
                     @Override public void onFailure(int errorCode){ addScanLog("ERR board scan shot: "+errorCode); }
                 });
         }catch(Exception e){ addScanLog("ERR triggerPopupScan: "+e.getMessage()); }
+    }
+
+    // shared by the accessibility-screenshot and fast-capture paths: OCR the
+    // popup zone and route the result into whichever scan mode is active
+    private void processPopupBitmap(Bitmap bmp){
+        final Bitmap bmpForTemplate=bmp.copy(Bitmap.Config.ARGB_8888,false);
+        new ScreenScanner(this,null).scanBitmap(bmp,
+            new ScreenScanner.ScanCallback(){
+                public void onResult(ScreenScanner.ScanResult r){
+                    if(oppScanMode) applyOppPopupScanResult(r,bmpForTemplate);
+                    else if(boardScanMode) applyPopupScanResult(r,bmpForTemplate);
+                    else { bmpForTemplate.recycle(); if(debugScanPending){
+                        debugScanPending=false;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
+                            mode=4; showPanel();
+                        }}, 500);
+                    }}
+                }
+                public void onError(String msg){ bmpForTemplate.recycle(); addScanLog("board scan OCR err: "+msg); }
+            }, ScreenScanner.MODE_POPUP);
     }
 
     private void applyPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
@@ -4233,6 +4328,86 @@ public class OverlayService extends Service {
                     if(rem>0) btnLabel.setText(((int)((rem+999)/1000))+"s");
                 }
             }},1200);
+        }
+    }
+
+    // ---- fast scan: optional persistent screen-recording capture for Board/Opp Scan ----
+
+    private void startFastScanSetup(){
+        try{
+            ScanPermActivity.scanRequest=true;
+            Intent si=new Intent(this,ScanPermActivity.class);
+            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+        }catch(Exception e){
+            ScanPermActivity.scanRequest=false;
+            onScanCaptureDenied();
+        }
+    }
+
+    static void deliverScanProjection(android.media.projection.MediaProjection mp){
+        OverlayService s=_instance;
+        if(s==null){ try{ mp.stop(); }catch(Exception e){} return; }
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.onScanCaptureGranted(mp));
+    }
+    static void deliverScanProjectionDenied(){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.onScanCaptureDenied());
+    }
+
+    private void onScanCaptureGranted(android.media.projection.MediaProjection mp){
+        scanProjection=mp;
+        try{
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+            wm.getDefaultDisplay().getRealMetrics(dm);
+            int w=dm.widthPixels, h=dm.heightPixels;
+            scanProjection.registerCallback(new android.media.projection.MediaProjection.Callback(){}, boardHandler);
+            scanReader=android.media.ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2);
+            scanVd=scanProjection.createVirtualDisplay("scryer-fastscan",w,h,dm.densityDpi,
+                android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                scanReader.getSurface(),null,null);
+            scanFastReady=true;
+            addScanLog("fast scan: ready "+w+"x"+h);
+            Toast.makeText(this,"⛧ Fast scan enabled — Board/Opp Scan now poll instantly",Toast.LENGTH_LONG).show();
+        }catch(Exception e){
+            addScanLog("ERR fast scan setup: "+e.getMessage());
+            releaseScanCapture();
+            Toast.makeText(this,"Fast scan setup failed — scans stay on the 1-second path",Toast.LENGTH_LONG).show();
+        }
+        mode=4; showPanel();
+    }
+    private void onScanCaptureDenied(){
+        Toast.makeText(this,"Fast scan permission denied — scans stay on the 1-second path",Toast.LENGTH_LONG).show();
+        mode=4; showPanel();
+    }
+    private void releaseScanCapture(){
+        scanFastReady=false;
+        try{ if(scanVd!=null) scanVd.release(); }catch(Exception e){}
+        scanVd=null;
+        try{ if(scanReader!=null) scanReader.close(); }catch(Exception e){}
+        scanReader=null;
+        try{ if(scanProjection!=null) scanProjection.stop(); }catch(Exception e){}
+        scanProjection=null;
+        ScanService.stop(this);
+    }
+    // grab the latest streamed frame, full-screen, no rate limit — null if none ready yet
+    private Bitmap captureScanFrame(){
+        if(!scanFastReady||scanReader==null) return null;
+        android.media.Image img=null;
+        try{
+            img=scanReader.acquireLatestImage();
+            if(img==null) return null;
+            android.media.Image.Plane plane=img.getPlanes()[0];
+            int w=img.getWidth(), h=img.getHeight();
+            int pixStride=plane.getPixelStride();
+            int rowPadding=plane.getRowStride()-pixStride*w;
+            Bitmap full=Bitmap.createBitmap(w+rowPadding/pixStride,h,Bitmap.Config.ARGB_8888);
+            full.copyPixelsFromBuffer(plane.getBuffer());
+            return full;
+        }catch(Exception e){
+            return null;
+        }finally{
+            if(img!=null){ try{ img.close(); }catch(Exception e2){} }
         }
     }
 
@@ -4507,7 +4682,7 @@ public class OverlayService extends Service {
             if(!oppScanMode) return;
             if(System.currentTimeMillis()>=oppScanDeadline){ stopOppScanMode(); return; }
             triggerPopupScan();
-            boardHandler.postDelayed(this,2500);
+            boardHandler.postDelayed(this,scanFastReady?900:2500);
         }};
         boardHandler.postDelayed(oppPollRunnable,600);
     }
@@ -4604,6 +4779,7 @@ public class OverlayService extends Service {
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
         releaseHuntCapture();
+        releaseScanCapture();
         autoTapHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         hideCalCaptureView();
