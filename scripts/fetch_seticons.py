@@ -33,8 +33,9 @@ except ImportError:
     sys.exit(1)
 
 
-def norm(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower())
+def norm(name) -> str:
+    # cdragon data contains entries with "name": null — treat those as empty
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
 def fetch(url: str) -> bytes:
@@ -77,8 +78,11 @@ def main() -> None:
             best_key, best_set, best_score = key, s, score
 
     print(f"using set {best_key} ({best_set.get('name')}) with {best_score} matches")
-    if best_score == 0:
-        sys.exit("no set matches any SetData champion — aborting")
+    # old sets share many champion names with the current one, so a weak best
+    # match means the current set just isn't on the CDN yet — wrong-set icons
+    # would silently mismatch the planner art, which is worse than none
+    if best_score < len(champs) // 2:
+        sys.exit(f"best set only matches {best_score}/{len(champs)} champions — aborting")
 
     OUTDIR.mkdir(parents=True, exist_ok=True)
     saved, missed = 0, []
