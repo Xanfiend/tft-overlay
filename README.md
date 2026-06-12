@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.62-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.63-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,10 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.63 - 2026-06-12
+- **In-game HUD fixed + glowing**: the gold pill now defaults near TFT's actual gold counter (bottom-right corner) instead of the middle of the board; the XP-to-level pill moved to match. Both pills now have a slow pulsing glowing outline so they're easier to spot over the game.
+- **NEW Fast Scan** (SETUP tab): an optional one-time screen-recording permission that lets Board Scan and Opp Scan poll the live capture instantly, skipping the 1-second screenshot wait. Off by default, toggle ON/OFF anytime. (THE HUNT's auto-buy already had its own fast capture — see v1.61/v1.62.)
 
 ### v1.62 - 2026-06-12
 - **THE HUNT is ~3x faster**: arming the hunt now requests screen-capture permission and watches the shop via a continuous MediaProjection stream (~3 checks/second) instead of the rate-limited accessibility screenshots (1/second). A marked champ is bought within ~0.3s of appearing. Android shows its recording indicator while hunting; everything stays on-device. Denying the dialog falls back to the 1/sec watcher automatically.
