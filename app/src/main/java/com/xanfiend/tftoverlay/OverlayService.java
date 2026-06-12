@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.61";
+    private static final String APP_VERSION = "v1.62";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -104,6 +104,15 @@ public class OverlayService extends Service {
     private final java.util.List<String> huntBuys = new java.util.ArrayList<>();
     private final java.util.Map<String,Long> huntCooldown = new java.util.HashMap<>();
     private Runnable huntPollRunnable, huntCountdownRunnable;
+    // fast hunt capture: a held MediaProjection streams frames with no rate limit,
+    // so the shop check runs ~3x per second instead of the accessibility API's
+    // hard 1/sec screenshot ceiling. Granted via the capture dialog when arming
+    // the hunt; denying it falls back to the 1/sec path automatically.
+    private android.media.projection.MediaProjection huntProjection;
+    private android.hardware.display.VirtualDisplay huntVd;
+    private android.media.ImageReader huntReader;
+    private boolean huntFast = false;    // fast capture pipeline is live
+    private boolean huntOcrBusy = false; // an OCR pass is in flight; skip frames
 
     // opponent scan mode: same polling but routes into opponent tracking + records star levels
     private boolean oppScanMode = false;
@@ -4241,14 +4250,47 @@ public class OverlayService extends Service {
             Toast.makeText(this,"Mark a champion first — hold its name in the GRIMOIRE",Toast.LENGTH_LONG).show();
             return;
         }
+        closePanel();
+        // Ask for a screen-capture token first: MediaProjection streams frames
+        // continuously, so the hunt reacts ~3x faster than the accessibility
+        // screenshot path. Denying the dialog falls back to 1/sec automatically.
+        try{
+            ScanPermActivity.huntRequest=true;
+            Intent si=new Intent(this,ScanPermActivity.class);
+            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(si);
+        }catch(Exception e){
+            ScanPermActivity.huntRequest=false;
+            beginHunt(null);
+        }
+    }
+
+    static void deliverHuntProjection(android.media.projection.MediaProjection mp){
+        OverlayService s=_instance;
+        if(s==null){ try{ mp.stop(); }catch(Exception e){} return; }
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.beginHunt(mp));
+    }
+    static void deliverHuntDenied(){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.beginHunt(null));
+    }
+
+    private void beginHunt(android.media.projection.MediaProjection mp){
+        closePanel(); // may have been reopened while the capture dialog was up
         huntMode=true;
-        huntBusy=false;
+        huntBusy=false; huntOcrBusy=false;
         huntDeadline=System.currentTimeMillis()+120000;
         huntBuys.clear();
         huntCooldown.clear();
-        closePanel();
-        addScanLog("hunt: started 120s window, marks="+pool.getHunt());
-        Toast.makeText(this,"⛧ The hunt begins — reroll freely, marked champs are bought for you. Tap the sigil to stop.",Toast.LENGTH_LONG).show();
+        huntProjection=mp;
+        if(mp!=null) setupHuntCapture(); else huntFast=false;
+        if(!huntFast && mp!=null){ // capture setup failed — drop the projection
+            releaseHuntCapture();
+        }
+        addScanLog("hunt: started 120s window, marks="+pool.getHunt()
+                +(huntFast?" (fast capture, ~3 checks/sec)":" (1/sec fallback)"));
+        Toast.makeText(this,"⛧ The hunt begins"+(huntFast?" — swift eyes":"")
+                +" — reroll freely, marked champs are bought for you. Tap the sigil to stop.",Toast.LENGTH_LONG).show();
 
         huntCountdownRunnable=new Runnable(){ public void run(){
             if(!huntMode) return;
@@ -4259,18 +4301,92 @@ public class OverlayService extends Service {
         }};
         boardHandler.post(huntCountdownRunnable);
 
-        huntPollRunnable=new Runnable(){ public void run(){
-            if(!huntMode) return;
-            if(!huntBusy) huntShopScan();
-            boardHandler.postDelayed(this, MIN_SHOT_GAP_MS+80);
-        }};
-        boardHandler.postDelayed(huntPollRunnable, 600);
+        if(huntFast){
+            huntPollRunnable=new Runnable(){ public void run(){
+                if(!huntMode) return;
+                huntFastPoll();
+                boardHandler.postDelayed(this, 300);
+            }};
+            // give TFT a moment to settle back in front after the capture dialog
+            boardHandler.postDelayed(huntPollRunnable, 900);
+        } else {
+            huntPollRunnable=new Runnable(){ public void run(){
+                if(!huntMode) return;
+                if(!huntBusy) huntShopScan();
+                boardHandler.postDelayed(this, MIN_SHOT_GAP_MS+80);
+            }};
+            boardHandler.postDelayed(huntPollRunnable, 600);
+        }
+    }
+
+    private void setupHuntCapture(){
+        try{
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+            wm.getDefaultDisplay().getRealMetrics(dm);
+            int w=dm.widthPixels, h=dm.heightPixels;
+            // Android 14 requires a registered callback before createVirtualDisplay()
+            huntProjection.registerCallback(new android.media.projection.MediaProjection.Callback(){}, boardHandler);
+            huntReader=android.media.ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2);
+            huntVd=huntProjection.createVirtualDisplay("scryer-hunt",w,h,dm.densityDpi,
+                android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                huntReader.getSurface(),null,null);
+            huntFast=true;
+            addScanLog("hunt: fast capture ready "+w+"x"+h);
+        }catch(Exception e){
+            addScanLog("ERR hunt capture setup: "+e.getMessage()+" — using 1/sec fallback");
+            huntFast=false;
+        }
+    }
+
+    private void releaseHuntCapture(){
+        huntFast=false;
+        try{ if(huntVd!=null) huntVd.release(); }catch(Exception e){}
+        huntVd=null;
+        try{ if(huntReader!=null) huntReader.close(); }catch(Exception e){}
+        huntReader=null;
+        try{ if(huntProjection!=null) huntProjection.stop(); }catch(Exception e){}
+        huntProjection=null;
+        ScanService.stop(this);
+    }
+
+    // Fast path: pull the latest streamed frame (no screenshot call, no rate
+    // limit), crop the shop strip, OCR it. Skips the frame if a buy-tap or an
+    // OCR pass is still in flight — OCR latency is the only pacing left.
+    private void huntFastPoll(){
+        if(!huntMode||huntBusy||huntOcrBusy||huntReader==null) return;
+        android.media.Image img=null;
+        try{
+            img=huntReader.acquireLatestImage();
+            if(img==null) return;
+            android.media.Image.Plane plane=img.getPlanes()[0];
+            int w=img.getWidth(), h=img.getHeight();
+            int pixStride=plane.getPixelStride();
+            int rowPadding=plane.getRowStride()-pixStride*w;
+            Bitmap full=Bitmap.createBitmap(w+rowPadding/pixStride,h,Bitmap.Config.ARGB_8888);
+            full.copyPixelsFromBuffer(plane.getBuffer());
+            img.close(); img=null;
+            boolean portrait=h>w;
+            final int cropTop=portrait? h*70/100 : h*65/100;
+            int cropBot=portrait? h*90/100 : h*85/100;
+            Bitmap crop=Bitmap.createBitmap(full,0,cropTop,w,cropBot-cropTop);
+            full.recycle();
+            huntOcrBusy=true;
+            new ScreenScanner(this,null).scanShopStrip(crop,w,h,
+                new ScreenScanner.ScanCallback(){
+                    public void onResult(ScreenScanner.ScanResult r){ huntOcrBusy=false; handleHuntResult(r,cropTop); }
+                    public void onError(String msg){ huntOcrBusy=false; }
+                });
+        }catch(Exception e){
+            if(img!=null){ try{ img.close(); }catch(Exception e2){} }
+            addScanLog("hunt frame err: "+e.getMessage());
+        }
     }
 
     private void stopHuntMode(){
         huntMode=false;
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
+        releaseHuntCapture();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         buzzDone();
         addScanLog("hunt: stopped, bought "+huntBuys.size()+" "+huntBuys);
@@ -4346,7 +4462,9 @@ public class OverlayService extends Service {
         int[] pt=pos.get(idx);
         addScanLog("hunt: buying "+name+" @"+pt[0]+","+(cropTop+pt[1]));
         dispatchTap(pt[0], cropTop+pt[1], new Runnable(){ public void run(){
-            huntCooldown.put(name, System.currentTimeMillis()+2500);
+            // fast capture sees the next shop within ~0.5s, so a short cooldown is
+            // enough to outlive the stale frame; the 1/sec path needs more margin
+            huntCooldown.put(name, System.currentTimeMillis()+(huntFast?1200:2500));
             huntBuys.add(name);
             pool.add(name,1); // a bought copy leaves the pool
             buzz();
@@ -4485,6 +4603,7 @@ public class OverlayService extends Service {
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
+        releaseHuntCapture();
         autoTapHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         hideCalCaptureView();
