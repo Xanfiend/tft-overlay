@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.62");
+        ver.setText("v1.63");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.63  ·  2026-06-12","FIXED the in-game HUD gold pill: it was defaulting to the middle of the board, far from TFT's own gold counter. Its default spot is now the bottom-right corner where the gold count actually sits (drag it the rest of the way if your device differs); the XP-to-level pill moved down to match. Both HUD pills now have a pulsing glowing outline so they stand out against the board. NEW Fast Scan (SETUP tab): an optional one-time screen-recording permission that, once granted, lets Board Scan and Opp Scan poll the live capture instantly instead of waiting on the 1-second screenshot limit — off by default, toggle ON/OFF anytime. (THE HUNT's auto-buy already does this for the shop — see v1.61/v1.62.)"},
             {"v1.62  ·  2026-06-12","THE HUNT got swift eyes: arming the hunt now asks for screen-capture permission, which lets it watch the shop about three times a second instead of once a second (Android only rate-limits the accessibility screenshot API; a screen-capture stream has no such limit). A marked champion is now bought within roughly a third of a second of appearing. Android shows its screen-recording indicator while the hunt runs and the capture stays on your phone like everything else. Denying the capture dialog is fine — the hunt automatically falls back to the old once-a-second watcher."},
             {"v1.61  ·  2026-06-11","NEW THE HUNT, auto-buy from the shop: hold a champion's name in the GRIMOIRE to mark it as prey (up to 5 marks, shown with a gold star), then press BEGIN THE HUNT on the POOL tab. For the next two minutes the overlay watches your shop about once a second; the moment a marked champion appears it taps the card and buys it for you, so you can hammer the reroll button and never miss the unit you're chasing. It reads your gold from the same screenshot and skips buys you cannot afford, every purchase is recorded in the pool tracker automatically, and a tap on the sigil ends the hunt early. Note Android limits screenshots to one per second, so a buy lands within about a second of the shop showing the champion. REWORKED in-game HUD: instead of one combined box it is now two tiny separate numbers you drag individually, +Ng (projected income, park it above the game's gold counter) and Ng→L (gold to next level, park it above the XP button). Each remembers its own position."},
             {"v1.60  ·  2026-06-11","NEW in-game HUD: a small draggable overlay sits on top of TFT itself (separate from the main panel) showing your gold and projected income for next round, plus exactly how much gold you still need to reach your next level. It updates automatically as you scry and as you make manual corrections, and can be dragged anywhere on screen or switched off entirely from the SETUP tab's new IN-GAME HUD section."},
