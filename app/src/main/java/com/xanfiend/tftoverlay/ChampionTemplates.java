@@ -196,7 +196,7 @@ public class ChampionTemplates {
     // champions share most of their pixels (board ground), which inflates raw
     // cosine similarity toward 1 for everything. Removing the average color
     // leaves the spatial pattern — the sprite — to drive the score.
-    private static void meanCenter(float[] s){
+    static void meanCenter(float[] s){
         float mr=0, mg=0, mb=0;
         int cells = s.length / 3;
         for(int i=0;i<s.length;i+=3){ mr+=s[i]; mg+=s[i+1]; mb+=s[i+2]; }

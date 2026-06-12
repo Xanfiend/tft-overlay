@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.63";
+    private static final String APP_VERSION = "v1.64";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -148,6 +148,17 @@ public class OverlayService extends Service {
     // adjust-grid: full-screen overlay showing the live probe grid with draggable
     // corner handles — visual calibration without blind taps
     private View gridAdjustView = null;
+
+    // planner scan: reads the whole board in one pass by snapshotting the Team
+    // Planner (flat 2D tiles, matched against bundled set icons) — zero unit taps
+    private boolean plannerScanPending = false;
+    private java.util.List<int[]> plannerUnits = null; // health-bar detection from the board shot (positions + stars)
+    private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    // planner calibration overlay: records where the planner controls live
+    private int plnCalStep = 0; // 0=idle, 1=planner btn, 2=snapshot btn, 3=first slot, 4=last slot, 5=close
+    private View plnCalView = null;
+    private boolean plnCalBusy = false;        // a pass-through tap is being replayed into the game
+    private final int[][] plnCalPts = new int[6][2]; // percent coords per step (index 1-5)
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -398,6 +409,7 @@ public class OverlayService extends Service {
                         if(huntMode){ stopHuntMode(); return true; }
                         if(oppScanMode){ stopOppScanMode(); return true; }
                         if(boardScanMode){ stopBoardScanMode(); return true; }
+                        if(plannerScanPending){ stopPlannerScan("stopped by sigil tap"); return true; }
                         if(autoScanPending){ finishAutoTapScan(); return true; }
                         long held=System.currentTimeMillis()-down;
                         if(held>1500){ triggerScan(); }
@@ -879,6 +891,20 @@ public class OverlayService extends Service {
 
             row1.addView(asBtn); row1.addView(aoBtn);
             root.addView(row1);
+
+            // PLANNER SCAN \u2014 whole board from one Team Planner snapshot, no unit taps
+            final boolean plnReady = accAvail && pool.plannerCalibrated();
+            LinearLayout plnBtn=ritualBtn("\u2742 SCRY THE PLANNER",
+                    plnReady ? "whole board in one snapshot \u00b7 no unit taps"
+                             : "calibrate the planner in SETUP first",
+                    plnReady?0xFF1A1400:0xFF0D0909, plnReady?GOLD:DIM, plnReady);
+            LinearLayout.LayoutParams pbl=new LinearLayout.LayoutParams(-1,-2); pbl.setMargins(0,0,0,4); plnBtn.setLayoutParams(pbl);
+            plnBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                if(!pool.plannerCalibrated()){ Toast.makeText(OverlayService.this,"Calibrate the planner in the SETUP tab first",Toast.LENGTH_LONG).show(); return; }
+                startPlannerScan();
+            }});
+            root.addView(plnBtn);
 
             // THE HUNT \u2014 shop watcher / auto-buy
             final java.util.List<String> huntList=pool.getHunt();
@@ -2328,6 +2354,49 @@ public class OverlayService extends Service {
             fsRow.addView(btn);
         }
         root.addView(fsRow);
+
+        addSecHdr(root, "PLANNER SCAN", GOLD);
+
+        SetIcons.load(this);
+        boolean plnCal=pool.plannerCalibrated();
+        int plnIcons=SetIcons.champCount();
+        TextView plnInfo=new TextView(this);
+        plnInfo.setText("Reads your whole board in one pass with zero unit taps: the scan opens the "
+                +"Team Planner, presses Snapshot, names every fielded unit from its flat tile, then "
+                +"closes the planner without confirming (the game is untouched). Calibrate once so it "
+                +"knows where the planner controls are.");
+        plnInfo.setTextColor(ASH); plnInfo.setTextSize(10); plnInfo.setPadding(2,0,0,6); root.addView(plnInfo);
+
+        TextView plnStatus=new TextView(this);
+        plnStatus.setText((plnCal?"✓ calibrated":"not calibrated yet")
+                +"  ·  "+plnIcons+" champion icons bundled"
+                +(plnIcons==0?" — Planner Scan needs an app update with icons":""));
+        plnStatus.setTextColor(plnCal&&plnIcons>0?GREEN:DIM); plnStatus.setTextSize(10);
+        plnStatus.setPadding(2,0,0,6); root.addView(plnStatus);
+
+        TextView plnCalBtn=new TextView(this);
+        plnCalBtn.setText(plnCal?"RECALIBRATE PLANNER":"CALIBRATE PLANNER");
+        plnCalBtn.setTextColor(BONE); plnCalBtn.setTextSize(13); plnCalBtn.setGravity(Gravity.CENTER);
+        plnCalBtn.setPadding(0,12,0,12); plnCalBtn.setBackground(box(plnCal?CARD:BLOOD,6,plnCal?GOLD:BLOODL,2));
+        LinearLayout.LayoutParams pcbl=new LinearLayout.LayoutParams(-1,-2); pcbl.setMargins(0,0,0,4); plnCalBtn.setLayoutParams(pcbl);
+        plnCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+                Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
+            }
+            startPlannerCalibration();
+        }});
+        root.addView(plnCalBtn);
+
+        TextView plnHint=new TextView(this);
+        plnHint.setText("Do this on the board view during a planning phase. Your taps are replayed into "
+                +"the game, so the planner really opens while you point things out.");
+        plnHint.setTextColor(ASH); plnHint.setTextSize(10); plnHint.setPadding(2,0,0,6); root.addView(plnHint);
+
+        if(plnCal){
+            root.addView(miniChip("✕ clear planner calibration", new View.OnClickListener(){ public void onClick(View v){
+                pool.clearPlannerCal(); showPanel();
+            }}));
+        }
 
         addSecHdr(root, "INSTANT VISUAL ID", GOLD);
 
@@ -4411,6 +4480,354 @@ public class OverlayService extends Service {
         }
     }
 
+    // ---- PLANNER SCAN: whole board from one Team Planner snapshot ----
+    // The Team Planner's Snapshot button copies every fielded unit into the
+    // planner as flat 2D tiles — the one place the game shows the whole board
+    // as deterministic art instead of 3D sprites. The scan opens the planner,
+    // presses Snapshot, names each tile against the bundled set icons, then
+    // closes the planner. Nothing is confirmed, so the game is untouched.
+
+    private static final int PLN_OPEN_WAIT_MS = 1100; // planner open animation
+    private static final int PLN_SNAP_WAIT_MS = 900;  // snapshot tiles populate
+    private static final int PLN_SLOTS = 10;          // snapshot slot row length
+
+    private interface ShotCb { void onShot(Bitmap bmp); }
+
+    // one full-screen shot via the fast capture when available, else the
+    // accessibility screenshot (waits out the 1/sec limit, retries once on it)
+    @SuppressWarnings("NewApi")
+    private void plannerShot(final ShotCb cb){ plannerShotAttempt(cb, 0); }
+
+    @SuppressWarnings("NewApi")
+    private void plannerShotAttempt(final ShotCb cb, final int attempt){
+        if(scanFastReady){
+            Bitmap fast=captureScanFrame();
+            if(fast!=null){ cb.onShot(fast); return; }
+        }
+        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null){ cb.onShot(null); return; }
+        long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
+        long wait=Math.max(0, MIN_SHOT_GAP_MS-sinceShot);
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
+            try{
+                lastShotMs=android.os.SystemClock.uptimeMillis();
+                svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                    new AccessibilityService.TakeScreenshotCallback(){
+                        @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                            try{
+                                android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                                Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                                hb.close();
+                                Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                                hw.recycle();
+                                cb.onShot(bmp);
+                            }catch(Exception e){ cb.onShot(null); }
+                        }
+                        @Override public void onFailure(int errorCode){
+                            if(errorCode==3 && attempt<2){
+                                plannerHandler.postDelayed(new Runnable(){ public void run(){
+                                    plannerShotAttempt(cb, attempt+1);
+                                }}, MIN_SHOT_GAP_MS);
+                            } else cb.onShot(null);
+                        }
+                    });
+            }catch(Exception e){ cb.onShot(null); }
+        }}, wait);
+    }
+
+    private void startPlannerScan(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
+            return;
+        }
+        SetIcons.load(this);
+        if(SetIcons.champCount()==0){
+            Toast.makeText(this,"No set icons in this build — Planner Scan needs an app update",Toast.LENGTH_LONG).show();
+            return;
+        }
+        plannerScanPending=true;
+        plannerUnits=null;
+        autoScanResults=new java.util.ArrayList<>();
+        autoScanGold=-1; autoScanLevel=-1;
+        autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
+        autoScanStartMs=android.os.SystemClock.uptimeMillis();
+        closePanel();
+        if(btnLabel!=null) btnLabel.setText("PLAN");
+        addScanLog("planner scan: board shot for positions/stars");
+        plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
+            if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
+            if(bmp!=null){
+                // best-effort: unit count + star levels from health bars. Names come
+                // from the planner; this only pairs stars to tiles, so failure is fine.
+                try{ plannerUnits=detectHealthBarUnits(bmp,false); }catch(Exception e){ plannerUnits=null; }
+                bmp.recycle();
+            }
+            addScanLog("planner scan: "+(plannerUnits==null?"no health-bar read"
+                    :plannerUnits.size()+" units (health bar)")+", opening planner");
+            plannerOpenPhase();
+        }});
+    }
+
+    private void plannerOpenPhase(){
+        if(!plannerScanPending) return;
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, new Runnable(){ public void run(){
+            plannerHandler.postDelayed(new Runnable(){ public void run(){
+                if(!plannerScanPending) return;
+                dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, new Runnable(){ public void run(){
+                    plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
+                }});
+            }}, PLN_OPEN_WAIT_MS);
+        }});
+    }
+
+    private void plannerReadPhase(){
+        if(!plannerScanPending) return;
+        addScanLog("planner scan: reading snapshot tiles");
+        plannerShot(new ShotCb(){ public void onShot(final Bitmap bmp){
+            if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
+            // close the planner right away — nothing was confirmed, so the
+            // snapshot is discarded and the board is exactly as it was
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+            wm.getDefaultDisplay().getRealMetrics(dm);
+            dispatchTap(pool.getPln("close_x")*dm.widthPixels/100f,
+                        pool.getPln("close_y")*dm.heightPixels/100f,
+                        new Runnable(){ public void run(){} });
+            if(bmp==null){ stopPlannerScan("no planner screenshot"); return; }
+            plannerProcess(bmp);
+        }});
+    }
+
+    // crop each snapshot slot along the calibrated first→last line, skip empties
+    // by detail (flat empty hexes have almost no texture), and name the rest
+    private void plannerProcess(final Bitmap shot){
+        new Thread(new Runnable(){ public void run(){
+            final java.util.List<String> slotNames=new java.util.ArrayList<>(); // one entry per OCCUPIED slot, null = unknown
+            try{
+                int w=shot.getWidth(), h=shot.getHeight();
+                float x1=pool.getPln("s1_x")*w/100f, y1=pool.getPln("s1_y")*h/100f;
+                float xN=pool.getPln("sn_x")*w/100f, yN=pool.getPln("sn_y")*h/100f;
+                float dxs=(xN-x1)/(PLN_SLOTS-1), dys=(yN-y1)/(PLN_SLOTS-1);
+                float spacing=(float)Math.hypot(dxs,dys);
+                if(spacing<8f){
+                    shot.recycle();
+                    plannerHandler.post(new Runnable(){ public void run(){
+                        stopPlannerScan("slot calibration too narrow — recalibrate in SETUP");
+                    }});
+                    return;
+                }
+                int cs=Math.max(24,(int)(spacing*0.80f));
+                for(int i=0;i<PLN_SLOTS;i++){
+                    int cx=(int)(x1+dxs*i), cy=(int)(y1+dys*i);
+                    float detail=hexDetail(shot,cx,cy,cs/2,w,h);
+                    if(detail<11f){ addScanLog("planner slot "+(i+1)+": empty (detail "+(int)detail+")"); continue; }
+                    int inset=cs*12/100;
+                    int tx=Math.max(0,cx-cs/2+inset), ty=Math.max(0,cy-cs/2+inset);
+                    int ts=Math.min(cs-2*inset, Math.min(w-tx,h-ty));
+                    if(ts<16){ slotNames.add(null); continue; }
+                    Bitmap tile=Bitmap.createBitmap(shot,tx,ty,ts,ts);
+                    SetIcons.IconMatch m=SetIcons.match(tile);
+                    if(m!=null){
+                        slotNames.add(m.name);
+                        addScanLog("planner slot "+(i+1)+": "+m.name+" "+(int)(m.sim*100)
+                                +"% (+"+(int)(m.margin*100)+"%)");
+                    } else {
+                        slotNames.add(null);
+                        addScanLog("planner slot "+(i+1)+": unknown — closest "+SetIcons.debugBest(tile));
+                    }
+                    tile.recycle();
+                }
+            }catch(Exception e){ addScanLog("ERR planner process: "+e.getMessage()); }
+            shot.recycle();
+            plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
+        }}).start();
+    }
+
+    private void plannerFinish(java.util.List<String> slotNames){
+        if(!plannerScanPending) return;
+        plannerScanPending=false;
+        plannerHandler.removeCallbacksAndMessages(null);
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        int occupied=slotNames.size();
+        int matched=0;
+        // stars pair tile-order to health-bar order — only trusted when the counts
+        // agree, and they only affect the result list, never the pool counts
+        boolean starsUsable = plannerUnits!=null && plannerUnits.size()==occupied;
+        for(int i=0;i<occupied;i++){
+            String name=slotNames.get(i);
+            if(name==null) continue;
+            matched++;
+            int stars = starsUsable && plannerUnits.get(i).length>2 ? plannerUnits.get(i)[2] : 0;
+            pool.add(name,1);
+            StringBuilder e=new StringBuilder(name);
+            for(int s2=0;s2<stars;s2++) e.append('★');
+            e.append(" ≈");
+            autoScanResults.add(e.toString());
+        }
+        int unknown=occupied-matched;
+        long tookMs=autoScanStartMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
+        addScanLog("planner scan: done, "+matched+" named, "+unknown+" unknown of "+occupied
+                +" tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
+        if(occupied==0){
+            Toast.makeText(this,"No snapshot tiles found — did the planner open? Recalibrate in SETUP if not.",Toast.LENGTH_LONG).show();
+        } else if(unknown>0){
+            Toast.makeText(this,unknown+" unit"+(unknown==1?"":"s")+" not recognized — run SCRY MY BOARD to read them by popup",Toast.LENGTH_LONG).show();
+        }
+        if(matched>0) buzzDone();
+        mode=0; showPanel();
+    }
+
+    private void stopPlannerScan(String why){
+        plannerScanPending=false;
+        plannerHandler.removeCallbacksAndMessages(null);
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        addScanLog("planner scan: "+why);
+        mode=0; showPanel();
+    }
+
+    // ---- planner calibration: tap-through capture of the planner controls ----
+    // Unlike board calibration, the pointed-at controls must actually work while
+    // calibrating (the planner has to open before its Snapshot button can be
+    // shown), so steps 1, 2 and 5 replay the user's tap into the game.
+
+    private void startPlannerCalibration(){
+        plnCalStep=1;
+        plnCalBusy=false;
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+            new Runnable(){ public void run(){ showPlnCalOverlay(); }}, 300);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showPlnCalOverlay(){
+        hidePlnCalView();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        final float spx=getResources().getDisplayMetrics().scaledDensity;
+
+        plnCalView=new View(OverlayService.this){
+            private final android.graphics.Paint bgP=new android.graphics.Paint();
+            private final android.graphics.Paint txtP=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                int W=getWidth(), H=getHeight();
+                // banner sits at the BOTTOM — the planner controls live top/center
+                float barTop=H*0.82f;
+                bgP.setColor(0xF00B0709);
+                canvas.drawRect(0,barTop,W,H,bgP);
+                txtP.setStyle(android.graphics.Paint.Style.FILL);
+                txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
+                String stepMsg, stepSub;
+                switch(plnCalStep){
+                    case 1: stepMsg="Tap the TEAM PLANNER button"; stepSub="the icon that opens the planner"; break;
+                    case 2: stepMsg="Tap the SNAPSHOT button"; stepSub="inside the planner that just opened"; break;
+                    case 3: stepMsg="Tap the FIRST snapshot slot"; stepSub="center of the LEFT-most slot in the row"; break;
+                    case 4: stepMsg="Tap the LAST slot in that row"; stepSub="center of the RIGHT-most slot"; break;
+                    case 5: stepMsg="Tap what CLOSES the planner"; stepSub="the X or back control"; break;
+                    default: stepMsg=""; stepSub="";
+                }
+                txtP.setTextSize(10*spx); txtP.setColor(0xFF7A6B60);
+                canvas.drawText("PLANNER CALIBRATION — STEP "+plnCalStep+" OF 5   ·   tap THIS BAR to cancel",
+                        W/2f, barTop+H*0.045f, txtP);
+                txtP.setTextSize(13*spx); txtP.setColor(0xFFE0D5C0);
+                txtP.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText(plnCalBusy?"…":stepMsg, W/2f, barTop+H*0.10f, txtP);
+                txtP.setTypeface(android.graphics.Typeface.DEFAULT);
+                txtP.setTextSize(9*spx); txtP.setColor(0xFFC9A227);
+                canvas.drawText(plnCalBusy?"replaying your tap into the game":stepSub,
+                        W/2f, barTop+H*0.15f, txtP);
+            }
+            @Override public boolean onTouchEvent(android.view.MotionEvent e){
+                if(e.getAction()!=android.view.MotionEvent.ACTION_UP) return true;
+                if(plnCalBusy) return true;
+                int H=getHeight();
+                float vx=e.getX(), vy=e.getY();
+                if(vy>=H*0.82f){ cancelPlnCal(); return true; }
+                handlePlnCalTap(vx,vy);
+                return true;
+            }
+        };
+        plnCalView.setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+        WindowManager.LayoutParams clp=new WindowManager.LayoutParams(
+            sw,sh,0,0,
+            Build.VERSION.SDK_INT>=26
+                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                :WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT);
+        clp.gravity=Gravity.TOP|Gravity.LEFT;
+        try{ wm.addView(plnCalView,clp); }catch(Exception ex){ plnCalView=null; plnCalStep=0; }
+    }
+
+    private void handlePlnCalTap(final float vx, final float vy){
+        final View v=plnCalView;
+        if(v==null) return;
+        int W=v.getWidth(), H=v.getHeight();
+        plnCalPts[plnCalStep][0]=Math.round(vx*100/W);
+        plnCalPts[plnCalStep][1]=Math.round(vy*100/H);
+        boolean passThrough = plnCalStep==1 || plnCalStep==2 || plnCalStep==5;
+        if(!passThrough){
+            // slot taps are record-only: tapping a planner slot for real could
+            // add or remove a planned unit
+            advancePlnCal();
+            return;
+        }
+        // window goes untouchable for a moment so the replayed gesture lands in
+        // the game underneath, then capture resumes
+        plnCalBusy=true; v.invalidate();
+        final boolean closing = plnCalStep==5;
+        try{
+            WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v.getLayoutParams();
+            lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+            wm.updateViewLayout(v,lp);
+        }catch(Exception e){}
+        dispatchTap(vx,vy,new Runnable(){ public void run(){
+            plannerHandler.postDelayed(new Runnable(){ public void run(){
+                View v2=plnCalView;
+                if(v2==null) return;
+                try{
+                    WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v2.getLayoutParams();
+                    lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                    wm.updateViewLayout(v2,lp);
+                }catch(Exception e){}
+                plnCalBusy=false;
+                advancePlnCal();
+            }}, closing?500:900);
+        }});
+    }
+
+    private void advancePlnCal(){
+        if(plnCalStep>=5){ finishPlnCal(); return; }
+        plnCalStep++;
+        if(plnCalView!=null) plnCalView.invalidate();
+    }
+
+    private void finishPlnCal(){
+        String[] keys={null,"btn","snap","s1","sn","close"};
+        for(int i=1;i<=5;i++){
+            pool.setPln(keys[i]+"_x", plnCalPts[i][0]);
+            pool.setPln(keys[i]+"_y", plnCalPts[i][1]);
+        }
+        plnCalStep=0;
+        hidePlnCalView();
+        Toast.makeText(this,"⛧ Planner calibrated — SCRY THE PLANNER is ready",Toast.LENGTH_LONG).show();
+        mode=4; showPanel();
+    }
+
+    private void cancelPlnCal(){
+        plnCalStep=0;
+        hidePlnCalView();
+        mode=4; showPanel();
+    }
+
+    private void hidePlnCalView(){
+        if(plnCalView!=null){ try{ wm.removeView(plnCalView); }catch(Exception e){} plnCalView=null; }
+        plnCalBusy=false;
+    }
+
     // ---- THE HUNT: shop watcher / auto-buy ----
     // Polls the shop strip once a second (the hard screenshot rate limit) and
     // taps any marked champion's shop card the moment it appears. The player
@@ -4781,8 +5198,10 @@ public class OverlayService extends Service {
         releaseHuntCapture();
         releaseScanCapture();
         autoTapHandler.removeCallbacksAndMessages(null);
+        plannerHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         hideCalCaptureView();
+        hidePlnCalView();
         hideGridAdjustView();
         hideProbeDots();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
