@@ -93,6 +93,13 @@ def main() -> None:
     for key, champ in want.items():
         entry = by_name.get(key)
         if entry is None:
+            # prefix fallback for names like "Nunu & Willump" vs SetData's "Nunu",
+            # only when it's unambiguous
+            cands = [v for k2, v in by_name.items()
+                     if k2 and (k2.startswith(key) or key.startswith(k2))]
+            if len(cands) == 1:
+                entry = cands[0]
+        if entry is None:
             missed.append(champ)
             continue
         variants = []
