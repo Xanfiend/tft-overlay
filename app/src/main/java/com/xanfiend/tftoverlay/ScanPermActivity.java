@@ -15,13 +15,17 @@ public class ScanPermActivity extends Activity {
     private static final int REQ_PROJECTION = 1001;
     private static final int REQ_NOTIF = 1002;
 
+    // Set by OverlayService before launching: the projection is handed to the
+    // hunt's continuous-capture loop instead of running a one-shot scan.
+    static volatile boolean huntRequest = false;
+
     private static void log(String msg) { OverlayService.addScanLog(msg); }
     private static void err(String msg) { OverlayService.addScanLog("ERR " + msg); }
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        OverlayService.clearScanLog();
+        if (!huntRequest) OverlayService.clearScanLog(); // keep the hunt's log intact
         log("onCreate  SDK=" + Build.VERSION.SDK_INT);
         if (Build.VERSION.SDK_INT >= 33 &&
                 checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -48,7 +52,8 @@ public class ScanPermActivity extends Activity {
                     (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             if (mpm == null) {
                 err("MediaProjectionManager null");
-                OverlayService.deliverScanError("mpm null");
+                if (huntRequest) { huntRequest = false; OverlayService.deliverHuntDenied(); }
+                else OverlayService.deliverScanError("mpm null");
                 finish();
                 return;
             }
@@ -56,7 +61,8 @@ public class ScanPermActivity extends Activity {
             log("createScreenCaptureIntent launched");
         } catch (Exception e) {
             err(e.getClass().getSimpleName() + ": " + e.getMessage());
-            OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
+            if (huntRequest) { huntRequest = false; OverlayService.deliverHuntDenied(); }
+            else OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
             finish();
         }
     }
@@ -87,13 +93,27 @@ public class ScanPermActivity extends Activity {
                             (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
                     if (mpm == null) {
                         err("mpm null");
-                        OverlayService.deliverScanError("mpm null");
+                        if (huntRequest) { huntRequest = false; OverlayService.deliverHuntDenied(); }
+                        else OverlayService.deliverScanError("mpm null");
                         ScanService.stop(this);
                         finish();
                         return;
                     }
                     MediaProjection mp = mpm.getMediaProjection(res, data);
                     if (mp != null) {
+                        if (huntRequest) {
+                            // hand the live projection to the hunt's continuous
+                            // capture loop. ScanService FGS stays up for the whole
+                            // hunt; OverlayService stops it when the hunt ends.
+                            huntRequest = false;
+                            log("MediaProjection ok — handing to the hunt");
+                            moveTaskToBack(true);
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                OverlayService.deliverHuntProjection(mp);
+                                finish();
+                            }, 700);
+                            return;
+                        }
                         log("MediaProjection ok, scan in 300ms");
                         new Handler(Looper.getMainLooper()).postDelayed(() -> runScan(mp), 300);
                         return;
@@ -103,14 +123,17 @@ public class ScanPermActivity extends Activity {
                     }
                 } catch (Exception e) {
                     err(e.getClass().getSimpleName() + ": " + e.getMessage());
-                    OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
+                    if (!huntRequest)
+                        OverlayService.deliverScanError(e.getClass().getSimpleName() + ": " + e.getMessage());
                 }
+                if (huntRequest) { huntRequest = false; OverlayService.deliverHuntDenied(); }
                 ScanService.stop(this);
                 finish();
             }, 400);
             return;
         }
         log("denied or wrong req (res=" + res + ")");
+        if (huntRequest) { huntRequest = false; OverlayService.deliverHuntDenied(); }
         finish();
     }
 
