@@ -128,6 +128,25 @@ public class Pool {
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }
 
+    // ---- planner scan calibration ----
+    // Screen-percent positions of the Team Planner controls, recorded by the
+    // tap-through calibration in SETUP. Keys: btn (planner button), snap
+    // (Snapshot button), s1 / sn (first and last snapshot slot centers), close
+    // (whatever dismisses the planner). -1 = not calibrated.
+    public int  getPln(String k)        { return p.getInt("pln_"+k, -1); }
+    public void setPln(String k, int v) { p.edit().putInt("pln_"+k, Math.max(0, Math.min(100, v))).apply(); }
+    public boolean plannerCalibrated(){
+        return getPln("btn_x")>=0 && getPln("snap_x")>=0 && getPln("s1_x")>=0
+            && getPln("sn_x")>=0 && getPln("close_x")>=0;
+    }
+    public void clearPlannerCal(){
+        android.content.SharedPreferences.Editor e = p.edit();
+        for(String k : new String[]{"btn","snap","s1","sn","close"}){
+            e.remove("pln_"+k+"_x"); e.remove("pln_"+k+"_y");
+        }
+        e.apply();
+    }
+
     // ---- in-game HUD overlay (two mini numbers: income above gold, gold-to-level above XP) ----
     public boolean getHudEnabled()         { return p.getBoolean("cfg_hud", true); }
     public void    setHudEnabled(boolean h){ p.edit().putBoolean("cfg_hud", h).apply(); }

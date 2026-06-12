@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.63-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.64-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,12 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.64 - 2026-06-12
+- **NEW SCRY THE PLANNER** (POOL tab): reads your whole board in one pass with **zero unit taps**. The scan opens the Team Planner, presses Snapshot (the one place the game shows every fielded unit as flat 2D art instead of a 3D sprite), names each tile against champion icons bundled in the app, then closes the planner without confirming — the game is untouched. ~5 seconds for any board, even units the app has never seen.
+- One-time setup: **CALIBRATE PLANNER** in the SETUP tab walks you through five taps (planner button, Snapshot button, first/last snapshot slot, close control); your taps are replayed into the game so the planner really opens while you point things out.
+- Star levels come from the same health-bar read Auto Scan uses; tiles the icons can't name with confidence are reported as unknown — SCRY MY BOARD reads those by popup as before.
+- New `fetch-icons` workflow pulls the current set's champion icons from CommunityDragon into `assets/seticons/` (re-run it on each set update). Champion art © Riot Games, used under Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal) policy — this is a free fan project, not endorsed by Riot.
 
 ### v1.63 - 2026-06-12
 - **In-game HUD fixed + glowing**: the gold pill now defaults near TFT's actual gold counter (bottom-right corner) instead of the middle of the board; the XP-to-level pill moved to match. Both pills now have a slow pulsing glowing outline so they're easier to spot over the game.

@@ -1,0 +1,40 @@
+name: Fetch Set Icons
+
+# Downloads the current set's flat 2D champion icons from CommunityDragon and
+# commits them to app/src/main/assets/seticons/ for Planner Scan. Run manually
+# after each set update (alongside editing SetData.java).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pillow
+        run: pip install pillow
+
+      - name: Fetch icons from CommunityDragon
+        run: python scripts/fetch_seticons.py
+
+      - name: Commit and push icons
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/seticons
+          if git diff --cached --quiet; then
+            echo "no icon changes"
+          else
+            git commit -m "assets: refresh set icons from CommunityDragon for Planner Scan"
+            git push
+          fi
