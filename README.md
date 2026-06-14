@@ -551,6 +551,6 @@ Open an issue or ping me with ideas.
 
 `❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
 
-by **[@xanfiend](https://instagram.com/xanfiend)**
+Made by **[@ravriks](https://instagram.com/ravriks)** aka **[@xanfiend](https://instagram.com/xanfiend)**
 
 </div>
