@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.68-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.69-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline gameplay](https://img.shields.io/badge/gameplay-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -227,6 +227,12 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone. The only network use is the optional self-update check, which contacts GitHub and nothing else — no analytics, no accounts, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.69 - 2026-06-15
+- **NEW always-on gold & XP reader** (SETUP tab, off by default): once enabled it quietly re-reads your real gold and level/XP off the screen every couple of seconds and keeps the in-game HUD numbers accurate without any taps. It pauses itself during a hunt or scan.
+- **THE HUNT (auto-buy) no longer has a 2-minute timer** — it now runs until you stop it.
+- **NEW on-screen STOP button**: starting the hunt, Board Scan, Opp Scan, or Auto Scan now shows a big draggable STOP button, so you can end it with one tap instead of finding the floating sigil.
+- **Fixed a serious bug** where the game could stop responding to touch/drag after using auto-buy or a scan, persisting even after closing the overlay. Every injected tap now has a hard timeout and can never overlap another, and every full-screen calibration overlay is forcibly removed whenever a hunt or scan starts or stops.
 
 ### v1.68 - 2026-06-15
 - **Fixed THE HUNT (auto-buy) never buying in landscape**: the shop watcher was scanning a fixed band near the *bottom* of the screen, but TFT Mobile draws the shop along the **top** in landscape — so it was reading the board, never the shop, and bought nothing. It now scans the shop's real position (top in landscape, bottom in portrait) and buys marked champions on sight again.

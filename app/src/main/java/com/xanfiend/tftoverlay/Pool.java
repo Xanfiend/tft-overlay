@@ -152,6 +152,11 @@ public class Pool {
     public void    setHudEnabled(boolean h){ p.edit().putBoolean("cfg_hud", h).apply(); }
     public int  getHudPos(String key, int def){ return p.getInt(key, def); }
     public void setHudPos(String key, int v)  { p.edit().putInt(key, v).apply(); }
+    // Auto gold/XP: keep the HUD gold + level/XP live by silently reading them off
+    // the screen (gold bottom-right, level/XP top-left) every few seconds. Off by
+    // default; needs the accessibility service. Yields while a hunt/scan is running.
+    public boolean getGoldWatch()          { return p.getBoolean("cfg_goldwatch", false); }
+    public void    setGoldWatch(boolean s) { p.edit().putBoolean("cfg_goldwatch", s).apply(); }
 
     // ---- economy tracker ----
     public int getGold()       { return p.getInt("econ_gold", 0); }
