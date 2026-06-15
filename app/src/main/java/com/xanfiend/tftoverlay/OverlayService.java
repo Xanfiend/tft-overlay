@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.64";
+    private static final String APP_VERSION = "v1.65";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -224,6 +224,18 @@ public class OverlayService extends Service {
         if(s==null) return;
         if(!visible) new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable(){ public void run(){
             if(s.panel!=null) s.closePanel();
+        }});
+    }
+
+    // called by TFTAccessibilityService when Android binds/unbinds the service.
+    // If the SETUP panel is open it still shows the stale "stuck"/"disabled"
+    // status it was built with, so rebuild it live — otherwise a user who just
+    // toggled the service on comes back to a panel that still says it is off.
+    static void onAccessibilityChanged(){
+        OverlayService s=_instance;
+        if(s==null) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable(){ public void run(){
+            if(s.panel!=null && s.mode==4) s.showPanel();
         }});
     }
 
@@ -877,7 +889,7 @@ public class OverlayService extends Service {
                     accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                if(!accAvail){ openAccessibilitySettings(); return; }
                 startAutoTapScan();
             }});
 
@@ -885,7 +897,7 @@ public class OverlayService extends Service {
                     accAvail?CARD:0xFF0D0909, accAvail?GOLD:DIM, accAvail);
             LinearLayout.LayoutParams aol=new LinearLayout.LayoutParams(0,-2,1f); aol.setMargins(3,0,0,0); aoBtn.setLayoutParams(aol);
             aoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                if(!accAvail){ openAccessibilitySettings(); return; }
                 startAutoOppScan();
             }});
 
@@ -900,7 +912,7 @@ public class OverlayService extends Service {
                     plnReady?0xFF1A1400:0xFF0D0909, plnReady?GOLD:DIM, plnReady);
             LinearLayout.LayoutParams pbl=new LinearLayout.LayoutParams(-1,-2); pbl.setMargins(0,0,0,4); plnBtn.setLayoutParams(pbl);
             plnBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                if(!accAvail){ openAccessibilitySettings(); return; }
                 if(!pool.plannerCalibrated()){ Toast.makeText(OverlayService.this,"Calibrate the planner in the SETUP tab first",Toast.LENGTH_LONG).show(); return; }
                 startPlannerScan();
             }});
@@ -924,7 +936,7 @@ public class OverlayService extends Service {
                         accAvail&&!huntList.isEmpty()?GOLD:DIM, accAvail&&!huntList.isEmpty());
                 LinearLayout.LayoutParams hbl=new LinearLayout.LayoutParams(-1,-2); hbl.setMargins(0,0,0,4); huntBtn.setLayoutParams(hbl);
                 huntBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                    if(!accAvail){ try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){} return; }
+                    if(!accAvail){ openAccessibilitySettings(); return; }
                     startHuntMode();
                 }});
                 root.addView(huntBtn);
@@ -2006,6 +2018,28 @@ public class OverlayService extends Service {
 
     // Used by scan buttons when accessibility is unavailable: tell the user the
     // exact problem — not enabled at all, or enabled in settings but not running.
+    // Jump straight to TFT Scryer's own accessibility page when the OS supports
+    // it (Android 12+), so a stuck toggle is one OFF/ON away instead of hidden
+    // in the full service list. Falls back to the list if the deep link fails.
+    private void openAccessibilitySettings(){
+        if(Build.VERSION.SDK_INT >= 31){
+            try{
+                Intent i=new Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS");
+                android.content.ComponentName cn=new android.content.ComponentName(
+                        this, TFTAccessibilityService.class);
+                android.os.Bundle args=new android.os.Bundle();
+                args.putString(":settings:fragment_args_key", cn.flattenToString());
+                i.putExtra(":settings:fragment_args_key", cn.flattenToString());
+                i.putExtra(":settings:show_fragment_args", args);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+                return;
+            }catch(Exception ignored){}
+        }
+        try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+    }
+
     private String accErrorMsg(){
         return TFTAccessibilityService.enabledInSettings(this)
             ? "Accessibility is stuck: toggle TFT Scryer OFF then ON in Accessibility settings"
@@ -2068,8 +2102,7 @@ public class OverlayService extends Service {
             accBtn.setPadding(0,10,0,10); accBtn.setBackground(box(CARD,6,EDGE,1));
             LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(0,-2,1f); accBtn.setLayoutParams(abl);
             accBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                try{ Intent i=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }catch(Exception e){}
+                openAccessibilitySettings();
             }});
             accBtnRow.addView(accBtn);
             root.addView(accBtnRow);
