@@ -11,9 +11,9 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.66-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.67-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
-[![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
+[![Offline gameplay](https://img.shields.io/badge/gameplay-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
 [![Set](https://img.shields.io/badge/Set%2017-Space%20Gods-C9A227?style=flat-square)](#)
 
@@ -110,7 +110,7 @@ S to C tier ratings, comp tags, the full component build chart, and trait breakp
 </tr>
 </table>
 
-Everything runs on your phone. No internet permission, no accounts, no data leaves the device.
+Everything runs on your phone. No accounts, no trackers, no data collection. The only time the app touches the network is the optional self-update check to GitHub (see [Auto-update](#-auto-update)); every tracking, scanning, and gameplay feature works fully offline.
 
 ## ✦ Install
 
@@ -122,6 +122,14 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 6. Launch TFT. The floating sigil appears on screen.
 
 > **Samsung devices**: if Install anyway is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser.
+
+## ✦ Auto-update
+
+Since the app is sideloaded (not on the Play Store), you have two ways to stay current:
+
+**Built in (easiest).** TFT Scryer checks GitHub for a newer release when you open it, and there is a **Check for updates** button on the SETUP screen. If a newer version exists it offers to download and install it in one tap. The first time, Android asks you to allow "install unknown apps" for TFT Scryer. Updates install over the top with no uninstall (every release is signed with the same key). This is the only feature that uses the network, and it contacts only GitHub.
+
+**Obtainium (keeps the app from ever touching the network).** If you would rather TFT Scryer never reach out on its own, use [Obtainium](https://github.com/ImranR98/Obtainium): add `https://github.com/Xanfiend/tft-overlay` as a source and Obtainium watches the releases and installs updates for you. (You can ignore the in-app check entirely if you go this route.)
 
 ## ✦ Tabs
 
@@ -148,7 +156,7 @@ Everything runs on your phone. No internet permission, no accounts, no data leav
 |---|---|
 | **OS** | Android 7.0 or later (API 24+) |
 | **Permissions** | Draw over other apps (required). Screen capture via Scan Now (optional). |
-| **Internet** | Not required. The app is fully offline. |
+| **Internet** | Only for the optional in-app update check (GitHub). All scanning, tracking, and gameplay work fully offline. |
 | **Storage** | About 10 MB installed. |
 | **Scan Now** | Works on Android 7.0+. On Android 14+ some devices (Xiaomi MIUI, some Samsung OneUI builds) may have issues with screen capture. The debug log in Settings will show the exact error if it fails. |
 | **Board Scan / Silent Scan** | Requires the Accessibility service enabled (Android 12+ only). Go to Settings tab in the overlay, tap App settings, allow restricted settings, then go to Accessibility and turn on TFT Scryer. |
@@ -189,7 +197,7 @@ The scan reads text from your screen using OCR. Make sure the TFT game screen is
 <details>
 <summary><b>Play Protect says the app is not recognised / blocks the install.</b></summary><br>
 
-Tap **Install anyway** or **More details → Install anyway**. Play Protect warns about any APK not distributed through the Play Store, regardless of whether it is safe. This app has no internet permission and collects nothing. The full source code is in this repo. If the button is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser, then try again.
+Tap **Install anyway** or **More details → Install anyway**. Play Protect warns about any APK not distributed through the Play Store, regardless of whether it is safe. This app collects nothing and contacts only GitHub, and only to check for and download its own updates. The full source code is in this repo. If the button is greyed out, go to Settings → Biometrics and security → Install unknown apps and enable it for your browser, then try again.
 </details>
 
 <details>
@@ -216,9 +224,13 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 
 [VirusTotal scan of the APK](https://www.virustotal.com/gui/file/effaa42fd316d6aa3a2948ee1b0370b176b2a6196d6da846e717dde3ae5f55f0/summary)
 
-The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
+The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone. The only network use is the optional self-update check, which contacts GitHub and nothing else — no analytics, no accounts, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.67 - 2026-06-15
+- **NEW in-app auto-update**: the app now checks GitHub for a newer release on launch (and via a **Check for updates** button in SETUP), and installs it in one tap. Updates apply over the top — no uninstall — since every release shares a signing key. This adds the `INTERNET` permission; it is the only feature that uses the network and it contacts only GitHub. All scanning, tracking, and gameplay remain fully offline, and there are still no trackers or data collection.
+- Prefer the app never touch the network? Use **[Obtainium](https://github.com/ImranR98/Obtainium)** instead — see [Auto-update](#-auto-update).
 
 ### v1.66 - 2026-06-15
 - **Fixed "This service is malfunctioning" / the overlay dying on its own** (most common on Xiaomi/HyperOS and other aggressive-battery ROMs). The overlay now runs as a proper **foreground service** with a quiet ongoing notification, keeping its process resident. The silent-scan accessibility service shares that process, so it's no longer killed and flagged as malfunctioning. A small "TFT Scryer is watching" notification appears while the overlay is up — that's what keeps it alive.
