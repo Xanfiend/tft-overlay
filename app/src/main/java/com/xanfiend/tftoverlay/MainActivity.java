@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.67");
+        ver.setText("v1.68");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -395,6 +395,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.68  ·  2026-06-15","FIXED THE HUNT (auto-buy) never buying in landscape. The shop watcher was scanning a fixed band near the bottom of the screen, but TFT Mobile draws the shop along the TOP in landscape — so the hunt was reading the board and never saw the shop, buying nothing. It now scans the shop's real position (top in landscape, bottom in portrait) and buys marked champions on sight again. It also no longer tries to read your gold from the shop strip (the counter isn't there); it buys marked champions whenever they appear and TFT ignores any you cannot afford."},
             {"v1.67  ·  2026-06-15","NEW in-app auto-update: TFT Scryer now checks GitHub for a newer release when you open it, and there is a Check for updates button on this SETUP screen. If a newer version exists it downloads and installs in one tap (the first time, Android asks you to allow installing updates for TFT Scryer). Updates install over the top with no uninstall. This adds internet permission — it is the only feature that uses the network and it contacts only GitHub, with no analytics, accounts, or data collection. Everything else still works fully offline. If you would rather the app never reach the network on its own, use the Obtainium app instead (details in the README)."},
             {"v1.66  ·  2026-06-15","FIXED the accessibility service showing \"This service is malfunctioning\" and the overlay vanishing on its own — most common on Xiaomi/HyperOS and other phones with aggressive battery management. The overlay now runs as a proper foreground service with a small ongoing notification, which keeps its process alive; because the silent-scan accessibility service shares that process, it no longer gets killed and flagged as malfunctioning. You will see a quiet \"TFT Scryer is watching\" notification while the overlay is up — that is what keeps it running. If your phone still kills it, also allow Autostart and set battery usage to No restrictions for TFT Scryer in your phone's settings."},
             {"v1.65  ·  2026-06-15","FIXED the accessibility \"stuck\" state lingering in SETUP: when you toggled the service back ON, the panel kept showing \"Stuck — switch shows ON but the service is not running\" until you manually reopened it. The panel now updates the moment Android binds the service, so it flips to \"Enabled\" on its own. The Accessibility settings button also jumps straight to TFT Scryer's own page (Android 12+) instead of dropping you in the full service list, so the OFF-then-ON fix is right there."},
