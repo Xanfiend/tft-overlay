@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.64");
+        ver.setText("v1.65");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -363,6 +363,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.65  ·  2026-06-15","FIXED the accessibility \"stuck\" state lingering in SETUP: when you toggled the service back ON, the panel kept showing \"Stuck — switch shows ON but the service is not running\" until you manually reopened it. The panel now updates the moment Android binds the service, so it flips to \"Enabled\" on its own. The Accessibility settings button also jumps straight to TFT Scryer's own page (Android 12+) instead of dropping you in the full service list, so the OFF-then-ON fix is right there."},
             {"v1.64  ·  2026-06-12","NEW SCRY THE PLANNER (POOL tab): reads your whole board in one pass with zero unit taps. The scan opens the Team Planner, presses Snapshot — the one place the game shows every fielded unit as flat 2D art instead of a 3D sprite — names each tile against champion icons bundled in the app, then closes the planner without confirming, so the game is untouched. Around five seconds for any board, even units the app has never seen before. One-time setup in the SETUP tab: CALIBRATE PLANNER walks you through five taps (planner button, Snapshot button, first and last snapshot slot, close control) and replays your taps into the game so the planner really opens while you point things out. Star levels come from the same health-bar read Auto Scan uses. Any tile the icons cannot name with confidence is reported as unknown — run SCRY MY BOARD to read those by popup as before."},
             {"v1.63  ·  2026-06-12","FIXED the in-game HUD gold pill: it was defaulting to the middle of the board, far from TFT's own gold counter. Its default spot is now the bottom-right corner where the gold count actually sits (drag it the rest of the way if your device differs); the XP-to-level pill moved down to match. Both HUD pills now have a pulsing glowing outline so they stand out against the board. NEW Fast Scan (SETUP tab): an optional one-time screen-recording permission that, once granted, lets Board Scan and Opp Scan poll the live capture instantly instead of waiting on the 1-second screenshot limit — off by default, toggle ON/OFF anytime. (THE HUNT's auto-buy already does this for the shop — see v1.61/v1.62.)"},
             {"v1.62  ·  2026-06-12","THE HUNT got swift eyes: arming the hunt now asks for screen-capture permission, which lets it watch the shop about three times a second instead of once a second (Android only rate-limits the accessibility screenshot API; a screen-capture stream has no such limit). A marked champion is now bought within roughly a third of a second of appearing. Android shows its screen-recording indicator while the hunt runs and the capture stays on your phone like everything else. Denying the capture dialog is fine — the hunt automatically falls back to the old once-a-second watcher."},

@@ -36,12 +36,14 @@ public class TFTAccessibilityService extends AccessibilityService {
     protected void onServiceConnected() {
         instance = this;
         OverlayService.addScanLog("AccessibilityService connected — silent scan enabled");
+        OverlayService.onAccessibilityChanged(); // refresh an open SETUP panel live
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         instance = null;
         OverlayService.addScanLog("AccessibilityService disconnected");
+        OverlayService.onAccessibilityChanged();
         return super.onUnbind(intent);
     }
 
