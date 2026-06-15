@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.65-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.66-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -219,6 +219,10 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone and nothing is sent anywhere. No internet permission, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.66 - 2026-06-15
+- **Fixed "This service is malfunctioning" / the overlay dying on its own** (most common on Xiaomi/HyperOS and other aggressive-battery ROMs). The overlay now runs as a proper **foreground service** with a quiet ongoing notification, keeping its process resident. The silent-scan accessibility service shares that process, so it's no longer killed and flagged as malfunctioning. A small "TFT Scryer is watching" notification appears while the overlay is up — that's what keeps it alive.
+- If a ROM still kills it, also enable **Autostart** and set battery usage to **No restrictions** for TFT Scryer in your phone's settings.
 
 ### v1.65 - 2026-06-15
 - **Fixed the accessibility "stuck" status lingering**: after toggling the service back ON, the SETUP panel kept showing "Stuck — switch shows ON but the service is not running" until you manually reopened it. It now refreshes the instant Android binds the service, flipping to "Enabled" on its own.

@@ -35,15 +35,25 @@ public class TFTAccessibilityService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         instance = this;
-        OverlayService.addScanLog("AccessibilityService connected — silent scan enabled");
-        OverlayService.onAccessibilityChanged(); // refresh an open SETUP panel live
+        // never let a callback throw out of here — an uncaught exception crashes
+        // the process and Android then flags the service as "malfunctioning"
+        try{
+            OverlayService.addScanLog("AccessibilityService connected — silent scan enabled");
+            OverlayService.onAccessibilityChanged(); // refresh an open SETUP panel live
+        }catch(Exception e){
+            android.util.Log.w("TFTScryer","onServiceConnected: "+e.getMessage());
+        }
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
         instance = null;
-        OverlayService.addScanLog("AccessibilityService disconnected");
-        OverlayService.onAccessibilityChanged();
+        try{
+            OverlayService.addScanLog("AccessibilityService disconnected");
+            OverlayService.onAccessibilityChanged();
+        }catch(Exception e){
+            android.util.Log.w("TFTScryer","onUnbind: "+e.getMessage());
+        }
         return super.onUnbind(intent);
     }
 
