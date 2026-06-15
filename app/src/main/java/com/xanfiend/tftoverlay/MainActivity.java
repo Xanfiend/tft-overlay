@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.66");
+        ver.setText("v1.67");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -144,7 +144,21 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         frame.addView(scroll);
         setContentView(frame);
+
+        // quiet auto-check on launch: only surfaces a dialog if a newer release
+        // exists; silent on "up to date" or any network error
+        if(!autoCheckedUpdate){
+            autoCheckedUpdate = true;
+            Updater.checkAsync(this, new Updater.CheckCallback(){
+                public void onResult(boolean available, String latest){
+                    if(available) Updater.promptAndInstall(MainActivity.this, latest);
+                }
+                public void onError(String msg){ /* stay silent on launch */ }
+            });
+        }
     }
+
+    private boolean autoCheckedUpdate = false;
 
     @Override protected void onResume(){
         super.onResume();
@@ -272,6 +286,22 @@ public class MainActivity extends Activity {
             }
         }));
 
+        // ---- updates ----
+        final TextView updBtn = btn("⟳  Check for updates", null);
+        updBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            updBtn.setText("⟳  Checking…");
+            Updater.checkAsync(MainActivity.this, new Updater.CheckCallback(){
+                public void onResult(boolean available, String latest){
+                    if(available){ updBtn.setText("⬇  Update to v"+latest);
+                        Updater.promptAndInstall(MainActivity.this, latest);
+                    } else { updBtn.setText("✓  Up to date (v"+Updater.installedVersion(MainActivity.this)+")"); }
+                }
+                public void onError(String msg){ updBtn.setText("⟳  Check for updates");
+                    toast("Update check failed: "+msg); }
+            });
+        }});
+        contentArea.addView(updBtn);
+
         contentArea.addView(divider(14, 16));
 
         // tips section header
@@ -365,6 +395,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.67  ·  2026-06-15","NEW in-app auto-update: TFT Scryer now checks GitHub for a newer release when you open it, and there is a Check for updates button on this SETUP screen. If a newer version exists it downloads and installs in one tap (the first time, Android asks you to allow installing updates for TFT Scryer). Updates install over the top with no uninstall. This adds internet permission — it is the only feature that uses the network and it contacts only GitHub, with no analytics, accounts, or data collection. Everything else still works fully offline. If you would rather the app never reach the network on its own, use the Obtainium app instead (details in the README)."},
             {"v1.66  ·  2026-06-15","FIXED the accessibility service showing \"This service is malfunctioning\" and the overlay vanishing on its own — most common on Xiaomi/HyperOS and other phones with aggressive battery management. The overlay now runs as a proper foreground service with a small ongoing notification, which keeps its process alive; because the silent-scan accessibility service shares that process, it no longer gets killed and flagged as malfunctioning. You will see a quiet \"TFT Scryer is watching\" notification while the overlay is up — that is what keeps it running. If your phone still kills it, also allow Autostart and set battery usage to No restrictions for TFT Scryer in your phone's settings."},
             {"v1.65  ·  2026-06-15","FIXED the accessibility \"stuck\" state lingering in SETUP: when you toggled the service back ON, the panel kept showing \"Stuck — switch shows ON but the service is not running\" until you manually reopened it. The panel now updates the moment Android binds the service, so it flips to \"Enabled\" on its own. The Accessibility settings button also jumps straight to TFT Scryer's own page (Android 12+) instead of dropping you in the full service list, so the OFF-then-ON fix is right there."},
             {"v1.64  ·  2026-06-12","NEW SCRY THE PLANNER (POOL tab): reads your whole board in one pass with zero unit taps. The scan opens the Team Planner, presses Snapshot — the one place the game shows every fielded unit as flat 2D art instead of a 3D sprite — names each tile against champion icons bundled in the app, then closes the planner without confirming, so the game is untouched. Around five seconds for any board, even units the app has never seen before. One-time setup in the SETUP tab: CALIBRATE PLANNER walks you through five taps (planner button, Snapshot button, first and last snapshot slot, close control) and replays your taps into the game so the planner really opens while you point things out. Star levels come from the same health-bar read Auto Scan uses. Any tile the icons cannot name with confidence is reported as unknown — run SCRY MY BOARD to read those by popup as before."},
