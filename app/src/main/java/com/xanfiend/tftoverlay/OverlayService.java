@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.65";
+    private static final String APP_VERSION = "v1.66";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -257,6 +257,7 @@ public class OverlayService extends Service {
     @Override public void onCreate(){
         super.onCreate();
         _instance=this;
+        goForeground(); // keep the process alive so the accessibility service isn't killed with it
         pool = new Pool(this);
         level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -265,7 +266,63 @@ public class OverlayService extends Service {
         if(pool.getHudEnabled()) addHud();
         new Thread(new Runnable(){ public void run(){ ChampionTemplates.load(OverlayService.this); }}).start();
     }
-    @Override public int onStartCommand(Intent i, int f, int id){ return START_STICKY; }
+    @Override public int onStartCommand(Intent i, int f, int id){
+        goForeground(); // also covers a START_STICKY restart by the system
+        return START_STICKY;
+    }
+
+    private static final String NOTIF_CHANNEL = "tft_scryer_overlay";
+    private static final int NOTIF_ID = 0x5C27; // "SCRY"
+    private boolean isForeground = false;
+
+    // Run as a foreground service. The overlay button and the accessibility
+    // service share this process; without foreground status, aggressive ROMs
+    // (Xiaomi/HyperOS especially) kill the process in the background, which tears
+    // down the accessibility service and makes Android flag it "malfunctioning".
+    // A quiet, low-importance ongoing notification keeps the process resident.
+    private void goForeground(){
+        if(isForeground) return;
+        try{
+            if(Build.VERSION.SDK_INT >= 26){
+                android.app.NotificationManager nm=
+                        (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if(nm!=null && nm.getNotificationChannel(NOTIF_CHANNEL)==null){
+                    android.app.NotificationChannel ch=new android.app.NotificationChannel(
+                            NOTIF_CHANNEL, "Overlay running",
+                            android.app.NotificationManager.IMPORTANCE_LOW);
+                    ch.setDescription("Keeps the TFT Scryer overlay and silent scan alive.");
+                    ch.setShowBadge(false);
+                    nm.createNotificationChannel(ch);
+                }
+            }
+            Intent open=new Intent(this, MainActivity.class);
+            open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            int piFlags=Build.VERSION.SDK_INT>=23
+                    ? android.app.PendingIntent.FLAG_IMMUTABLE : 0;
+            android.app.PendingIntent pi=android.app.PendingIntent.getActivity(this,0,open,piFlags);
+            android.app.Notification.Builder b = Build.VERSION.SDK_INT>=26
+                    ? new android.app.Notification.Builder(this, NOTIF_CHANNEL)
+                    : new android.app.Notification.Builder(this);
+            b.setSmallIcon(R.drawable.ic_notify)
+             .setContentTitle("TFT Scryer is watching")
+             .setContentText("Overlay and silent scan stay ready. Tap to open.")
+             .setOngoing(true)
+             .setContentIntent(pi);
+            if(Build.VERSION.SDK_INT>=21) b.setPriority(android.app.Notification.PRIORITY_LOW);
+            android.app.Notification n=b.build();
+            if(Build.VERSION.SDK_INT>=34){
+                startForeground(NOTIF_ID, n,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIF_ID, n);
+            }
+            isForeground=true;
+        }catch(Exception e){
+            // never let a notification/FGS quirk crash the overlay — it still runs,
+            // just without the extra process priority
+            android.util.Log.w("TFTScryer","goForeground failed: "+e.getMessage());
+        }
+    }
 
     private int wtype(){
         return Build.VERSION.SDK_INT>=26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY

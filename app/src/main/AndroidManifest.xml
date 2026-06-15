@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -21,7 +22,15 @@
         </activity>
 
         <service android:name=".OverlayService"
-                 android:exported="false" />
+                 android:exported="false"
+                 android:foregroundServiceType="specialUse">
+            <!-- a persistent on-screen overlay HUD for a game running on the same
+                 device; it must outlive aggressive background-process killing on
+                 some ROMs, otherwise the bundled accessibility service dies with
+                 its host process and Android marks it "malfunctioning". -->
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="persistent_game_overlay_hud" />
+        </service>
 
         <service android:name=".ScanService"
                  android:exported="false"
