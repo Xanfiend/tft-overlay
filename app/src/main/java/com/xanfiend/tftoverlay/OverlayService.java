@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.68";
+    private static final String APP_VERSION = "v1.69";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -100,7 +100,6 @@ public class OverlayService extends Service {
     // hunt mode: polls the shop strip ~once a second (screenshot rate limit) and
     // auto-buys any marked champion the moment it appears in the shop
     private boolean huntMode = false;
-    private long huntDeadline = 0;
     private boolean huntBusy = false; // a buy-tap sequence is in flight; skip captures
     private final java.util.List<String> huntBuys = new java.util.ArrayList<>();
     private final java.util.Map<String,Long> huntCooldown = new java.util.HashMap<>();
@@ -122,6 +121,24 @@ public class OverlayService extends Service {
     private android.hardware.display.VirtualDisplay scanVd;
     private android.media.ImageReader scanReader;
     private boolean scanFastReady = false;
+
+    // always-on gold/XP reader: periodically OCRs the bottom-right gold counter and
+    // the top-left level/XP and syncs them into the HUD, so the numbers stay live
+    // with no manual taps. Off by default; toggled in Settings. Uses the silent
+    // accessibility screenshot at a relaxed cadence and yields to hunt/scan loops.
+    private boolean goldWatchOn = false;
+    private boolean goldWatchBusy = false;
+    private Runnable goldWatchRunnable;
+    private final android.os.Handler goldWatchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    // on-screen STOP button shown while the hunt or an auto-scan loop runs, so it
+    // can be stopped with one obvious tap instead of finding the small floating sigil
+    private View stopBtnView = null;
+
+    // guards against two injected gestures overlapping: on some ROMs (HyperOS/MIUI)
+    // an injected tap landing while the user's own finger is mid-drag can drop the
+    // real touch's release, leaving the game feeling "stuck" until it is re-touched
+    private boolean injecting = false;
 
     // opponent scan mode: same polling but routes into opponent tracking + records star levels
     private boolean oppScanMode = false;
@@ -264,6 +281,7 @@ public class OverlayService extends Service {
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         addButton();
         if(pool.getHudEnabled()) addHud();
+        if(pool.getGoldWatch()) startGoldWatch();
         new Thread(new Runnable(){ public void run(){ ChampionTemplates.load(OverlayService.this); }}).start();
     }
     @Override public int onStartCommand(Intent i, int f, int id){
@@ -2356,6 +2374,37 @@ public class OverlayService extends Service {
         }
         root.addView(hudRow);
 
+        addSecHdr(root, "AUTO GOLD & XP", GOLD);
+
+        TextView gwHint=new TextView(this);
+        gwHint.setText("Keeps the HUD numbers live by quietly reading gold (bottom-right) and level/XP (top-left) every few seconds. Pauses during a hunt or scan. Needs the accessibility service.");
+        gwHint.setTextColor(DIM); gwHint.setTextSize(10); gwHint.setPadding(2,0,0,8); root.addView(gwHint);
+
+        boolean curGw=pool.getGoldWatch();
+        LinearLayout gwRow=new LinearLayout(this); gwRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams gwRowLp=new LinearLayout.LayoutParams(-1,-2); gwRowLp.setMargins(0,0,0,14); gwRow.setLayoutParams(gwRowLp);
+        String[] gwLabels={"ON","OFF"}; boolean[] gwVals={true,false};
+        for(int i=0;i<2;i++){
+            final boolean gv=gwVals[i];
+            TextView btn=new TextView(this); btn.setText(gwLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curGw==gv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(gv && (Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null)){
+                    Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show();
+                    return;
+                }
+                pool.setGoldWatch(gv);
+                if(gv) startGoldWatch(); else stopGoldWatch();
+                showPanel();
+            }});
+            gwRow.addView(btn);
+        }
+        root.addView(gwRow);
+
         addSecHdr(root, "OPEN TAB", GOLD);
 
         int curStart=pool.getStartTab();
@@ -3327,6 +3376,8 @@ public class OverlayService extends Service {
         boardScanDeadline=System.currentTimeMillis()+25000;
         boardScanResults=new java.util.ArrayList<>();
         closePanel();
+        teardownStrayOverlays();
+        showStopButton("✦ STOP SCAN");
         addScanLog("board scan: started 25s window");
 
         boardCountdownRunnable=new Runnable(){ public void run(){
@@ -3351,6 +3402,8 @@ public class OverlayService extends Service {
         boardScanMode=false;
         if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
         if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
+        hideStopButton();
+        teardownStrayOverlays();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("board scan: stopped, found "+boardScanResults.size()+" champs");
         mode=0; showPanel();
@@ -3379,6 +3432,8 @@ public class OverlayService extends Service {
         autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
         autoScanStartMs=android.os.SystemClock.uptimeMillis();
         closePanel();
+        teardownStrayOverlays();
+        showStopButton("✦ STOP SCAN");
         if(btnLabel!=null) btnLabel.setText("...");
         addScanLog("auto-tap: starting, getting screen size");
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
@@ -4033,9 +4088,19 @@ public class OverlayService extends Service {
         }catch(Exception e){ return probes; }
     }
 
+    // watchdog: if a dispatched gesture's callback is ever dropped, this clears the
+    // overlap guard so injection can never wedge shut permanently
+    private final Runnable injectReset = new Runnable(){ public void run(){ injecting=false; }};
+    private void clearInjecting(){ injecting=false; boardHandler.removeCallbacks(injectReset); }
+
     private void dispatchTap(float x, float y, final Runnable onDone){
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null){ onDone.run(); return; }
+        // never let two injected taps overlap — that is what can drop the user's
+        // own touch on some ROMs; the caller still advances via onDone
+        if(injecting){ addScanLog("skip overlapping tap"); onDone.run(); return; }
+        injecting=true;
+        boardHandler.postDelayed(injectReset, TAP_STROKE_MS+1500L);
         try{
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
@@ -4046,10 +4111,10 @@ public class OverlayService extends Service {
                     .addStroke(stroke).build();
             svc.dispatchGesture(gesture,
                 new android.accessibilityservice.AccessibilityService.GestureResultCallback(){
-                    @Override public void onCompleted(android.accessibilityservice.GestureDescription d){ onDone.run(); }
-                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){ onDone.run(); }
+                    @Override public void onCompleted(android.accessibilityservice.GestureDescription d){ clearInjecting(); onDone.run(); }
+                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){ clearInjecting(); onDone.run(); }
                 }, null);
-        }catch(Exception e){ addScanLog("ERR dispatchTap: "+e.getMessage()); onDone.run(); }
+        }catch(Exception e){ addScanLog("ERR dispatchTap: "+e.getMessage()); clearInjecting(); onDone.run(); }
     }
 
     @SuppressWarnings("NewApi")
@@ -4380,6 +4445,8 @@ public class OverlayService extends Service {
     private void finishAutoTapScan(){
         autoScanPending=false;
         autoTapHandler.removeCallbacksAndMessages(null);
+        hideStopButton();
+        teardownStrayOverlays();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         if(!autoOppMode){
             // one self-scry commits everything: gold, level, XP, stage (champs
@@ -4918,6 +4985,137 @@ public class OverlayService extends Service {
         plnCalBusy=false;
     }
 
+    // ---- on-screen STOP button + stray-overlay failsafe ----
+
+    // A big, draggable STOP button shown while the hunt or an auto-scan runs. One
+    // tap stops whatever is active; it can be dragged out of the way and remembers
+    // its spot. Reusing this for every long-running mode means the user never has
+    // to chase the small floating sigil to halt the auto-tapping.
+    @SuppressWarnings("deprecation")
+    private void showStopButton(final String label){
+        hideStopButton();
+        final TextView b=new TextView(this);
+        b.setText(label);
+        b.setTextColor(BONE); b.setTextSize(14); b.setTypeface(null,android.graphics.Typeface.BOLD);
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(box(0xE6B11A22,28,BONE,3));
+        b.setPadding(48,26,48,26);
+        b.setAlpha(0.97f);
+        android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
+        final WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-2,-2,wtype(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+        lp.gravity=Gravity.TOP|Gravity.START;
+        lp.x=pool.getHudPos("stop_x", dm.widthPixels*40/100);
+        lp.y=pool.getHudPos("stop_y", dm.heightPixels*45/100);
+        stopBtnView=b;
+        b.setOnTouchListener(new View.OnTouchListener(){
+            int ix,iy; float tx,ty; boolean moved;
+            public boolean onTouch(View v, MotionEvent e){
+                int a=e.getAction();
+                if(a==MotionEvent.ACTION_DOWN){ ix=lp.x; iy=lp.y; tx=e.getRawX(); ty=e.getRawY(); moved=false; return true; }
+                else if(a==MotionEvent.ACTION_MOVE){
+                    int dx=(int)(e.getRawX()-tx), dy=(int)(e.getRawY()-ty);
+                    if(Math.abs(dx)>14||Math.abs(dy)>14) moved=true;
+                    lp.x=ix+dx; lp.y=iy+dy; try{ wm.updateViewLayout(v,lp); }catch(Exception ex){}
+                    return true;
+                } else if(a==MotionEvent.ACTION_UP){
+                    pool.setHudPos("stop_x",lp.x); pool.setHudPos("stop_y",lp.y);
+                    if(!moved) stopActiveMode();
+                    return true;
+                }
+                return false;
+            }
+        });
+        try{ wm.addView(stopBtnView,lp); }catch(Exception ex){ stopBtnView=null; }
+    }
+    private void hideStopButton(){
+        if(stopBtnView!=null){ try{ wm.removeView(stopBtnView); }catch(Exception e){} stopBtnView=null; }
+    }
+    // stop whichever long-running mode is active (called by the STOP button)
+    private void stopActiveMode(){
+        if(huntMode){ stopHuntMode(); return; }
+        if(boardScanMode){ stopBoardScanMode(); return; }
+        if(oppScanMode){ stopOppScanMode(); return; }
+        if(autoScanPending){ finishAutoTapScan(); return; }
+        hideStopButton();
+    }
+
+    // Failsafe: strip any full-screen, touch-capturing calibration overlay that
+    // could otherwise be left attached and swallow every touch. WindowManager views
+    // outlive the code that added them, so a missed teardown blocks the whole screen
+    // even after the overlay is "off". Called when starting a hunt/scan and on stop.
+    private void teardownStrayOverlays(){
+        hideCalCaptureView();
+        hideGridAdjustView();
+        hidePlnCalView();
+        hideProbeDots();
+        clearInjecting();
+    }
+
+    // ---- always-on gold/XP reader ----
+
+    private void startGoldWatch(){
+        if(goldWatchOn) return;
+        if(Build.VERSION.SDK_INT<31) return;
+        goldWatchOn=true;
+        goldWatchBusy=false;
+        addScanLog("gold watch: on");
+        goldWatchRunnable=new Runnable(){ public void run(){
+            if(!goldWatchOn) return;
+            goldWatchTick();
+            goldWatchHandler.postDelayed(this, 2500);
+        }};
+        goldWatchHandler.postDelayed(goldWatchRunnable, 1500);
+    }
+    private void stopGoldWatch(){
+        goldWatchOn=false;
+        if(goldWatchRunnable!=null){ goldWatchHandler.removeCallbacks(goldWatchRunnable); goldWatchRunnable=null; }
+        goldWatchBusy=false;
+    }
+    @SuppressWarnings("NewApi")
+    private void goldWatchTick(){
+        // yield while any capture-heavy mode is running so we don't fight the
+        // screenshot rate limit or interrupt a hunt/scan
+        if(goldWatchBusy||huntMode||boardScanMode||oppScanMode||autoScanPending) return;
+        if(panel!=null) return; // panel covers the game — nothing useful to read
+        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        if(svc==null) return;
+        long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
+        if(sinceShot<MIN_SHOT_GAP_MS) return;
+        goldWatchBusy=true;
+        lastShotMs=android.os.SystemClock.uptimeMillis();
+        try{
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            hb.close();
+                            Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            hw.recycle();
+                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                                new ScreenScanner.ScanCallback(){
+                                    public void onResult(ScreenScanner.ScanResult r){ goldWatchBusy=false; applyHudOnly(r); }
+                                    public void onError(String msg){ goldWatchBusy=false; }
+                                });
+                        }catch(Exception e){ goldWatchBusy=false; }
+                    }
+                    @Override public void onFailure(int errorCode){ goldWatchBusy=false; }
+                });
+        }catch(Exception e){ goldWatchBusy=false; }
+    }
+    // apply ONLY the gold/level/XP from a full scan — never touches pool champs,
+    // bench or augments, and never reopens the panel or toasts
+    private void applyHudOnly(ScreenScanner.ScanResult r){
+        boolean changed=false;
+        if(r.gold>=0){ pool.setGold(r.gold); changed=true; }
+        if(r.level>=0){ level=r.level; pool.setLevel(r.level); changed=true; }
+        if(r.xpNeed>0){ pool.setXp(r.xpCur, r.xpNeed); changed=true; }
+        if(changed){ refreshHud(); if(panel!=null && mode==3) refreshEcon(); }
+    }
+
     // ---- THE HUNT: shop watcher / auto-buy ----
     // Polls the shop strip once a second (the hard screenshot rate limit) and
     // taps any marked champion's shop card the moment it appears. The player
@@ -4959,9 +5157,9 @@ public class OverlayService extends Service {
 
     private void beginHunt(android.media.projection.MediaProjection mp){
         closePanel(); // may have been reopened while the capture dialog was up
+        teardownStrayOverlays();
         huntMode=true;
         huntBusy=false; huntOcrBusy=false;
-        huntDeadline=System.currentTimeMillis()+120000;
         huntBuys.clear();
         huntCooldown.clear();
         huntProjection=mp;
@@ -4969,19 +5167,13 @@ public class OverlayService extends Service {
         if(!huntFast && mp!=null){ // capture setup failed — drop the projection
             releaseHuntCapture();
         }
-        addScanLog("hunt: started 120s window, marks="+pool.getHunt()
+        addScanLog("hunt: started (runs until stopped), marks="+pool.getHunt()
                 +(huntFast?" (fast capture, ~3 checks/sec)":" (1/sec fallback)"));
         Toast.makeText(this,"⛧ The hunt begins"+(huntFast?" — swift eyes":"")
-                +" — reroll freely, marked champs are bought for you. Tap the sigil to stop.",Toast.LENGTH_LONG).show();
+                +" — reroll freely, marked champs are bought for you. Tap STOP to end.",Toast.LENGTH_LONG).show();
 
-        huntCountdownRunnable=new Runnable(){ public void run(){
-            if(!huntMode) return;
-            long rem=huntDeadline-System.currentTimeMillis();
-            if(rem<=0){ stopHuntMode(); return; }
-            if(btnLabel!=null) btnLabel.setText("HUNT "+((int)((rem+999)/1000)));
-            boardHandler.postDelayed(this,500);
-        }};
-        boardHandler.post(huntCountdownRunnable);
+        if(btnLabel!=null) btnLabel.setText("HUNT");
+        showStopButton("✦ STOP HUNT");
 
         if(huntFast){
             huntPollRunnable=new Runnable(){ public void run(){
@@ -5075,6 +5267,8 @@ public class OverlayService extends Service {
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
         releaseHuntCapture();
+        hideStopButton();
+        teardownStrayOverlays();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         buzzDone();
         addScanLog("hunt: stopped, bought "+huntBuys.size()+" "+huntBuys);
@@ -5158,10 +5352,7 @@ public class OverlayService extends Service {
             if(btnLabel!=null){
                 btnLabel.setText("+"+name.split(" ")[0]);
                 boardHandler.postDelayed(new Runnable(){ public void run(){
-                    if(huntMode&&btnLabel!=null){
-                        long rem=huntDeadline-System.currentTimeMillis();
-                        if(rem>0) btnLabel.setText("HUNT "+((int)((rem+999)/1000)));
-                    }
+                    if(huntMode&&btnLabel!=null) btnLabel.setText("HUNT");
                 }},1200);
             }
             boardHandler.postDelayed(new Runnable(){ public void run(){
@@ -5179,6 +5370,8 @@ public class OverlayService extends Service {
         oppScanDeadline=System.currentTimeMillis()+30000;
         oppScanResults=new java.util.LinkedHashMap<>();
         closePanel();
+        teardownStrayOverlays();
+        showStopButton("✦ STOP SCAN");
         addScanLog("opp scan: started 30s window");
 
         oppCountdownRunnable=new Runnable(){ public void run(){
@@ -5203,6 +5396,8 @@ public class OverlayService extends Service {
         oppScanMode=false;
         if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
+        hideStopButton();
+        teardownStrayOverlays();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("opp scan: stopped, found "+oppScanResults.size()+" champs");
         mode=0; showPanel();
@@ -5299,6 +5494,9 @@ public class OverlayService extends Service {
         hidePlnCalView();
         hideGridAdjustView();
         hideProbeDots();
+        hideStopButton();
+        clearInjecting();
+        stopGoldWatch();
         try{ if(button!=null) wm.removeView(button); }catch(Exception e){}
         try{ if(closeView!=null) wm.removeView(closeView); }catch(Exception e){}
         removeHud();
