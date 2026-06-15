@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.67";
+    private static final String APP_VERSION = "v1.68";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -5048,8 +5048,14 @@ public class OverlayService extends Service {
             full.copyPixelsFromBuffer(plane.getBuffer());
             img.close(); img=null;
             boolean portrait=h>w;
-            final int cropTop=portrait? h*70/100 : h*65/100;
-            int cropBot=portrait? h*90/100 : h*85/100;
+            // The shop strip is NOT at the bottom in landscape: TFT Mobile draws the
+            // shop cards along the TOP of the screen in landscape (and near the bottom
+            // in portrait). The old fixed 65-85% band read the board/ground in
+            // landscape and never saw the shop, so nothing was ever bought. Scanning
+            // the shop's real band (not the whole frame) also avoids matching bench
+            // unit labels, which would mis-tap the bench instead of a shop card.
+            final int cropTop=portrait? h*66/100 : h*5/100;
+            int cropBot   = portrait? h*92/100 : h*47/100;
             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,w,cropBot-cropTop);
             full.recycle();
             huntOcrBusy=true;
@@ -5096,9 +5102,9 @@ public class OverlayService extends Service {
                             hw.recycle();
                             int sw=full.getWidth(), sh=full.getHeight();
                             boolean portrait=sh>sw;
-                            // same shop band the full scan uses
-                            final int cropTop=portrait? sh*70/100 : sh*65/100;
-                            int cropBot=portrait? sh*90/100 : sh*85/100;
+                            // shop is at the TOP in landscape, near the bottom in portrait
+                            final int cropTop=portrait? sh*66/100 : sh*5/100;
+                            int cropBot   = portrait? sh*92/100 : sh*47/100;
                             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
                             full.recycle();
                             new ScreenScanner(OverlayService.this,null).scanShopStrip(crop,sw,sh,
@@ -5115,10 +5121,12 @@ public class OverlayService extends Service {
 
     private void handleHuntResult(ScreenScanner.ScanResult r, final int cropTop){
         if(!huntMode) return;
-        // keep gold (and the HUD) live while hunting — the strip includes the counter
-        if(r.gold>=0){ pool.setGold(r.gold); refreshHud(); }
         long now=System.currentTimeMillis();
-        int budget=r.gold; // -1 = unknown, buy on faith
+        // The shop band does NOT contain the player's gold counter (it sits bottom-
+        // right in landscape, below the shop). The 1-2 digit numbers in this band are
+        // the cards' COST badges, which must not be mistaken for gold — so don't sync
+        // the HUD from here and buy on faith. TFT simply ignores a tap you can't
+        // afford, and the marked champ is retried on the next poll once gold is up.
         final java.util.List<String> toBuy=new java.util.ArrayList<>();
         final java.util.List<int[]> tapAt=new java.util.ArrayList<>();
         for(int i=0;i<r.shopChampions.size();i++){
@@ -5126,9 +5134,6 @@ public class OverlayService extends Service {
             if(!pool.isHunted(name)) continue;
             Long cd=huntCooldown.get(name);
             if(cd!=null && now<cd) continue; // just bought — card may be stale in this frame
-            int cost=Pool.costOf(name);
-            if(budget>=0 && budget<cost){ addScanLog("hunt: "+name+" seen but only "+budget+"g"); continue; }
-            if(budget>=0) budget-=cost;
             toBuy.add(name);
             tapAt.add(r.shopChampPos.get(i));
         }
