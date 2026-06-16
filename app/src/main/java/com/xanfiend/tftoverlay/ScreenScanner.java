@@ -328,6 +328,94 @@ public class ScreenScanner {
         return r;
     }
 
+    // ---- gold/XP corner scan (always-on watcher) ----
+    // The HUD watcher only needs gold (bottom-right) and level/XP/stage (top-left).
+    // OCRing the whole screen for that is wasteful, so we crop just those two
+    // corners and composite them into ONE small bitmap (top-left band stacked above
+    // the gold band) for a single OCR pass — roughly a quarter of the pixels of a
+    // full-frame scan, with no shop/board/bench text to cause false matches.
+    // Recycles `full`.
+    void scanGoldXp(Bitmap full, ScanCallback cb) {
+        int w = full.getWidth(), h = full.getHeight();
+        boolean portrait = h > w;
+        // top-left quadrant holds the level badge, XP "cur/need" and stage "x-y";
+        // staying in the left half avoids the screen-center shop cards in landscape
+        int tlW = Math.max(1, w / 2);
+        int tlH = Math.max(1, portrait ? h / 8 : h / 4);
+        // bottom-right holds the gold counter (rendered larger than cost badges)
+        int brTop  = h * 78 / 100;
+        int brLeft = w / 2;
+        int brW = Math.max(1, w - brLeft);
+        int brH = Math.max(1, h - brTop);
+        final int seam = tlH; // blocks at/below the seam came from the gold band
+        Bitmap combo;
+        try {
+            combo = Bitmap.createBitmap(Math.max(tlW, brW), tlH + brH, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas cv = new android.graphics.Canvas(combo);
+            cv.drawColor(0xFF000000);
+            cv.drawBitmap(full, new android.graphics.Rect(0, 0, tlW, tlH),
+                    new android.graphics.Rect(0, 0, tlW, tlH), null);
+            cv.drawBitmap(full, new android.graphics.Rect(brLeft, brTop, brLeft + brW, brTop + brH),
+                    new android.graphics.Rect(0, tlH, brW, tlH + brH), null);
+        } catch (Exception e) {
+            full.recycle();
+            cb.onError("crop: " + e.getMessage());
+            return;
+        }
+        full.recycle();
+        final Bitmap fcombo = combo;
+        InputImage image = InputImage.fromBitmap(fcombo, 0);
+        recognizer().process(image)
+                .addOnSuccessListener(text -> {
+                    ScanResult r = parseGoldXp(text, seam);
+                    fcombo.recycle();
+                    cb.onResult(r);
+                })
+                .addOnFailureListener(e -> {
+                    fcombo.recycle();
+                    cb.onError("OCR: " + e.getMessage());
+                });
+    }
+
+    private ScanResult parseGoldXp(Text text, int seam) {
+        ScanResult r = new ScanResult();
+        int goldBoxH = 0;
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String raw = block.getText().trim();
+            if (raw.isEmpty()) continue;
+            if (box.centerY() >= seam) {
+                // gold band: the standalone number with the tallest box wins (the
+                // gold counter is drawn larger than any shop-card cost badge)
+                if (raw.matches("\\d{1,3}")) {
+                    int v = Integer.parseInt(raw);
+                    if (v >= 0 && v <= 300 && box.height() > goldBoxH) { r.gold = v; goldBoxH = box.height(); }
+                }
+                continue;
+            }
+            // top-left band: level, XP progress, stage-round
+            if (r.level == -1 && raw.matches("[2-9]|10")) r.level = Integer.parseInt(raw);
+            if (r.xpNeed < 0) {
+                java.util.regex.Matcher xm = java.util.regex.Pattern
+                        .compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b").matcher(raw);
+                if (xm.find()) {
+                    int cur = Integer.parseInt(xm.group(1));
+                    int need = Integer.parseInt(xm.group(2));
+                    boolean valid = false;
+                    for (int x : SetData.XP_TO_NEXT) if (x == need) { valid = true; break; }
+                    if (valid && cur <= need) { r.xpCur = cur; r.xpNeed = need; }
+                }
+            }
+            if (r.stageRound.isEmpty()) {
+                java.util.regex.Matcher sm = java.util.regex.Pattern
+                        .compile("\\b([1-9])-([1-7])\\b").matcher(raw);
+                if (sm.find()) r.stageRound = sm.group(1) + "-" + sm.group(2);
+            }
+        }
+        return r;
+    }
+
     private Bitmap captureFrame() throws Exception {
         DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
         int w = dm.widthPixels;

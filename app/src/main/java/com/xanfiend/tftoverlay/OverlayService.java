@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.70";
+    private static final String APP_VERSION = "v1.71";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -128,6 +128,7 @@ public class OverlayService extends Service {
     // accessibility screenshot at a relaxed cadence and yields to hunt/scan loops.
     private boolean goldWatchOn = false;
     private boolean goldWatchBusy = false;
+    private int goldWatchIdle = 0; // consecutive no-change reads — backs off the poll rate
     private Runnable goldWatchRunnable;
     private final android.os.Handler goldWatchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -2404,6 +2405,31 @@ public class OverlayService extends Service {
             gwRow.addView(btn);
         }
         root.addView(gwRow);
+
+        addSecHdr(root, "SHOP POSITION (hunt)", GOLD);
+
+        TextView spHint=new TextView(this);
+        spHint.setText("Where THE HUNT looks for the shop. Auto reads the top in landscape and the bottom in portrait — switch it if auto-buy isn't seeing your shop.");
+        spHint.setTextColor(DIM); spHint.setTextSize(10); spHint.setPadding(2,0,0,8); root.addView(spHint);
+
+        int curSp=pool.getShopPos();
+        LinearLayout spRow=new LinearLayout(this); spRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams spRowLp=new LinearLayout.LayoutParams(-1,-2); spRowLp.setMargins(0,0,0,14); spRow.setLayoutParams(spRowLp);
+        String[] spLabels={"Auto","Top","Bottom"}; int[] spVals={0,1,2};
+        for(int i=0;i<3;i++){
+            final int sv=spVals[i];
+            TextView btn=new TextView(this); btn.setText(spLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
+            btn.setPadding(0,10,0,10);
+            boolean sel=(curSp==sv);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setShopPos(sv); showPanel();
+            }});
+            spRow.addView(btn);
+        }
+        root.addView(spRow);
 
         addSecHdr(root, "OPEN TAB", GOLD);
 
@@ -5060,11 +5086,15 @@ public class OverlayService extends Service {
         if(Build.VERSION.SDK_INT<31) return;
         goldWatchOn=true;
         goldWatchBusy=false;
+        goldWatchIdle=0;
         addScanLog("gold watch: on");
         goldWatchRunnable=new Runnable(){ public void run(){
             if(!goldWatchOn) return;
             goldWatchTick();
-            goldWatchHandler.postDelayed(this, 2500);
+            // back off to 6s once the numbers have been static for a while, so a
+            // parked screen between rounds barely costs anything; snap back to 2.5s
+            // the moment a value changes
+            goldWatchHandler.postDelayed(this, goldWatchIdle>=4 ? 6000 : 2500);
         }};
         goldWatchHandler.postDelayed(goldWatchRunnable, 1500);
     }
@@ -5095,7 +5125,7 @@ public class OverlayService extends Service {
                             hb.close();
                             Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
-                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                            new ScreenScanner(OverlayService.this,null).scanGoldXp(bmp,
                                 new ScreenScanner.ScanCallback(){
                                     public void onResult(ScreenScanner.ScanResult r){ goldWatchBusy=false; applyHudOnly(r); }
                                     public void onError(String msg){ goldWatchBusy=false; }
@@ -5110,10 +5140,23 @@ public class OverlayService extends Service {
     // bench or augments, and never reopens the panel or toasts
     private void applyHudOnly(ScreenScanner.ScanResult r){
         boolean changed=false;
-        if(r.gold>=0){ pool.setGold(r.gold); changed=true; }
-        if(r.level>=0){ level=r.level; pool.setLevel(r.level); changed=true; }
-        if(r.xpNeed>0){ pool.setXp(r.xpCur, r.xpNeed); changed=true; }
-        if(changed){ refreshHud(); if(panel!=null && mode==3) refreshEcon(); }
+        // only write + repaint when a value actually moved — saves a SharedPreferences
+        // commit and a HUD redraw on every static frame, and drives the idle backoff
+        if(r.gold>=0 && r.gold!=pool.getGold()){ pool.setGold(r.gold); changed=true; }
+        if(r.level>=0 && r.level!=level){ level=r.level; pool.setLevel(r.level); changed=true; }
+        if(r.xpNeed>0 && (r.xpCur!=pool.getXpCur() || r.xpNeed!=pool.getXpNeed())){ pool.setXp(r.xpCur, r.xpNeed); changed=true; }
+        if(!r.stageRound.isEmpty() && !r.stageRound.equals(pool.getStageRound())){ pool.setStageRound(r.stageRound); changed=true; }
+        if(changed){ goldWatchIdle=0; refreshHud(); if(panel!=null && mode==3) refreshEcon(); }
+        else goldWatchIdle++;
+    }
+
+    // Where the shop strip sits, honoring the SHOP POSITION override (0=auto,
+    // 1=top, 2=bottom). Auto = top in landscape, bottom in portrait.
+    private boolean shopAtTop(boolean portrait){
+        int pos=pool.getShopPos();
+        if(pos==1) return true;
+        if(pos==2) return false;
+        return !portrait;
     }
 
     // ---- THE HUNT: shop watcher / auto-buy ----
@@ -5246,8 +5289,9 @@ public class OverlayService extends Service {
             // landscape and never saw the shop, so nothing was ever bought. Scanning
             // the shop's real band (not the whole frame) also avoids matching bench
             // unit labels, which would mis-tap the bench instead of a shop card.
-            final int cropTop=portrait? h*66/100 : h*5/100;
-            int cropBot   = portrait? h*92/100 : h*47/100;
+            boolean shopTop=shopAtTop(portrait);
+            final int cropTop=shopTop? h*5/100 : h*66/100;
+            int cropBot   =   shopTop? h*47/100 : h*92/100;
             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,w,cropBot-cropTop);
             full.recycle();
             huntOcrBusy=true;
@@ -5297,8 +5341,10 @@ public class OverlayService extends Service {
                             int sw=full.getWidth(), sh=full.getHeight();
                             boolean portrait=sh>sw;
                             // shop is at the TOP in landscape, near the bottom in portrait
-                            final int cropTop=portrait? sh*66/100 : sh*5/100;
-                            int cropBot   = portrait? sh*92/100 : sh*47/100;
+                            // (overridable via the SHOP POSITION setting)
+                            boolean shopTop=shopAtTop(portrait);
+                            final int cropTop=shopTop? sh*5/100 : sh*66/100;
+                            int cropBot   =   shopTop? sh*47/100 : sh*92/100;
                             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
                             full.recycle();
                             new ScreenScanner(OverlayService.this,null).scanShopStrip(crop,sw,sh,

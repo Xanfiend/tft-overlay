@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.70-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.71-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline gameplay](https://img.shields.io/badge/gameplay-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -227,6 +227,10 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone. The only network use is the optional self-update check, which contacts GitHub and nothing else — no analytics, no accounts, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.71 - 2026-06-16
+- **Optimized the always-on gold/XP reader**: it now OCRs only the two corners holding the numbers (top-left level/XP/stage, bottom-right gold), composited into one small image — ~25% of the pixels of a full-frame scan, faster and less prone to misreading board/shop text as gold. It updates only on an actual change and backs its poll rate off from 2.5s to 6s while values are static, so a parked screen costs almost nothing.
+- **NEW SHOP POSITION setting** (SETUP) for THE HUNT: **Auto / Top / Bottom**. Auto reads the top in landscape and the bottom in portrait; force one if your device differs and auto-buy isn't seeing the shop. No-overlay calibration, so it can't affect touch.
 
 ### v1.70 - 2026-06-16
 - **Fixed the in-app updater always reporting "you're on the latest version."** The rolling GitHub release accumulates every past APK as an asset, and the updater was returning the *first* matching asset (an old `v1.10` build) instead of the newest — so the version comparison always failed. It now takes the **highest** version across all assets and the release title.
