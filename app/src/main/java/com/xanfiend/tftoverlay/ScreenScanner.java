@@ -342,9 +342,11 @@ public class ScreenScanner {
         // staying in the left half avoids the screen-center shop cards in landscape
         int tlW = Math.max(1, w / 2);
         int tlH = Math.max(1, portrait ? h / 8 : h / 4);
-        // bottom-right holds the gold counter (rendered larger than cost badges)
-        int brTop  = h * 78 / 100;
-        int brLeft = w / 2;
+        // bottom-right corner holds the gold counter (drawn large, far to the
+        // right). Keep the crop tight to that corner so center-screen numbers and
+        // the reroll/XP costs on the left can't be mistaken for gold.
+        int brTop  = h * 74 / 100;
+        int brLeft = w * 58 / 100;
         int brW = Math.max(1, w - brLeft);
         int brH = Math.max(1, h - brTop);
         final int seam = tlH; // blocks at/below the seam came from the gold band
@@ -386,10 +388,13 @@ public class ScreenScanner {
             String raw = block.getText().trim();
             if (raw.isEmpty()) continue;
             if (box.centerY() >= seam) {
-                // gold band: the standalone number with the tallest box wins (the
-                // gold counter is drawn larger than any shop-card cost badge)
-                if (raw.matches("\\d{1,3}")) {
-                    int v = Integer.parseInt(raw);
+                // gold band: pull the digit run out of the block (the gold coin
+                // glyph often fuses onto the number, e.g. "⛃53", so a strict
+                // all-digits match would miss it). Tallest box wins — the gold
+                // counter is drawn larger than any stray number nearby.
+                java.util.regex.Matcher gm = java.util.regex.Pattern.compile("(\\d{1,3})").matcher(raw);
+                if (gm.find()) {
+                    int v = Integer.parseInt(gm.group(1));
                     if (v >= 0 && v <= 300 && box.height() > goldBoxH) { r.gold = v; goldBoxH = box.height(); }
                 }
                 continue;
@@ -413,6 +418,8 @@ public class ScreenScanner {
                 if (sm.find()) r.stageRound = sm.group(1) + "-" + sm.group(2);
             }
         }
+        log("goldXp: gold=" + r.gold + " lvl=" + r.level
+                + " xp=" + r.xpCur + "/" + r.xpNeed + " stage=" + r.stageRound);
         return r;
     }
 

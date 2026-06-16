@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.71";
+    private static final String APP_VERSION = "v1.72";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -4114,10 +4114,9 @@ public class OverlayService extends Service {
         }catch(Exception e){ return probes; }
     }
 
-    // watchdog: if a dispatched gesture's callback is ever dropped, this clears the
-    // overlap guard so injection can never wedge shut permanently
-    private final Runnable injectReset = new Runnable(){ public void run(){ injecting=false; }};
-    private void clearInjecting(){ injecting=false; boardHandler.removeCallbacks(injectReset); }
+    // overlap guard: cleared by dispatchTap's own completion path, and forced
+    // clear on teardown so a torn-down flow never wedges injection shut
+    private void clearInjecting(){ injecting=false; }
 
     private void dispatchTap(float x, float y, final Runnable onDone){
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
@@ -4126,7 +4125,20 @@ public class OverlayService extends Service {
         // own touch on some ROMs; the caller still advances via onDone
         if(injecting){ addScanLog("skip overlapping tap"); onDone.run(); return; }
         injecting=true;
-        boardHandler.postDelayed(injectReset, TAP_STROKE_MS+1500L);
+        // onDone MUST run exactly once. Normally the gesture's completion callback
+        // fires it, but HyperOS/MIUI frequently DROP that callback — and without a
+        // fallback the whole sequence stalls (the hunt buys one champ then freezes;
+        // planner steps never advance). So a timeout fires onDone if the callback
+        // never arrives, and a one-shot guard stops it running twice.
+        final boolean[] fired={false};
+        final Runnable finish=new Runnable(){ public void run(){
+            if(fired[0]) return;
+            fired[0]=true;
+            injecting=false;
+            boardHandler.removeCallbacks(this);
+            onDone.run();
+        }};
+        boardHandler.postDelayed(finish, TAP_STROKE_MS+500L);
         try{
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
@@ -4137,10 +4149,10 @@ public class OverlayService extends Service {
                     .addStroke(stroke).build();
             svc.dispatchGesture(gesture,
                 new android.accessibilityservice.AccessibilityService.GestureResultCallback(){
-                    @Override public void onCompleted(android.accessibilityservice.GestureDescription d){ clearInjecting(); onDone.run(); }
-                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){ clearInjecting(); onDone.run(); }
+                    @Override public void onCompleted(android.accessibilityservice.GestureDescription d){ finish.run(); }
+                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){ finish.run(); }
                 }, null);
-        }catch(Exception e){ addScanLog("ERR dispatchTap: "+e.getMessage()); clearInjecting(); onDone.run(); }
+        }catch(Exception e){ addScanLog("ERR dispatchTap: "+e.getMessage()); finish.run(); }
     }
 
     @SuppressWarnings("NewApi")
@@ -4967,19 +4979,25 @@ public class OverlayService extends Service {
             lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
             wm.updateViewLayout(v,lp);
         }catch(Exception e){}
-        dispatchTap(vx,vy,new Runnable(){ public void run(){
-            plannerHandler.postDelayed(new Runnable(){ public void run(){
-                View v2=plnCalView;
-                if(v2==null) return;
-                try{
-                    WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v2.getLayoutParams();
-                    lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                    wm.updateViewLayout(v2,lp);
-                }catch(Exception e){}
-                plnCalBusy=false;
-                advancePlnCal();
-            }}, closing?500:900);
-        }});
+        // CRUCIAL: updateViewLayout is async — give the FLAG_NOT_TOUCHABLE a moment
+        // to actually take effect, otherwise the injected tap lands on this overlay
+        // (which ignores it while busy) instead of the planner button, and the
+        // planner never opens.
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
+            dispatchTap(vx,vy,new Runnable(){ public void run(){
+                plannerHandler.postDelayed(new Runnable(){ public void run(){
+                    View v2=plnCalView;
+                    if(v2==null) return;
+                    try{
+                        WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v2.getLayoutParams();
+                        lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                        wm.updateViewLayout(v2,lp);
+                    }catch(Exception e){}
+                    plnCalBusy=false;
+                    advancePlnCal();
+                }}, closing?500:900);
+            }});
+        }}, 180);
     }
 
     private void advancePlnCal(){
