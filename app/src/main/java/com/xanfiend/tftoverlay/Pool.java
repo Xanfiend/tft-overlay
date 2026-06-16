@@ -157,6 +157,11 @@ public class Pool {
     // default; needs the accessibility service. Yields while a hunt/scan is running.
     public boolean getGoldWatch()          { return p.getBoolean("cfg_goldwatch", false); }
     public void    setGoldWatch(boolean s) { p.edit().putBoolean("cfg_goldwatch", s).apply(); }
+    // Where THE HUNT looks for the shop cards. 0 = auto (top in landscape, bottom
+    // in portrait), 1 = force top, 2 = force bottom — a no-overlay calibration knob
+    // for devices that draw the shop somewhere the orientation default misses.
+    public int  getShopPos()      { return p.getInt("cfg_shoppos", 0); }
+    public void setShopPos(int v) { p.edit().putInt("cfg_shoppos", v).apply(); }
 
     // ---- economy tracker ----
     public int getGold()       { return p.getInt("econ_gold", 0); }
