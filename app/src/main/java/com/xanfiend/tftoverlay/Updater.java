@@ -197,20 +197,29 @@ public final class Updater {
 
     private static String parseLatestVersion(String json) throws Exception {
         JSONObject root = new JSONObject(json);
-        // prefer the version baked into the per-release asset filename
+        String best = null;
+        // The rolling "latest" release accumulates every historical APK as an
+        // asset (tft-scryer-v1.2.apk ... tft-scryer-v1.69.apk), so we must take
+        // the HIGHEST version present — not the first regex match, which would be
+        // an old build like 1.10 and make the app think it is already up to date.
         if(root.has("assets")){
             JSONArray assets = root.getJSONArray("assets");
             for(int i=0;i<assets.length();i++){
                 String name = assets.getJSONObject(i).optString("name","");
                 Matcher m = VER_IN_ASSET.matcher(name);
-                if(m.find()) return m.group(1);
+                if(m.find()){
+                    String v = m.group(1);
+                    if(best == null || isNewer(v, best)) best = v;
+                }
             }
         }
-        // fall back to the release name, e.g. "TFT Scryer v1.66"
-        String name = root.optString("name","");
-        Matcher m = Pattern.compile("v([0-9]+(?:\\.[0-9]+)+)").matcher(name);
-        if(m.find()) return m.group(1);
-        return null;
+        // also consider the release title, e.g. "TFT Scryer v1.69"
+        Matcher rm = Pattern.compile("v([0-9]+(?:\\.[0-9]+)+)").matcher(root.optString("name",""));
+        if(rm.find()){
+            String v = rm.group(1);
+            if(best == null || isNewer(v, best)) best = v;
+        }
+        return best;
     }
 
     /** true when a > b, comparing dotted numeric versions like 1.66 vs 1.7. */
