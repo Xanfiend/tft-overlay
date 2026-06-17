@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.73";
+    private static final String APP_VERSION = "v1.74";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -59,6 +59,7 @@ public class OverlayService extends Service {
     // chip references so we can update the count badge in place without rebuilding
     private TextView[] chipViews;
     private String[] chipNames;
+    private String buildSel=null; // BUILDS tab: champion whose meta items are shown
 
     // economy tab: held so refreshEcon() can update without rebuilding the panel
     private TextView econGoldTv, econInterestTv, econBracketTv;
@@ -713,6 +714,7 @@ public class OverlayService extends Service {
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
+        buildSel=null;
     }
 
     @SuppressWarnings("deprecation")
@@ -788,7 +790,7 @@ public class OverlayService extends Service {
         TextView sigil=new TextView(this); sigil.setText("\u29bf");
         sigil.setTextColor(BLOODL); sigil.setTextSize(16); sigil.setPadding(0,0,10,0);
         TextView title=new TextView(this);
-        title.setText(mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
+        title.setText(mode==5?"\u2694 BUILDS":mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
         title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
@@ -803,10 +805,10 @@ public class OverlayService extends Service {
 
         // tab row \u2014 ordered by in-game frequency of use
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
-        int[] tabModes={0,1,2,3,4}; // Pool | Odds | Guide | Gold | Setup
-        String[] tabGlyphs={"\u25a6","\u2738","\u229e","\u00a7","\u2699"};
-        String[] tabNames={"POOL","ODDS","GUIDE","GOLD","SETUP"};
-        for(int t=0;t<5;t++){
+        int[] tabModes={0,1,5,2,3,4}; // Pool | Odds | Builds | Guide | Gold | Setup
+        String[] tabGlyphs={"\u25a6","\u2738","\u2694","\u229e","\u00a7","\u2699"};
+        String[] tabNames={"POOL","ODDS","BUILDS","GUIDE","GOLD","SETUP"};
+        for(int t=0;t<tabModes.length;t++){
             final int tm=tabModes[t]; boolean on=mode==tm;
             LinearLayout tabWrap=new LinearLayout(this); tabWrap.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams twl=new LinearLayout.LayoutParams(0,-2,1f); twl.setMargins(2,0,2,0); tabWrap.setLayoutParams(twl);
@@ -864,7 +866,8 @@ public class OverlayService extends Service {
         content.addView(lvlHint);
         }
 
-        if(mode==4) buildSettings(content);
+        if(mode==5) buildBuilds(content);
+        else if(mode==4) buildSettings(content);
         else if(mode==3) buildEconomy(content);
         else if(mode==2) buildGuide(content);
         else if(mode==1) buildSummary(content);
@@ -1174,6 +1177,112 @@ public class OverlayService extends Service {
             }
         }
         // big done button
+        Button done=new Button(this); done.setText("DONE"); done.setAllCaps(false);
+        done.setBackground(box(BLOOD,6,BLOODL,2)); done.setTextColor(BONE); done.setTextSize(15); done.setTypeface(null, android.graphics.Typeface.BOLD);
+        done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
+        LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.setMargins(0,14,0,0); done.setLayoutParams(dl);
+        root.addView(done);
+    }
+
+    // ---- BUILDS TAB: tap a champion -> the items that are meta on them ----
+    private void buildBuilds(LinearLayout root){
+        addSecHdr(root, "⚔ META BUILDS", GOLD);
+
+        TextView intro=new TextView(this);
+        intro.setText("Tap a champion for the items that carry on them this patch.  ✦ marks the meta itemizers.");
+        intro.setTextColor(ASH); intro.setTextSize(10); intro.setLineSpacing(2,1f); intro.setPadding(2,0,2,2);
+        root.addView(intro);
+
+        TextView patch=new TextView(this);
+        patch.setText("meta snapshot · patch "+ChampItemData.PATCH+" · verify vs your live tier list");
+        patch.setTextColor(DIM); patch.setTextSize(9); patch.setPadding(2,0,2,8);
+        root.addView(patch);
+
+        // detail card for the currently selected champion
+        if(buildSel!=null){
+            final int cost=Pool.costOf(buildSel);
+            ChampItemData.Build b=ChampItemData.get(buildSel);
+            LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(box(CARD,10, b!=null?GOLD:EDGE, 2)); card.setPadding(14,12,14,12);
+            LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,2,0,10); card.setLayoutParams(cl);
+
+            LinearLayout hdr=new LinearLayout(this); hdr.setOrientation(LinearLayout.HORIZONTAL); hdr.setGravity(Gravity.CENTER_VERTICAL);
+            TextView nm=new TextView(this); nm.setText(buildSel);
+            nm.setTextColor(BONE); nm.setTextSize(17); nm.setTypeface(null,android.graphics.Typeface.BOLD);
+            nm.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            hdr.addView(nm);
+            TextView pip=new TextView(this); pip.setText(cost+"◈");
+            pip.setTextColor(COSTC[cost]); pip.setTextSize(14); pip.setTypeface(null,android.graphics.Typeface.BOLD);
+            hdr.addView(pip);
+            card.addView(hdr);
+
+            if(b!=null){
+                TextView role=new TextView(this); role.setText(b.role+"  ·  "+b.comp);
+                role.setTextColor(GOLD); role.setTextSize(11); role.setTypeface(null,android.graphics.Typeface.BOLD);
+                role.setPadding(0,4,0,9); card.addView(role);
+
+                for(int i=0;i<b.items.length;i++){
+                    boolean bis=(i==0);
+                    LinearLayout irow=new LinearLayout(this); irow.setOrientation(LinearLayout.HORIZONTAL); irow.setGravity(Gravity.CENTER_VERTICAL);
+                    irow.setBackground(box(bis?0xFF1A1400:VOID,6,bis?GOLD:EDGE,bis?2:1)); irow.setPadding(11,10,11,10);
+                    LinearLayout.LayoutParams irl=new LinearLayout.LayoutParams(-1,-2); irl.setMargins(0,0,0,4); irow.setLayoutParams(irl);
+                    TextView it=new TextView(this); it.setText("◆  "+b.items[i]);
+                    it.setTextColor(bis?GOLD:BONE); it.setTextSize(13);
+                    it.setTypeface(null, bis?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+                    it.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                    irow.addView(it);
+                    if(bis){
+                        TextView tag=new TextView(this); tag.setText("BIS");
+                        tag.setTextColor(0xFF000000); tag.setTextSize(9); tag.setTypeface(null,android.graphics.Typeface.BOLD);
+                        tag.setBackground(box(GOLD,4,GOLD,0)); tag.setPadding(8,3,8,3); irow.addView(tag);
+                    }
+                    card.addView(irow);
+                }
+                if(b.note!=null && !b.note.isEmpty()){
+                    TextView note=new TextView(this); note.setText("✦  "+b.note);
+                    note.setTextColor(ASH); note.setTextSize(10); note.setLineSpacing(3,1f); note.setPadding(0,7,0,0);
+                    card.addView(note);
+                }
+            } else {
+                TextView fb=new TextView(this);
+                String tip = cost<=2
+                    ? "No meta build this patch — at 1-2 cost it's usually a trait-bot or reroll piece. Hold your items for your comp's marked carry (✦). If it must tank, slam Warmog's / Bramble / Gargoyle."
+                    : "No meta build this patch. Itemize your comp's marked carry (✦) instead. AP backline flexes Blue Buff / Jeweled Gauntlet / Deathcap; frontline wants Warmog's / Bramble / Gargoyle.";
+                fb.setText(tip);
+                fb.setTextColor(ASH); fb.setTextSize(11); fb.setLineSpacing(3,1f); fb.setPadding(0,8,0,2);
+                card.addView(fb);
+            }
+            root.addView(card);
+        } else {
+            TextView pick=new TextView(this);
+            pick.setText("— pick a champion below —");
+            pick.setTextColor(DIM); pick.setTextSize(10); pick.setGravity(Gravity.CENTER); pick.setPadding(0,4,0,8);
+            root.addView(pick);
+        }
+
+        // champion picker, grouped by cost
+        for(int cost=1;cost<=5;cost++){
+            addSecHdr(root, cost+"-COST", COSTC[cost]);
+            LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
+            for(int j=0;j<arr.length;j++){
+                if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
+                final String name=arr[j];
+                boolean meta=ChampItemData.has(name);
+                boolean sel=name.equals(buildSel);
+                TextView chip=new TextView(this);
+                chip.setText((meta?"✦ ":"")+name);
+                chip.setTextColor(sel?0xFF000000:(meta?BONE:ASH));
+                chip.setTextSize(13); chip.setGravity(Gravity.CENTER); chip.setPadding(8,16,8,16);
+                chip.setTypeface(null, (sel||meta)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+                chip.setBackground(box(sel?GOLD:CARD,6, sel?0xFFFFFFFF:(meta?GOLD:EDGE), (sel||meta)?2:1));
+                LinearLayout.LayoutParams chl=new LinearLayout.LayoutParams(0,-2,1f); chl.setMargins(3,3,3,3); chip.setLayoutParams(chl);
+                chip.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ buildSel=name; buzz(); showPanel(); } });
+                pressFeedback(chip);
+                row.addView(chip);
+            }
+            if(row!=null){ int fillN=(3-(arr.length%3))%3; for(int k=0;k<fillN;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); row.addView(sp);} }
+        }
+
         Button done=new Button(this); done.setText("DONE"); done.setAllCaps(false);
         done.setBackground(box(BLOOD,6,BLOODL,2)); done.setTextColor(BONE); done.setTextSize(15); done.setTypeface(null, android.graphics.Typeface.BOLD);
         done.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
