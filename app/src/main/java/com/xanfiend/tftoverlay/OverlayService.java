@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.74";
+    private static final String APP_VERSION = "v1.75";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1184,12 +1184,21 @@ public class OverlayService extends Service {
         root.addView(done);
     }
 
+    // unit-tier badge colour: S gold, A green, B ash, C dim
+    private int tierColor(String t){
+        if("S".equals(t)) return GOLD;
+        if("A".equals(t)) return 0xFF4E9E5A;
+        if("B".equals(t)) return ASH;
+        if("C".equals(t)) return DIM;
+        return EDGE;
+    }
+
     // ---- BUILDS TAB: tap a champion -> the items that are meta on them ----
     private void buildBuilds(LinearLayout root){
         addSecHdr(root, "⚔ META BUILDS", GOLD);
 
         TextView intro=new TextView(this);
-        intro.setText("Tap a champion for the items that carry on them this patch.  ✦ marks the meta itemizers.");
+        intro.setText("Tap a champion for the items that carry on them this patch.  ✦ = meta itemizer · letter = unit tier (S best).");
         intro.setTextColor(ASH); intro.setTextSize(10); intro.setLineSpacing(2,1f); intro.setPadding(2,0,2,2);
         root.addView(intro);
 
@@ -1214,6 +1223,15 @@ public class OverlayService extends Service {
             TextView pip=new TextView(this); pip.setText(cost+"◈");
             pip.setTextColor(COSTC[cost]); pip.setTextSize(14); pip.setTypeface(null,android.graphics.Typeface.BOLD);
             hdr.addView(pip);
+            String selTier=ChampItemData.tierOf(buildSel);
+            if(!selTier.isEmpty()){
+                TextView tb=new TextView(this); tb.setText(selTier);
+                tb.setTextColor(0xFF000000); tb.setTextSize(12); tb.setTypeface(null,android.graphics.Typeface.BOLD);
+                tb.setGravity(Gravity.CENTER);
+                tb.setBackground(box(tierColor(selTier),5,tierColor(selTier),0)); tb.setPadding(13,4,13,4);
+                LinearLayout.LayoutParams tbl=new LinearLayout.LayoutParams(-2,-2); tbl.setMargins(10,0,0,0); tb.setLayoutParams(tbl);
+                hdr.addView(tb);
+            }
             card.addView(hdr);
 
             if(b!=null){
@@ -1269,8 +1287,18 @@ public class OverlayService extends Service {
                 final String name=arr[j];
                 boolean meta=ChampItemData.has(name);
                 boolean sel=name.equals(buildSel);
+                String tier=ChampItemData.tierOf(name);
                 TextView chip=new TextView(this);
-                chip.setText((meta?"✦ ":"")+name);
+                String label=(meta?"✦ ":"")+name+(tier.isEmpty()?"":"  "+tier);
+                if(!tier.isEmpty() && !sel){
+                    android.text.SpannableString ss=new android.text.SpannableString(label);
+                    int st=label.length()-tier.length();
+                    ss.setSpan(new android.text.style.ForegroundColorSpan(tierColor(tier)), st, label.length(), 0);
+                    ss.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), st, label.length(), 0);
+                    chip.setText(ss);
+                } else {
+                    chip.setText(label);
+                }
                 chip.setTextColor(sel?0xFF000000:(meta?BONE:ASH));
                 chip.setTextSize(13); chip.setGravity(Gravity.CENTER); chip.setPadding(8,16,8,16);
                 chip.setTypeface(null, (sel||meta)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
