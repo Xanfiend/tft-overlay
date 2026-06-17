@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.72";
+    private static final String APP_VERSION = "v1.73";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -135,6 +135,7 @@ public class OverlayService extends Service {
     // on-screen STOP button shown while the hunt or an auto-scan loop runs, so it
     // can be stopped with one obvious tap instead of finding the small floating sigil
     private View stopBtnView = null;
+    private WindowManager.LayoutParams stopBtnLp = null;
 
     // guards against two injected gestures overlapping: on some ROMs (HyperOS/MIUI)
     // an injected tap landing while the user's own finger is mid-drag can drop the
@@ -2995,7 +2996,7 @@ public class OverlayService extends Service {
                 canvas.drawText("ADJUST GRID", W/2f, barH*0.42f, p);
                 p.setTypeface(android.graphics.Typeface.DEFAULT);
                 p.setColor(0xFF7A6B60); p.setTextSize(10*spx);
-                canvas.drawText("Corners shape the board · middle rings space the rows · end rings stretch the bench", W/2f, barH*0.78f, p);
+                canvas.drawText("Drag the 4 corner rings onto the hex centres · middle rings adjust row spacing · SAVE when dots sit on champions", W/2f, barH*0.78f, p);
 
                 // bottom bar: SAVE | CANCEL
                 float btnTop=H*0.90f;
@@ -4740,6 +4741,7 @@ public class OverlayService extends Service {
             Toast.makeText(this,"No set icons in this build — Planner Scan needs an app update",Toast.LENGTH_LONG).show();
             return;
         }
+        clearInjecting();
         plannerScanPending=true;
         plannerUnits=null;
         autoScanResults=new java.util.ArrayList<>();
@@ -4768,14 +4770,24 @@ public class OverlayService extends Service {
         android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(dm);
         final int sw=dm.widthPixels, sh=dm.heightPixels;
-        dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, new Runnable(){ public void run(){
-            plannerHandler.postDelayed(new Runnable(){ public void run(){
-                if(!plannerScanPending) return;
-                dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, new Runnable(){ public void run(){
-                    plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
-                }});
-            }}, PLN_OPEN_WAIT_MS);
-        }});
+        // Make all our overlay views NOT_TOUCHABLE so the injected gestures reach TFT,
+        // not our sigil or HUD chips which sit on top in the window stack.
+        setOverlaysTouchable(false);
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
+            dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, new Runnable(){ public void run(){
+                setOverlaysTouchable(true);
+                plannerHandler.postDelayed(new Runnable(){ public void run(){
+                    if(!plannerScanPending) return;
+                    setOverlaysTouchable(false);
+                    plannerHandler.postDelayed(new Runnable(){ public void run(){
+                        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, new Runnable(){ public void run(){
+                            setOverlaysTouchable(true);
+                            plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
+                        }});
+                    }}, 200);
+                }}, PLN_OPEN_WAIT_MS);
+            }});
+        }}, 200);
     }
 
     private void plannerReadPhase(){
@@ -4787,9 +4799,12 @@ public class OverlayService extends Service {
             // snapshot is discarded and the board is exactly as it was
             android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
             wm.getDefaultDisplay().getRealMetrics(dm);
-            dispatchTap(pool.getPln("close_x")*dm.widthPixels/100f,
-                        pool.getPln("close_y")*dm.heightPixels/100f,
-                        new Runnable(){ public void run(){} });
+            setOverlaysTouchable(false);
+            final float closeX=pool.getPln("close_x")*dm.widthPixels/100f;
+            final float closeY=pool.getPln("close_y")*dm.heightPixels/100f;
+            plannerHandler.postDelayed(new Runnable(){ public void run(){
+                dispatchTap(closeX,closeY,new Runnable(){ public void run(){ setOverlaysTouchable(true); }});
+            }},200);
             if(bmp==null){ stopPlannerScan("no planner screenshot"); return; }
             plannerProcess(bmp);
         }});
@@ -4844,6 +4859,7 @@ public class OverlayService extends Service {
         if(!plannerScanPending) return;
         plannerScanPending=false;
         plannerHandler.removeCallbacksAndMessages(null);
+        setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         int occupied=slotNames.size();
         int matched=0;
@@ -4877,6 +4893,7 @@ public class OverlayService extends Service {
     private void stopPlannerScan(String why){
         plannerScanPending=false;
         plannerHandler.removeCallbacksAndMessages(null);
+        setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("planner scan: "+why);
         mode=0; showPanel();
@@ -4970,8 +4987,8 @@ public class OverlayService extends Service {
             advancePlnCal();
             return;
         }
-        // window goes untouchable for a moment so the replayed gesture lands in
-        // the game underneath, then capture resumes
+        // All touchable overlay views (cal overlay, sigil, HUD chips) go untouchable
+        // so the replayed gesture passes through to TFT underneath.
         plnCalBusy=true; v.invalidate();
         final boolean closing = plnCalStep==5;
         try{
@@ -4979,20 +4996,19 @@ public class OverlayService extends Service {
             lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
             wm.updateViewLayout(v,lp);
         }catch(Exception e){}
-        // CRUCIAL: updateViewLayout is async — give the FLAG_NOT_TOUCHABLE a moment
-        // to actually take effect, otherwise the injected tap lands on this overlay
-        // (which ignores it while busy) instead of the planner button, and the
-        // planner never opens.
+        setOverlaysTouchable(false);
+        // updateViewLayout is async — 180ms for the system to propagate the flag
         plannerHandler.postDelayed(new Runnable(){ public void run(){
             dispatchTap(vx,vy,new Runnable(){ public void run(){
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
                     View v2=plnCalView;
-                    if(v2==null) return;
+                    if(v2==null){ setOverlaysTouchable(true); return; }
                     try{
                         WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v2.getLayoutParams();
                         lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
                         wm.updateViewLayout(v2,lp);
                     }catch(Exception e){}
+                    setOverlaysTouchable(true);
                     plnCalBusy=false;
                     advancePlnCal();
                 }}, closing?500:900);
@@ -5052,7 +5068,7 @@ public class OverlayService extends Service {
         lp.gravity=Gravity.TOP|Gravity.START;
         lp.x=pool.getHudPos("stop_x", dm.widthPixels*40/100);
         lp.y=pool.getHudPos("stop_y", dm.heightPixels*45/100);
-        stopBtnView=b;
+        stopBtnView=b; stopBtnLp=lp;
         b.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; boolean moved;
             public boolean onTouch(View v, MotionEvent e){
@@ -5071,10 +5087,11 @@ public class OverlayService extends Service {
                 return false;
             }
         });
-        try{ wm.addView(stopBtnView,lp); }catch(Exception ex){ stopBtnView=null; }
+        try{ wm.addView(stopBtnView,lp); }catch(Exception ex){ stopBtnView=null; stopBtnLp=null; }
     }
     private void hideStopButton(){
         if(stopBtnView!=null){ try{ wm.removeView(stopBtnView); }catch(Exception e){} stopBtnView=null; }
+        stopBtnLp=null;
     }
     // stop whichever long-running mode is active (called by the STOP button)
     private void stopActiveMode(){
@@ -5095,6 +5112,29 @@ public class OverlayService extends Service {
         hidePlnCalView();
         hideProbeDots();
         clearInjecting();
+    }
+
+    // Make the sigil, HUD chips, and stop button touchable or not. Called around
+    // injected planner taps so the gesture reaches TFT instead of landing on our
+    // overlay views (which sit on top of the game in the window stack).
+    private void setOverlaysTouchable(boolean touchable){
+        int f=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        if(button!=null && btnLp!=null){
+            if(touchable) btnLp.flags&=~f; else btnLp.flags|=f;
+            try{ wm.updateViewLayout(button,btnLp); }catch(Exception e){}
+        }
+        if(hudGoldView!=null && hudGoldLp!=null){
+            if(touchable) hudGoldLp.flags&=~f; else hudGoldLp.flags|=f;
+            try{ wm.updateViewLayout(hudGoldView,hudGoldLp); }catch(Exception e){}
+        }
+        if(hudXpView!=null && hudXpLp!=null){
+            if(touchable) hudXpLp.flags&=~f; else hudXpLp.flags|=f;
+            try{ wm.updateViewLayout(hudXpView,hudXpLp); }catch(Exception e){}
+        }
+        if(stopBtnView!=null && stopBtnLp!=null){
+            if(touchable) stopBtnLp.flags&=~f; else stopBtnLp.flags|=f;
+            try{ wm.updateViewLayout(stopBtnView,stopBtnLp); }catch(Exception e){}
+        }
     }
 
     // ---- always-on gold/XP reader ----

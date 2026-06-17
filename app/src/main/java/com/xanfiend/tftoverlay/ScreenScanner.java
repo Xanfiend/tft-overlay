@@ -343,10 +343,11 @@ public class ScreenScanner {
         int tlW = Math.max(1, w / 2);
         int tlH = Math.max(1, portrait ? h / 8 : h / 4);
         // bottom-right corner holds the gold counter (drawn large, far to the
-        // right). Keep the crop tight to that corner so center-screen numbers and
-        // the reroll/XP costs on the left can't be mistaken for gold.
-        int brTop  = h * 74 / 100;
-        int brLeft = w * 58 / 100;
+        // right). In portrait the shop cards occupy the bottom strip and their cost
+        // labels sit in the right half — keep the crop tight to the far corner to
+        // avoid picking up a cost pill instead of the gold.
+        int brTop  = portrait ? h * 84 / 100 : h * 74 / 100;
+        int brLeft = portrait ? w * 76 / 100 : w * 76 / 100;
         int brW = Math.max(1, w - brLeft);
         int brH = Math.max(1, h - brTop);
         final int seam = tlH; // blocks at/below the seam came from the gold band
@@ -382,6 +383,7 @@ public class ScreenScanner {
     private ScanResult parseGoldXp(Text text, int seam) {
         ScanResult r = new ScanResult();
         int goldBoxH = 0;
+        int goldBoxX = 0; // rightmost wins among blocks of similar height
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
@@ -390,12 +392,20 @@ public class ScreenScanner {
             if (box.centerY() >= seam) {
                 // gold band: pull the digit run out of the block (the gold coin
                 // glyph often fuses onto the number, e.g. "⛃53", so a strict
-                // all-digits match would miss it). Tallest box wins — the gold
-                // counter is drawn larger than any stray number nearby.
+                // all-digits match would miss it). Tallest box wins; among blocks
+                // within 4px of the same height prefer the rightmost — the gold
+                // counter is always in the far-right corner.
                 java.util.regex.Matcher gm = java.util.regex.Pattern.compile("(\\d{1,3})").matcher(raw);
                 if (gm.find()) {
                     int v = Integer.parseInt(gm.group(1));
-                    if (v >= 0 && v <= 300 && box.height() > goldBoxH) { r.gold = v; goldBoxH = box.height(); }
+                    if (v >= 0 && v <= 300) {
+                        boolean taller = box.height() > goldBoxH + 4;
+                        boolean sameHeight = box.height() >= goldBoxH - 4;
+                        boolean moreRight = box.centerX() > goldBoxX;
+                        if (taller || (sameHeight && moreRight)) {
+                            r.gold = v; goldBoxH = box.height(); goldBoxX = box.centerX();
+                        }
+                    }
                 }
                 continue;
             }
