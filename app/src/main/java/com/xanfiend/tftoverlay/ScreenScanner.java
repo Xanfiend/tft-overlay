@@ -335,21 +335,41 @@ public class ScreenScanner {
     // the gold band) for a single OCR pass — roughly a quarter of the pixels of a
     // full-frame scan, with no shop/board/bench text to cause false matches.
     // Recycles `full`.
-    void scanGoldXp(Bitmap full, ScanCallback cb) {
+    // goldCx / goldBandTop let the caller pin the gold-read region to wherever the
+    // user parked the in-game gold HUD pill (the pill sits just ABOVE the game's
+    // gold counter, so the band we read starts at the pill's bottom edge and runs
+    // down over the counter — and never includes the pill's own text). Pass -1 for
+    // both to fall back to the fixed bottom-right corner heuristic.
+    void scanGoldXp(Bitmap full, ScanCallback cb) { scanGoldXp(full, -1, -1, cb); }
+
+    void scanGoldXp(Bitmap full, int goldCx, int goldBandTop, ScanCallback cb) {
         int w = full.getWidth(), h = full.getHeight();
         boolean portrait = h > w;
         // top-left quadrant holds the level badge, XP "cur/need" and stage "x-y";
         // staying in the left half avoids the screen-center shop cards in landscape
         int tlW = Math.max(1, w / 2);
         int tlH = Math.max(1, portrait ? h / 8 : h / 4);
-        // bottom-right corner holds the gold counter (drawn large, far to the
-        // right). In portrait the shop cards occupy the bottom strip and their cost
-        // labels sit in the right half — keep the crop tight to the far corner to
-        // avoid picking up a cost pill instead of the gold.
-        int brTop  = portrait ? h * 84 / 100 : h * 74 / 100;
-        int brLeft = portrait ? w * 76 / 100 : w * 76 / 100;
-        int brW = Math.max(1, w - brLeft);
-        int brH = Math.max(1, h - brTop);
+        int brTop, brLeft, brW, brH;
+        if (goldCx >= 0 && goldBandTop >= 0) {
+            // user-pinned: read the band right below the gold pill. A wide, short
+            // box centred on the pill catches the counter whether it sits dead
+            // below or slightly to one side, and excludes the pill itself.
+            brTop  = Math.min(h - 1, Math.max(0, goldBandTop));
+            brLeft = Math.max(0, goldCx - w * 22 / 100);
+            int right = Math.min(w, goldCx + w * 22 / 100);
+            brW = Math.max(1, right - brLeft);
+            brH = Math.max(1, Math.min(h - brTop, h * 16 / 100));
+            log("goldXp pinned band: x=" + brLeft + "-" + (brLeft + brW) + " y=" + brTop + "-" + (brTop + brH));
+        } else {
+            // bottom-right corner holds the gold counter (drawn large, far to the
+            // right). In portrait the shop cards occupy the bottom strip and their
+            // cost labels sit in the right half — keep the crop tight to the far
+            // corner to avoid picking up a cost pill instead of the gold.
+            brTop  = portrait ? h * 84 / 100 : h * 74 / 100;
+            brLeft = w * 76 / 100;
+            brW = Math.max(1, w - brLeft);
+            brH = Math.max(1, h - brTop);
+        }
         final int seam = tlH; // blocks at/below the seam came from the gold band
         Bitmap combo;
         try {
