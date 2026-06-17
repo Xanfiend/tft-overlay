@@ -108,6 +108,38 @@ public final class ChampItemData {
             "Dragon's Claw vs heavy AP, Bramble vs crit/AD boards.");
     }
 
+    // ---- unit tier list (patch 17.5b) ----
+    // S = meta-defining (anchors an S-tier comp or tops the unit win-rate list),
+    // A = strong / reliable secondary, B = playable / situational, C = weak.
+    // Only units with real evidence are ranked; the rest stay unranked (no badge).
+    private static final Map<String,String> TIER = new HashMap<>();
+    private static void tier(String champ, String t){ TIER.put(champ, t); }
+    static {
+        // S — carries of the current S-tier comps + top-stat 5-costs
+        tier("Corki","S");        // Meeple Fateweavers
+        tier("Samira","S");       // Space Groove Samira reroll (75% top4)
+        tier("Xayah","S");        // Stargazer Xayah
+        tier("Vex","S");          // Vanguard / Shepherd Vex
+        tier("AurelionSol","S");  // Dark Star A.Sol
+        tier("Jhin","S");         // highest-cap 5-cost
+        tier("Shen","S");         // top-stat 5-cost frontline
+        tier("Bard","S");         // top-stat 5-cost
+        tier("Blitzcrank","S");   // top-stat 5-cost
+        // A — strong carries / key support+tank of S comps
+        tier("Kaisa","A");        // Shepherd / Rogues Kai'Sa
+        tier("Karma","A");        // Dark Star duo carry
+        tier("Riven","A");        // Fateweavers secondary carry
+        tier("Rammus","A");       // Fateweavers primary tank
+        tier("Sona","A");         // key support 5-cost in multiple S comps
+        tier("Ornn","A");         // Samira reroll second tank
+        // B — playable but out-capped
+        tier("MissFortune","B");  // MF reroll, B-tier this patch
+        tier("TahmKench","B");    // Dark Star frontline filler
+    }
+
+    /** Tier letter ("S"/"A"/"B"/"C") for a champion, or "" if unranked this patch. */
+    public static String tierOf(String champ){ String t=TIER.get(champ); return t==null?"":t; }
+
     /** Verified meta build for a champion, or null if it has no entry this patch. */
     public static Build get(String champ){ return M.get(champ); }
 
