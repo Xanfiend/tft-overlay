@@ -628,7 +628,10 @@ public class OverlayService extends Service {
         if(hudGoldView==null) return;
         int gold=pool.getGold();
         int income=Pool.expectedIncome(gold, pool.getStreak());
-        hudGoldView.setText("+"+income+"g");
+        // Lead with the actual tracked gold (so it can be read at a glance and
+        // verified against the game's own counter right below it), then the
+        // projected next-round income as a smaller suffix.
+        hudGoldView.setText(gold+"g  +"+income);
 
         int lvl=pool.getLevel();
         int xpNeed=pool.getXpNeed();
@@ -2352,7 +2355,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "IN-GAME HUD", GOLD);
 
         TextView hudHint=new TextView(this);
-        hudHint.setText("Two tiny numbers to park over the game's own counters: +Ng (projected income, drag it above your gold) and Ng→L (gold to next level, drag it above the XP button).");
+        hudHint.setText("Two tiny numbers to park over the game's own counters. The GOLD pill shows your tracked gold and projected income (Ng +N) — drag it so it sits just ABOVE the game's gold counter. The other shows gold to next level (Ng→L) — drag it above the XP button. IMPORTANT: with AUTO GOLD & XP on, the reader reads the strip directly BELOW the gold pill, so placing the gold pill right above your gold counter is what makes the reading accurate.");
         hudHint.setTextColor(DIM); hudHint.setTextSize(10); hudHint.setPadding(2,0,0,8); root.addView(hudHint);
 
         boolean curHud=pool.getHudEnabled();
@@ -2379,7 +2382,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "AUTO GOLD & XP", GOLD);
 
         TextView gwHint=new TextView(this);
-        gwHint.setText("Keeps the HUD numbers live by quietly reading gold (bottom-right) and level/XP (top-left) every few seconds. Pauses during a hunt or scan. Needs the accessibility service.");
+        gwHint.setText("Keeps the HUD numbers live by quietly reading gold and level/XP every few seconds. If the IN-GAME HUD is on, it reads gold from the strip just below your gold pill — so park that pill right above your gold counter for an accurate read. With the HUD off it falls back to the bottom-right corner. Pauses during a hunt or scan. Needs the accessibility service.");
         gwHint.setTextColor(DIM); gwHint.setTextSize(10); gwHint.setPadding(2,0,0,8); root.addView(gwHint);
 
         boolean curGw=pool.getGoldWatch();
@@ -5173,6 +5176,14 @@ public class OverlayService extends Service {
         if(sinceShot<MIN_SHOT_GAP_MS) return;
         goldWatchBusy=true;
         lastShotMs=android.os.SystemClock.uptimeMillis();
+        // pin the gold-read region to the user's gold HUD pill: read the band just
+        // below it (the pill is parked above the game's gold counter). If the HUD is
+        // off, pass -1 so the scanner falls back to its corner heuristic.
+        final int gCx, gBandTop;
+        if(hudGoldView!=null && hudGoldLp!=null && hudGoldView.getHeight()>0){
+            gCx = hudGoldLp.x + hudGoldView.getWidth()/2;
+            gBandTop = hudGoldLp.y + hudGoldView.getHeight();
+        } else { gCx=-1; gBandTop=-1; }
         try{
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
@@ -5183,7 +5194,7 @@ public class OverlayService extends Service {
                             hb.close();
                             Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
-                            new ScreenScanner(OverlayService.this,null).scanGoldXp(bmp,
+                            new ScreenScanner(OverlayService.this,null).scanGoldXp(bmp, gCx, gBandTop,
                                 new ScreenScanner.ScanCallback(){
                                     public void onResult(ScreenScanner.ScanResult r){ goldWatchBusy=false; applyHudOnly(r); }
                                     public void onError(String msg){ goldWatchBusy=false; }
