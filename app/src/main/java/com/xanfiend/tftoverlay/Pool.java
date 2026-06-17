@@ -354,15 +354,15 @@ public class Pool {
     public void setBoardBotRightPct(int v){ p.edit().putInt("cal_br", v).apply(); }
 
     // Portrait calibration — board sits much higher on screen in portrait mode
-    public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   22); }
+    public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   17); }
     public void setPortraitBoardTopPct(int v)  { p.edit().putInt("cal_p_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getPortraitBoardBotPct()        { return p.getInt("cal_p_bot",   58); }
+    public int getPortraitBoardBotPct()        { return p.getInt("cal_p_bot",   55); }
     public void setPortraitBoardBotPct(int v)  { p.edit().putInt("cal_p_bot",   Math.max(20, Math.min(90,v))).apply(); }
-    public int getPortraitBoardLeftPct()       { return p.getInt("cal_p_left",  12); }
+    public int getPortraitBoardLeftPct()       { return p.getInt("cal_p_left",   9); }
     public void setPortraitBoardLeftPct(int v) { p.edit().putInt("cal_p_left",  Math.max(0,  Math.min(50,v))).apply(); }
-    public int getPortraitBoardRightPct()      { return p.getInt("cal_p_right", 88); }
+    public int getPortraitBoardRightPct()      { return p.getInt("cal_p_right", 91); }
     public void setPortraitBoardRightPct(int v){ p.edit().putInt("cal_p_right", Math.max(50, Math.min(100,v))).apply(); }
-    public int getPortraitBenchYPct()          { return p.getInt("cal_p_bench", 75); }
+    public int getPortraitBenchYPct()          { return p.getInt("cal_p_bench", 73); }
     public void setPortraitBenchYPct(int v)    { p.edit().putInt("cal_p_bench", Math.max(50, Math.min(95,v))).apply(); }
     public void resetPortraitCalibration()     {
         p.edit().remove("cal_p_top").remove("cal_p_bot").remove("cal_p_left")
