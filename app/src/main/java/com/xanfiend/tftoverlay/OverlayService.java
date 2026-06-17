@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.75";
+    private static final String APP_VERSION = "v1.76";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -745,6 +745,7 @@ public class OverlayService extends Service {
                 (int)(getResources().getDisplayMetrics().heightPixels*0.86),
                 wtype(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                     | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
                     | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
@@ -3573,6 +3574,7 @@ public class OverlayService extends Service {
         if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
         hideStopButton();
         teardownStrayOverlays();
+        setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("board scan: stopped, found "+boardScanResults.size()+" champs");
         mode=0; showPanel();
@@ -4628,6 +4630,7 @@ public class OverlayService extends Service {
         autoTapHandler.removeCallbacksAndMessages(null);
         hideStopButton();
         teardownStrayOverlays();
+        setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         if(!autoOppMode){
             // one self-scry commits everything: gold, level, XP, stage (champs
@@ -5302,6 +5305,7 @@ public class OverlayService extends Service {
         hidePlnCalView();
         hideProbeDots();
         clearInjecting();
+        setOverlaysTouchable(true);
     }
 
     // Make the sigil, HUD chips, and stop button touchable or not. Called around
@@ -5700,6 +5704,7 @@ public class OverlayService extends Service {
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         hideStopButton();
         teardownStrayOverlays();
+        setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("opp scan: stopped, found "+oppScanResults.size()+" champs");
         mode=0; showPanel();
@@ -5753,6 +5758,7 @@ public class OverlayService extends Service {
         // if tap-calibration or grid-adjust was active, cancel it — the overlay will be wrong size
         if(calCaptureView!=null){ calStep=0; hideCalCaptureView(); }
         if(gridAdjustView!=null) hideGridAdjustView();
+        if(plnCalView!=null){ plnCalStep=0; hidePlnCalView(); setOverlaysTouchable(true); }
         // screen rotated — rebuild panel with fresh dimensions so it fits the new orientation
         if(panel != null){
             int savedMode = mode;
