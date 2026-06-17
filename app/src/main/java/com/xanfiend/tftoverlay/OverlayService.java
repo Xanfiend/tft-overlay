@@ -2558,7 +2558,9 @@ public class OverlayService extends Service {
 
         TextView plnHint=new TextView(this);
         plnHint.setText("Do this on the board view during a planning phase. Your taps are replayed into "
-                +"the game, so the planner really opens while you point things out.");
+                +"the game, so the planner really opens while you point things out. The instruction bar "
+                +"is DRAGGABLE — if it covers the button you need to tap, drag it out of the way first. "
+                +"Use the ✕ CANCEL button on the bar to stop.");
         plnHint.setTextColor(ASH); plnHint.setTextSize(10); plnHint.setPadding(2,0,0,6); root.addView(plnHint);
 
         if(plnCal){
@@ -4926,12 +4928,30 @@ public class OverlayService extends Service {
         plnCalView=new View(OverlayService.this){
             private final android.graphics.Paint bgP=new android.graphics.Paint();
             private final android.graphics.Paint txtP=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            // instruction banner is DRAGGABLE — TFT's planner/menu buttons can sit
+            // anywhere, so the user slides this strip off whatever they need to tap.
+            float barTop=-1;   // px; -1 until first layout, then defaults to the top
+            float barH=0;
+            boolean downInBar=false, dragged=false;
+            float downY=0, barTopAtDown=0;
+
+            private void ensureLayout(){
+                int H=getHeight(); if(H<=0) return;
+                barH=H*0.16f;
+                if(barTop<0) barTop=0;                 // start at the TOP, out of the shop's way
+                if(barTop>H-barH) barTop=H-barH;
+                if(barTop<0) barTop=0;
+            }
+            private android.graphics.RectF cancelRect(){
+                int W=getWidth();
+                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f, left=W*0.5f-w/2f;
+                return new android.graphics.RectF(left,top,left+w,top+h);
+            }
             @Override protected void onDraw(android.graphics.Canvas canvas){
-                int W=getWidth(), H=getHeight();
-                // banner sits at the BOTTOM — the planner controls live top/center
-                float barTop=H*0.82f;
+                ensureLayout();
+                int W=getWidth();
                 bgP.setColor(0xF00B0709);
-                canvas.drawRect(0,barTop,W,H,bgP);
+                canvas.drawRect(0,barTop,W,barTop+barH,bgP);
                 txtP.setStyle(android.graphics.Paint.Style.FILL);
                 txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
                 String stepMsg, stepSub;
@@ -4944,23 +4964,53 @@ public class OverlayService extends Service {
                     default: stepMsg=""; stepSub="";
                 }
                 txtP.setTextSize(10*spx); txtP.setColor(0xFF7A6B60);
-                canvas.drawText("PLANNER CALIBRATION — STEP "+plnCalStep+" OF 5   ·   tap THIS BAR to cancel",
-                        W/2f, barTop+H*0.045f, txtP);
+                canvas.drawText("PLANNER CALIBRATION — STEP "+plnCalStep+" OF 5   ·   drag this bar if it covers a button",
+                        W/2f, barTop+barH*0.18f, txtP);
                 txtP.setTextSize(13*spx); txtP.setColor(0xFFE0D5C0);
                 txtP.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                canvas.drawText(plnCalBusy?"…":stepMsg, W/2f, barTop+H*0.10f, txtP);
+                canvas.drawText(plnCalBusy?"…":stepMsg, W/2f, barTop+barH*0.38f, txtP);
                 txtP.setTypeface(android.graphics.Typeface.DEFAULT);
                 txtP.setTextSize(9*spx); txtP.setColor(0xFFC9A227);
                 canvas.drawText(plnCalBusy?"replaying your tap into the game":stepSub,
-                        W/2f, barTop+H*0.15f, txtP);
+                        W/2f, barTop+barH*0.50f, txtP);
+                // CANCEL pill
+                android.graphics.RectF cr=cancelRect();
+                txtP.setColor(0xFF1A0E10); canvas.drawRoundRect(cr,10,10,txtP);
+                txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
+                txtP.setColor(0xFFC1121F); canvas.drawRoundRect(cr,10,10,txtP);
+                txtP.setStyle(android.graphics.Paint.Style.FILL);
+                txtP.setTextSize(11*spx);
+                canvas.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, txtP);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
-                if(e.getAction()!=android.view.MotionEvent.ACTION_UP) return true;
+                ensureLayout();
                 if(plnCalBusy) return true;
-                int H=getHeight();
                 float vx=e.getX(), vy=e.getY();
-                if(vy>=H*0.82f){ cancelPlnCal(); return true; }
-                handlePlnCalTap(vx,vy);
+                int a=e.getAction();
+                boolean inBar = vy>=barTop && vy<=barTop+barH;
+                if(a==android.view.MotionEvent.ACTION_DOWN){
+                    downInBar=inBar; dragged=false; downY=vy; barTopAtDown=barTop;
+                    return true;
+                } else if(a==android.view.MotionEvent.ACTION_MOVE){
+                    if(downInBar){
+                        float dy=vy-downY;
+                        if(Math.abs(dy)>12) dragged=true;
+                        int H=getHeight();
+                        barTop=Math.max(0,Math.min(H-barH, barTopAtDown+dy));
+                        invalidate();
+                    }
+                    return true;
+                } else if(a==android.view.MotionEvent.ACTION_UP){
+                    if(downInBar){
+                        // a tap (not a drag) on the CANCEL pill cancels; otherwise the
+                        // banner tap does nothing so it can never be hit by accident
+                        if(!dragged && cancelRect().contains(vx,vy)) cancelPlnCal();
+                        return true;
+                    }
+                    // tap OUTSIDE the banner → record this spot and replay it into the game
+                    handlePlnCalTap(vx,vy);
+                    return true;
+                }
                 return true;
             }
         };
