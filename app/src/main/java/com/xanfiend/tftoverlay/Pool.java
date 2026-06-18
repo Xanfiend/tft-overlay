@@ -250,6 +250,8 @@ public class Pool {
         p.edit().putString("hunt_list", sb.toString()).apply();
         return true;
     }
+    // wipe every auto-buy mark in one go
+    public void clearHunt(){ p.edit().remove("hunt_list").apply(); }
 
     // ---- learned champ→traits map ----
     // The overlay learns each champion's traits from the unit popup the first
