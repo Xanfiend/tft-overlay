@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.78";
+    private static final String APP_VERSION = "v1.79";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -1024,6 +1024,17 @@ public class OverlayService extends Service {
                     startHuntMode();
                 }});
                 root.addView(huntBtn);
+                // one-tap way to turn auto-buy OFF: clears every ✦ prey mark so the
+                // hunt has nothing to buy. (Unmarking one at a time is a long-press on
+                // the name, which is easy to miss — this is the obvious off switch.)
+                if(!huntList.isEmpty()){
+                    root.addView(miniChip("✕ clear auto-buy marks ("+huntList.size()+")",
+                        new View.OnClickListener(){ public void onClick(View v){
+                            pool.clearHunt(); buzz();
+                            Toast.makeText(OverlayService.this,"Auto-buy off — all marks cleared",Toast.LENGTH_SHORT).show();
+                            showPanel();
+                        }}));
+                }
             }
             if(!huntBuys.isEmpty()){
                 TextView hb=new TextView(this);
