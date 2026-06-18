@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.80";
+    private static final String APP_VERSION = "v1.81";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -468,6 +468,7 @@ public class OverlayService extends Service {
         // frames, so animations show as a flicker instead of a smooth transition.
         btnLp = new WindowManager.LayoutParams(-2,-2,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
         btnLp.gravity=Gravity.TOP|Gravity.START; btnLp.x=20; btnLp.y=300;
         button.setOnTouchListener(new View.OnTouchListener(){
@@ -496,10 +497,12 @@ public class OverlayService extends Service {
                     showCloseTarget(false);
                     if(moved){ snapButtonToEdge(); return true; }
                     if(!moved){
-                        if(oppScanMode){ stopOppScanMode(); return true; }
-                        if(boardScanMode){ stopBoardScanMode(); return true; }
-                        if(plannerScanPending){ stopPlannerScan("stopped by sigil tap"); return true; }
-                        if(autoScanPending){ finishAutoTapScan(); return true; }
+                        // All long-running modes (scans, hunt) are stopped ONLY by the
+                        // on-screen STOP button. The sigil just opens the panel so the
+                        // user can check their pool without killing the active scan.
+                        if(oppScanMode||boardScanMode||plannerScanPending||autoScanPending){
+                            mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel(); return true;
+                        }
                         long held=System.currentTimeMillis()-down;
                         // While THE HUNT is running, the sigil just opens the panel — it must
                         // NOT cancel auto-buy (the dedicated STOP button ends the hunt), and we
@@ -5085,6 +5088,10 @@ public class OverlayService extends Service {
     private void startPlannerCalibration(){
         plnCalStep=1;
         plnCalBusy=false;
+        // If a previous scan left injecting=true (e.g. gesture callback dropped by HyperOS),
+        // dispatchTap would silently skip every calibration tap — advancing the wizard without
+        // ever opening the planner. Clear it before any calibration tap fires.
+        clearInjecting();
         closePanel();
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
             new Runnable(){ public void run(){ showPlnCalOverlay(); }}, 300);
@@ -5111,7 +5118,7 @@ public class OverlayService extends Service {
             private void ensureLayout(){
                 int H=getHeight(); if(H<=0) return;
                 barH=H*0.16f;
-                if(barTop<0) barTop=0;                 // start at the TOP, out of the shop's way
+                if(barTop<0) barTop=H*0.40f;           // start at mid-screen, away from top HUD and bottom shop
                 if(barTop>H-barH) barTop=H-barH;
                 if(barTop<0) barTop=0;
             }
@@ -5228,15 +5235,17 @@ public class OverlayService extends Service {
         setOverlaysTouchable(false);  // lift the sigil/HUD chips out of the way too
         plannerHandler.postDelayed(new Runnable(){ public void run(){
             dispatchTap(vx,vy,new Runnable(){ public void run(){
+                // Allow extra time for TFT to open/close the planner before the next
+                // calibration overlay appears — 1500ms covers slow animation on older devices.
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
                     setOverlaysTouchable(true);
                     plnCalBusy=false;
                     if(closing){ finishPlnCal(); return; }
                     plnCalStep++;              // advance, then rebuild the capture sheet
                     showPlnCalOverlay();
-                }}, closing?500:900);
+                }}, closing?500:1500);
             }});
-        }}, 250);
+        }}, 400);
     }
 
     private void advancePlnCal(){
@@ -5269,7 +5278,17 @@ public class OverlayService extends Service {
     }
 
     private void hidePlnCalView(){
-        if(plnCalView!=null){ try{ wm.removeView(plnCalView); }catch(Exception e){} plnCalView=null; }
+        if(plnCalView!=null){
+            // Belt-and-suspenders: flag non-touchable first so even if removeView is
+            // delayed by the compositor the upcoming dispatchGesture reaches TFT.
+            try{
+                WindowManager.LayoutParams lp=(WindowManager.LayoutParams)plnCalView.getLayoutParams();
+                lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                wm.updateViewLayout(plnCalView,lp);
+            }catch(Exception e){}
+            try{ wm.removeView(plnCalView); }catch(Exception e){}
+            plnCalView=null;
+        }
         plnCalBusy=false;
     }
 
