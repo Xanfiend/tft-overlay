@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.79");
+        ver.setText("v1.80");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -395,6 +395,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.80  ·  2026-06-18","FIXED tapping the sigil cancelling THE HUNT. While auto-buy was running, a tap on the floating sigil stopped the hunt — so you couldn't open the panel (to scry, check your pool, clear marks, etc.) without killing auto-buy. Now the sigil just opens the panel while the hunt keeps running in the background; the dedicated STOP button (shown on screen during the hunt) is what ends it. The sigil also won't kick off a competing board scan mid-hunt. Board Scan / Opp Scan / Auto Scan still stop on a sigil tap as before — only the long-running hunt changed."},
             {"v1.79  ·  2026-06-18","ADDED an obvious way to turn auto-buy OFF. THE HUNT auto-buys any champion you have marked with a ✦ (long-press its name in the POOL tab). Until now the only way to un-mark was to long-press each name again, which is easy to miss — so if you had marked a few champs there was no clear off switch. The POOL tab now shows a '✕ clear auto-buy marks' button right under BEGIN THE HUNT whenever you have any marks; one tap wipes them all, so the hunt has nothing to buy. (You can still un-mark a single champ by long-pressing its name as before.)"},
             {"v1.78  ·  2026-06-18","Stability pass from a full code review. FIXED two memory leaks where a full-screen screenshot bitmap could be left un-recycled if a scan failed partway through setup (the auto board scan and the auto opponent scan init paths, and the per-unit popup capture) — over a long session these could pile up and crash the app with out-of-memory. Each now recycles its bitmap on the failure branch. Hardened the planner-calibration touch handling so the floating sigil and HUD can never be left in a non-touchable state if a calibration tap-replay is interrupted: finishing or cancelling calibration now force-restores normal touch routing. No behavior change for a normal run — these only matter when something errors mid-scan."},
             {"v1.77  ·  2026-06-18","FIXED planner calibration where tapping the TEAM PLANNER button just skipped to the next step (\"tap the SNAPSHOT button inside the planner that just opened\") WITHOUT the planner ever opening. Cause: the calibration sheet is a full-screen touch-catcher, and the old code tried to make it tap-through and replay your tap 180ms later — but that flag change is asynchronous, so on most devices the replayed tap landed right back on the still-active sheet (which ate it) and the planner never opened, yet the wizard advanced anyway. The sheet is now fully REMOVED before your tap is replayed into the game and rebuilt for the next step, so the planner genuinely opens (and the snapshot genuinely fires, and the close genuinely closes). A removed window cannot intercept the tap, so this is reliable across devices."},

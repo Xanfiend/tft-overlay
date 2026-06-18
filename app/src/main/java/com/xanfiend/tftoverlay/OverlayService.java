@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.79";
+    private static final String APP_VERSION = "v1.80";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -496,13 +496,17 @@ public class OverlayService extends Service {
                     showCloseTarget(false);
                     if(moved){ snapButtonToEdge(); return true; }
                     if(!moved){
-                        if(huntMode){ stopHuntMode(); return true; }
                         if(oppScanMode){ stopOppScanMode(); return true; }
                         if(boardScanMode){ stopBoardScanMode(); return true; }
                         if(plannerScanPending){ stopPlannerScan("stopped by sigil tap"); return true; }
                         if(autoScanPending){ finishAutoTapScan(); return true; }
                         long held=System.currentTimeMillis()-down;
-                        if(held>1500){ triggerScan(); }
+                        // While THE HUNT is running, the sigil just opens the panel — it must
+                        // NOT cancel auto-buy (the dedicated STOP button ends the hunt), and we
+                        // don't fire a competing scan while the hunt is tapping the shop.
+                        if(huntMode){
+                            mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel();
+                        } else if(held>1500){ triggerScan(); }
                         else {
                             if(held>450) mode=0;
                             else if(pool.getStartTab()==1) mode=0;
@@ -1006,7 +1010,7 @@ public class OverlayService extends Service {
             final java.util.List<String> huntList=pool.getHunt();
             if(huntMode){
                 TextView huntActive=new TextView(this);
-                huntActive.setText("\u2726 The hunt is on \u2014 marked champs are bought on sight \u00b7 tap sigil to stop");
+                huntActive.setText("\u2726 The hunt is on \u2014 marked champs are bought on sight \u00b7 tap the STOP button to end (the sigil just opens this panel)");
                 huntActive.setTextColor(GOLD); huntActive.setTextSize(12); huntActive.setGravity(Gravity.CENTER);
                 huntActive.setBackground(box(BLOOD,6,GOLD,2)); huntActive.setPadding(0,12,0,12);
                 LinearLayout.LayoutParams hal=new LinearLayout.LayoutParams(-1,-2); hal.setMargins(0,0,0,4); huntActive.setLayoutParams(hal);
