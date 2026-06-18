@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.77";
+    private static final String APP_VERSION = "v1.78";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -3613,11 +3613,13 @@ public class OverlayService extends Service {
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        Bitmap goldTmp=null; // visible to catch so an early failure can recycle it
                         try{
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                             Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                             final int sw=hw.getWidth(), sh=hw.getHeight();
-                            final Bitmap goldLvlBmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            goldTmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            final Bitmap goldLvlBmp=goldTmp;
                             hb.close();
                             java.util.List<int[]> grid=buildProbeGrid(sw,sh);
                             hw.recycle();
@@ -3679,7 +3681,11 @@ public class OverlayService extends Service {
                                         autoTapNextProbe();
                                     }
                                 }, ScreenScanner.MODE_FULL);
-                        }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel(); }
+                        }catch(Exception e){
+                            // scanBitmap never registered, so recycle the copy ourselves
+                            if(goldTmp!=null) goldTmp.recycle();
+                            autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel();
+                        }
                     }
                     @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
                 });
@@ -3715,11 +3721,13 @@ public class OverlayService extends Service {
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        Bitmap bmpTmp=null; // visible to catch so an early failure can recycle it
                         try{
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                             Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                             final int sw=hw.getWidth(), sh=hw.getHeight();
-                            final Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            bmpTmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            final Bitmap bmp=bmpTmp;
                             hb.close(); hw.recycle();
                             autoTapScreenH=sh;
                             java.util.List<int[]> oppGrid=buildOppProbeGrid(sw,sh);
@@ -3755,7 +3763,10 @@ public class OverlayService extends Service {
                                     }
                                     public void onError(String msg){ autoTapNextProbe(); }
                                 }, ScreenScanner.MODE_FULL);
-                        }catch(Exception e){ autoScanPending=false; addScanLog("ERR auto-opp init: "+e.getMessage()); mode=0; showPanel(); }
+                        }catch(Exception e){
+                            if(bmpTmp!=null) bmpTmp.recycle();
+                            autoScanPending=false; addScanLog("ERR auto-opp init: "+e.getMessage()); mode=0; showPanel();
+                        }
                     }
                     @Override public void onFailure(int errorCode){ autoScanPending=false; autoOppMode=false; addScanLog("ERR auto-opp shot: "+errorCode); mode=0; showPanel(); }
                 });
@@ -4335,12 +4346,14 @@ public class OverlayService extends Service {
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        Bitmap fullTmp=null; // visible to catch so an early failure can recycle it
                         try{
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                             Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                             hb.close();
                             final int sw=hw.getWidth(), sh=hw.getHeight();
-                            final Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            fullTmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                            final Bitmap full=fullTmp;
                             hw.recycle();
                             // crop to popup band — board rows 39-60%, bench 72%, popups appear above units
                             boolean portrait=sh>sw;
@@ -4361,7 +4374,12 @@ public class OverlayService extends Service {
                                     }
                                     public void onError(String msg){ full.recycle(); addScanLog("auto-tap OCR err: "+msg); advanceAutoTap(); }
                                 });
-                        }catch(Exception e){ addScanLog("ERR auto-tap probe: "+e.getMessage()); advanceAutoTap(); }
+                        }catch(Exception e){
+                            // scanPopupZone never registered its callback, so nothing else will
+                            // recycle this full-screen bitmap — do it here or it leaks (OOM over a long scan)
+                            if(fullTmp!=null) fullTmp.recycle();
+                            addScanLog("ERR auto-tap probe: "+e.getMessage()); advanceAutoTap();
+                        }
                     }
                     @Override public void onFailure(int errorCode){
                         // errorCode 3 = ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT: the
@@ -5220,6 +5238,10 @@ public class OverlayService extends Service {
         }
         plnCalStep=0;
         hidePlnCalView();
+        // failsafe: every passThrough step makes overlays untouchable around the
+        // replay; if any restore callback was dropped (e.g. handler cleared by a
+        // racing scan-stop) the sigil/HUD could be left untouchable. Force them back.
+        setOverlaysTouchable(true);
         Toast.makeText(this,"⛧ Planner calibrated — SCRY THE PLANNER is ready",Toast.LENGTH_LONG).show();
         mode=4; showPanel();
     }
@@ -5227,6 +5249,7 @@ public class OverlayService extends Service {
     private void cancelPlnCal(){
         plnCalStep=0;
         hidePlnCalView();
+        setOverlaysTouchable(true); // failsafe, same reason as finishPlnCal
         mode=4; showPanel();
     }
 
