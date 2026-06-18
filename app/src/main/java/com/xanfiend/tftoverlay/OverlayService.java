@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.76";
+    private static final String APP_VERSION = "v1.77";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -5180,33 +5180,30 @@ public class OverlayService extends Service {
             advancePlnCal();
             return;
         }
-        // All touchable overlay views (cal overlay, sigil, HUD chips) go untouchable
-        // so the replayed gesture passes through to TFT underneath.
-        plnCalBusy=true; v.invalidate();
+        // Replay this tap into the game so the planner actually opens / snapshots /
+        // closes. The OLD approach flipped FLAG_NOT_TOUCHABLE on this same full-screen
+        // overlay and dispatched the tap 180ms later — but updateViewLayout is async,
+        // so on many devices the flag had not propagated yet and the injected tap
+        // landed straight back on this (still-touchable) overlay, which swallowed it.
+        // The planner never opened, yet the wizard advanced anyway — exactly the
+        // "tapping the icon just goes to the next step" bug. A REMOVED window cannot
+        // intercept the gesture, so tear the overlay down completely first, replay,
+        // then rebuild it for the next step.
         final boolean closing = plnCalStep==5;
-        try{
-            WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v.getLayoutParams();
-            lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-            wm.updateViewLayout(v,lp);
-        }catch(Exception e){}
-        setOverlaysTouchable(false);
-        // updateViewLayout is async — 180ms for the system to propagate the flag
+        hidePlnCalView();              // removes the window; sets plnCalBusy=false
+        plnCalBusy=true;              // still mid-replay
+        setOverlaysTouchable(false);  // lift the sigil/HUD chips out of the way too
         plannerHandler.postDelayed(new Runnable(){ public void run(){
             dispatchTap(vx,vy,new Runnable(){ public void run(){
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
-                    View v2=plnCalView;
-                    if(v2==null){ setOverlaysTouchable(true); return; }
-                    try{
-                        WindowManager.LayoutParams lp=(WindowManager.LayoutParams)v2.getLayoutParams();
-                        lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                        wm.updateViewLayout(v2,lp);
-                    }catch(Exception e){}
                     setOverlaysTouchable(true);
                     plnCalBusy=false;
-                    advancePlnCal();
+                    if(closing){ finishPlnCal(); return; }
+                    plnCalStep++;              // advance, then rebuild the capture sheet
+                    showPlnCalOverlay();
                 }}, closing?500:900);
             }});
-        }}, 180);
+        }}, 250);
     }
 
     private void advancePlnCal(){
