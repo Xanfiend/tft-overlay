@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.81";
+    private static final String APP_VERSION = "v1.82";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -104,6 +104,12 @@ public class OverlayService extends Service {
     private boolean huntBusy = false; // a buy-tap sequence is in flight; skip captures
     private final java.util.List<String> huntBuys = new java.util.ArrayList<>();
     private final java.util.Map<String,Long> huntCooldown = new java.util.HashMap<>();
+    // champs tapped-to-buy but not yet confirmed gone from the shop. A copy is only
+    // counted into the pool once its card actually disappears, so an unaffordable
+    // marked champ that keeps reappearing while you reroll at low gold (its tap does
+    // nothing) no longer inflates the pool count on every poll.
+    private final java.util.Map<String,Long> huntPendingBuys = new java.util.HashMap<>();
+    private static final long HUNT_CONFIRM_MS = 900; // let the shop redraw before judging a tap
     private Runnable huntPollRunnable, huntCountdownRunnable;
     // fast hunt capture: a held MediaProjection streams frames with no rate limit,
     // so the shop check runs ~3x per second instead of the accessibility API's
@@ -5519,6 +5525,7 @@ public class OverlayService extends Service {
         huntBusy=false; huntOcrBusy=false;
         huntBuys.clear();
         huntCooldown.clear();
+        huntPendingBuys.clear();
         huntProjection=mp;
         if(mp!=null) setupHuntCapture(); else huntFast=false;
         if(!huntFast && mp!=null){ // capture setup failed — drop the projection
@@ -5676,6 +5683,26 @@ public class OverlayService extends Service {
     private void handleHuntResult(ScreenScanner.ScanResult r, final int cropTop){
         if(!huntMode) return;
         long now=System.currentTimeMillis();
+        // Resolve taps from a previous frame: once enough time has passed for the shop
+        // to redraw, a marked champ that VANISHED was actually bought (count it); one
+        // still sitting in the shop was NOT bought (couldn't afford it) — never count.
+        if(!huntPendingBuys.isEmpty()){
+            java.util.Iterator<java.util.Map.Entry<String,Long>> it=huntPendingBuys.entrySet().iterator();
+            while(it.hasNext()){
+                java.util.Map.Entry<String,Long> e=it.next();
+                if(now-e.getValue()<HUNT_CONFIRM_MS) continue; // give the shop time to update
+                String pn=e.getKey();
+                if(!r.shopChampions.contains(pn)){
+                    pool.add(pn,1); // a bought copy leaves the pool
+                    huntBuys.add(pn);
+                    addScanLog("hunt: confirmed buy "+pn);
+                    refreshHud();
+                } else {
+                    addScanLog("hunt: "+pn+" still in shop — not bought (unaffordable)");
+                }
+                it.remove();
+            }
+        }
         // The shop band does NOT contain the player's gold counter (it sits bottom-
         // right in landscape, below the shop). The 1-2 digit numbers in this band are
         // the cards' COST badges, which must not be mistaken for gold — so don't sync
@@ -5706,8 +5733,10 @@ public class OverlayService extends Service {
             // fast capture sees the next shop within ~0.5s, so a short cooldown is
             // enough to outlive the stale frame; the 1/sec path needs more margin
             huntCooldown.put(name, System.currentTimeMillis()+(huntFast?1200:2500));
-            huntBuys.add(name);
-            pool.add(name,1); // a bought copy leaves the pool
+            // don't count yet — wait until the next frame confirms the card left the
+            // shop (handleHuntResult). This prevents counting taps that did nothing
+            // because the champ was unaffordable.
+            huntPendingBuys.put(name, System.currentTimeMillis());
             buzz();
             if(btnLabel!=null){
                 btnLabel.setText("+"+name.split(" ")[0]);
