@@ -118,6 +118,11 @@ public class Pool {
     // the grid automatically when detection is inconclusive. On by default.
     public boolean getSmartScan()         { return p.getBoolean("cfg_smartscan", true); }
     public void    setSmartScan(boolean s){ p.edit().putBoolean("cfg_smartscan", s).apply(); }
+    // Smart Scan vertical nudge: how far below the health bar (extra % of screen
+    // height) the tap lands. Lets a user whose dots sit uniformly too high/low slide
+    // every marker onto the unit body. 0 = the built-in 4% drop. Clamped -8..+8.
+    public int  getSmartNudgeY()       { return p.getInt("cfg_smartnudge", 0); }
+    public void setSmartNudgeY(int n)  { p.edit().putInt("cfg_smartnudge", Math.max(-8, Math.min(8, n))).apply(); }
     // Instant Visual ID: units whose board sprite was learned from an earlier
     // popup-confirmed scan are recognized straight from the first screenshot,
     // skipping their tap entirely. Strict match thresholds; popup OCR stays the
@@ -311,13 +316,13 @@ public class Pool {
     // 4 perspective rows between them). Landscape defaults from TFT Mobile screenshots.
     public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getBoardBotPct()        { return p.getInt("cal_bot",   66); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   71); }
     public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
     public int getBoardLeftPct()       { return p.getInt("cal_left",   8); }
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
     public int getBoardRightPct()      { return p.getInt("cal_right", 88); }
     public void setBoardRightPct(int v){ p.edit().putInt("cal_right", Math.max(50, Math.min(100,v))).apply(); }
-    public int getBenchYPct()          { return p.getInt("cal_bench",   80); }
+    public int getBenchYPct()          { return p.getInt("cal_bench",   89); }
     public void setBenchYPct(int v)    { p.edit().putInt("cal_bench",   Math.max(50, Math.min(95,v))).apply(); }
     // Horizontal shift of the whole bench row as a percentage of screen width.
     // Negative = left, positive = right. Default -4 shifts the bench 4% left
