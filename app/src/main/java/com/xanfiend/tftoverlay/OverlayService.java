@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.83";
+    private static final String APP_VERSION = "v1.84";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -3854,11 +3854,23 @@ public class OverlayService extends Service {
         } else {
             top      = h * pool.getBoardTopPct()      / 100;
             bot      = h * pool.getBoardBotPct()      / 100;
-            topLeft  = w * pool.getBoardTopLeftPct()  / 100;
-            topRight = w * pool.getBoardTopRightPct() / 100;
-            botLeft  = w * pool.getBoardBotLeftPct()  / 100;
-            botRight = w * pool.getBoardBotRightPct() / 100;
             benchY   = h * pool.getBenchYPct()        / 100;
+            if(pool.hasLandscapeGridCal()){
+                topLeft  = w * pool.getBoardTopLeftPct()  / 100;
+                topRight = w * pool.getBoardTopRightPct() / 100;
+                botLeft  = w * pool.getBoardBotLeftPct()  / 100;
+                botRight = w * pool.getBoardBotRightPct() / 100;
+            } else {
+                // Aspect-aware default: TFT draws the board height-fit and centered, so on
+                // a wider screen it takes up a smaller fraction of the width. Deriving the
+                // back/front row spans from the screen aspect makes the grid land on the
+                // board on any device with no manual calibration. Measured spans: the back
+                // row is ~0.67x and the front row ~0.98x the screen HEIGHT, centered.
+                float aspect=(float)w/h;
+                float backHalf=0.667f/aspect/2f, frontHalf=0.978f/aspect/2f;
+                topLeft  = (int)((0.5f-backHalf)*w);  topRight = (int)((0.5f+backHalf)*w);
+                botLeft  = (int)((0.5f-frontHalf)*w); botRight = (int)((0.5f+frontHalf)*w);
+            }
         }
         // Repair swapped calibration saved by older versions (front row tapped before
         // the back row): the back-row Y would sit below the front-row Y and the

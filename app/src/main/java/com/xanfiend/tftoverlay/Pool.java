@@ -314,9 +314,9 @@ public class Pool {
     // ---- scan calibration: probe grid percentages ----
     // top = BACK-row hex-center Y, bot = FRONT-row hex-center Y (the probe grid lays
     // 4 perspective rows between them). Landscape defaults from TFT Mobile screenshots.
-    public int getBoardTopPct()        { return p.getInt("cal_top",   39); }
+    public int getBoardTopPct()        { return p.getInt("cal_top",   44); }
     public void setBoardTopPct(int v)  { p.edit().putInt("cal_top",   Math.max(5,  Math.min(60,v))).apply(); }
-    public int getBoardBotPct()        { return p.getInt("cal_bot",   71); }
+    public int getBoardBotPct()        { return p.getInt("cal_bot",   72); }
     public void setBoardBotPct(int v)  { p.edit().putInt("cal_bot",   Math.max(20, Math.min(90,v))).apply(); }
     public int getBoardLeftPct()       { return p.getInt("cal_left",   8); }
     public void setBoardLeftPct(int v) { p.edit().putInt("cal_left",  Math.max(0,  Math.min(50,v))).apply(); }
@@ -332,9 +332,9 @@ public class Pool {
     // Row spacing: vertical position of board rows 2 and 3 as a percent of the
     // back-to-front span (row 1 = 0, row 4 = 100). Defaults match the previously
     // hardcoded perspective fractions 0.27 / 0.58.
-    public int getRowF1Pct()        { return p.getInt("cal_rowf1", 27); }
+    public int getRowF1Pct()        { return p.getInt("cal_rowf1", 33); }
     public void setRowF1Pct(int v)  { p.edit().putInt("cal_rowf1", Math.max(5, Math.min(95,v))).apply(); }
-    public int getRowF2Pct()        { return p.getInt("cal_rowf2", 58); }
+    public int getRowF2Pct()        { return p.getInt("cal_rowf2", 66); }
     public void setRowF2Pct(int v)  { p.edit().putInt("cal_rowf2", Math.max(5, Math.min(95,v))).apply(); }
     // Bench span: explicit left/right ends of the bench row as a percent of screen
     // width. -1 = unset, fall back to deriving the span from the board's front row.
@@ -359,6 +359,14 @@ public class Pool {
     public void setBoardBotLeftPct(int v) { p.edit().putInt("cal_bl", v).apply(); }
     public int getBoardBotRightPct()      { return p.getInt("cal_br", getBoardRightPct()); }
     public void setBoardBotRightPct(int v){ p.edit().putInt("cal_br", v).apply(); }
+    // True once the user has manually set any landscape board edge/row. Until then the
+    // grid derives its horizontal span from the screen aspect (board is height-fit and
+    // centered, so a wide screen shows a narrower board) instead of a fixed percentage,
+    // so the fallback grid lands on the board on any device with zero calibration.
+    public boolean hasLandscapeGridCal(){
+        return p.contains("cal_tl")||p.contains("cal_tr")||p.contains("cal_bl")||p.contains("cal_br")
+            ||p.contains("cal_left")||p.contains("cal_right");
+    }
 
     // Portrait calibration — board sits much higher on screen in portrait mode
     public int getPortraitBoardTopPct()        { return p.getInt("cal_p_top",   17); }
