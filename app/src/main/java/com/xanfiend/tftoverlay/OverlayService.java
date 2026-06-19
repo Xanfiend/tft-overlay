@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.82";
+    private static final String APP_VERSION = "v1.83";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2851,6 +2851,48 @@ public class OverlayService extends Service {
         calHint.setTextColor(DIM); calHint.setTextSize(10); calHint.setPadding(2,2,0,0);
         root.addView(calHint);
 
+        // Smart Scan dot height: a vertical nudge for when the detected dots sit
+        // uniformly above or below the units. ▼ moves them down, ▲ up; each tap
+        // re-previews live with SHOW DOTS so you can dial it onto your champs.
+        TextView nudgeHdr=new TextView(this); nudgeHdr.setText("◇ SMART SCAN DOT HEIGHT");
+        nudgeHdr.setTextColor(GOLD); nudgeHdr.setTextSize(11); nudgeHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+        nudgeHdr.setLetterSpacing(0.1f);
+        LinearLayout.LayoutParams nhl=new LinearLayout.LayoutParams(-1,-2); nhl.setMargins(2,16,0,4); nudgeHdr.setLayoutParams(nhl);
+        root.addView(nudgeHdr);
+
+        LinearLayout nudgeRow=new LinearLayout(this); nudgeRow.setOrientation(LinearLayout.HORIZONTAL);
+        nudgeRow.setLayoutParams(new LinearLayout.LayoutParams(-1,-2));
+
+        TextView nUp=new TextView(this); nUp.setText("▲ up");
+        nUp.setTextColor(BONE); nUp.setTextSize(13); nUp.setGravity(Gravity.CENTER);
+        nUp.setPadding(0,12,0,12); nUp.setBackground(box(CARD,6,EDGE,2));
+        LinearLayout.LayoutParams nul=new LinearLayout.LayoutParams(0,-2,1f); nul.setMargins(0,0,4,0); nUp.setLayoutParams(nul);
+
+        final TextView nVal=new TextView(this);
+        nVal.setText((pool.getSmartNudgeY()>0?"+":"")+pool.getSmartNudgeY()+"%");
+        nVal.setTextColor(pool.getSmartNudgeY()==0?ASH:GOLD); nVal.setTextSize(15);
+        nVal.setTypeface(null,android.graphics.Typeface.BOLD); nVal.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams nvl=new LinearLayout.LayoutParams(0,-2,0.8f); nVal.setLayoutParams(nvl);
+
+        TextView nDown=new TextView(this); nDown.setText("▼ down");
+        nDown.setTextColor(BONE); nDown.setTextSize(13); nDown.setGravity(Gravity.CENTER);
+        nDown.setPadding(0,12,0,12); nDown.setBackground(box(CARD,6,EDGE,2));
+        LinearLayout.LayoutParams ndl=new LinearLayout.LayoutParams(0,-2,1f); ndl.setMargins(4,0,0,0); nDown.setLayoutParams(ndl);
+
+        nUp.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            pool.setSmartNudgeY(pool.getSmartNudgeY()-1); buzz(); closePanel(); showProbeDots();
+        }});
+        nDown.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            pool.setSmartNudgeY(pool.getSmartNudgeY()+1); buzz(); closePanel(); showProbeDots();
+        }});
+        nudgeRow.addView(nUp); nudgeRow.addView(nVal); nudgeRow.addView(nDown);
+        root.addView(nudgeRow);
+
+        TextView nudgeHint=new TextView(this);
+        nudgeHint.setText("If the red dots sit above or below your units, nudge until they land on the champ bodies. Each tap previews the dots live.");
+        nudgeHint.setTextColor(DIM); nudgeHint.setTextSize(10); nudgeHint.setPadding(2,2,0,0);
+        root.addView(nudgeHint);
+
     }
 
     // ---- tap-to-calibrate ----
@@ -4182,7 +4224,9 @@ public class OverlayService extends Service {
         }
 
         java.util.List<int[]> units=new java.util.ArrayList<>(); // {tapX,tapY}
-        int bodyDrop=Math.max(10, h*4/100); // bar bottom -> unit body
+        // bar bottom -> unit body, plus a user nudge for devices where the dots sit
+        // uniformly above/below the units (SETUP -> Smart Scan dot height)
+        int bodyDrop=Math.max(10, h*4/100) + h*pool.getSmartNudgeY()/100;
         StringBuilder clrLog=new StringBuilder("smart t"+tier+" bars:");
         for(int[] c : cl){
             int count=c[1], minY=c[2], maxY=c[3];
@@ -4197,7 +4241,7 @@ public class OverlayService extends Service {
             // across the bar's own width.
             if(flankMatches(px, zw, zh, cx-zoneLeft, minY-zoneTop-6, barW, opp, tier) ||
                flankMatches(px, zw, zh, cx-zoneLeft, maxY-zoneTop+6, barW, opp, tier)) continue;
-            int tapY=maxY+bodyDrop;
+            int tapY=Math.max(0, Math.min(h-1, maxY+bodyDrop));
             boolean dup=false;
             for(int[] u : units){
                 if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
