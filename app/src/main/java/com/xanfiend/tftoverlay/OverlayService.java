@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.86";
+    private static final String APP_VERSION = "v1.87";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -47,6 +47,10 @@ public class OverlayService extends Service {
     // probe dots overlay: shows all scan tap positions over TFT for calibration
     private View probeDotsView = null;
     private final android.os.Handler probeDotsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    // dev: "scan from saved image" overlay (validate OCR/detection without TFT)
+    private View imageScanView = null;
+    private Bitmap imageScanBmp = null;
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
     // Shop odds live in SetData so set updates stay one-file
@@ -2785,6 +2789,25 @@ public class OverlayService extends Service {
         autoCalHint.setTextColor(ASH); autoCalHint.setTextSize(10); autoCalHint.setPadding(2,0,0,10);
         root.addView(autoCalHint);
 
+        TextView imgScanBtn=new TextView(this); imgScanBtn.setText("SCAN FROM IMAGE (test, no game)");
+        imgScanBtn.setTextColor(BONE); imgScanBtn.setTextSize(13); imgScanBtn.setGravity(Gravity.CENTER);
+        imgScanBtn.setPadding(0,12,0,12); imgScanBtn.setBackground(box(CARD,6,ASH,2));
+        LinearLayout.LayoutParams isbl=new LinearLayout.LayoutParams(-1,-2); isbl.setMargins(0,0,0,6); imgScanBtn.setLayoutParams(isbl);
+        imgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            closePanel();
+            try{
+                Intent i=new Intent(OverlayService.this, ImageScanActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+            }catch(Exception e){ Toast.makeText(OverlayService.this,"could not open picker: "+e.getMessage(),Toast.LENGTH_LONG).show(); }
+        }});
+        root.addView(imgScanBtn);
+
+        TextView imgScanHint=new TextView(this);
+        imgScanHint.setText("Pick a saved TFT screenshot and run the full scan on it — see the OCR (gold/level/shop) and the detected unit dots drawn over the image. Validates scanning without being in a game.");
+        imgScanHint.setTextColor(ASH); imgScanHint.setTextSize(10); imgScanHint.setPadding(2,0,0,10);
+        root.addView(imgScanHint);
+
         TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (manual)");
         tapCalBtn.setTextColor(BONE); tapCalBtn.setTextSize(13); tapCalBtn.setGravity(Gravity.CENTER);
         tapCalBtn.setPadding(0,12,0,12); tapCalBtn.setBackground(box(BLOOD,6,BLOODL,2));
@@ -3644,6 +3667,141 @@ public class OverlayService extends Service {
         if(probeDotsView!=null){
             try{ wm.removeView(probeDotsView); }catch(Exception e){}
             probeDotsView=null;
+        }
+    }
+
+    // ---- dev: scan from a saved image (no TFT needed) ----
+
+    /** Called by ImageScanActivity with a decoded screenshot. Returns false if the
+     *  overlay isn't running. Takes ownership of bmp (recycles it when done). */
+    static boolean scanFromImage(final Bitmap bmp){
+        final OverlayService s=_instance;
+        if(s==null) return false;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->s.runImageScan(bmp));
+        return true;
+    }
+
+    private void runImageScan(final Bitmap img){
+        closePanel();
+        hideImageScan();
+        // OCR recycles the bitmap it's given, so feed it a copy and keep `img` for
+        // health-bar detection and for drawing the result.
+        Bitmap ocrCopy;
+        try{ ocrCopy=img.copy(Bitmap.Config.ARGB_8888,false); }
+        catch(Exception e){ ocrCopy=null; }
+        final int bw=img.getWidth(), bh=img.getHeight();
+        addScanLog("=== SCAN FROM IMAGE "+bw+"x"+bh+" ===");
+        final ScreenScanner.ScanResult[] ocr={null};
+        Runnable finish=()->{
+            java.util.List<int[]> detected=null;
+            try{ detected=detectHealthBarUnits(img,false); }catch(Exception e){}
+            java.util.List<int[]> grid=buildProbeGrid(bw,bh);
+            java.util.List<int[]> probes; int boardCount;
+            if(detected!=null && !detected.isEmpty()){
+                probes=new java.util.ArrayList<>(detected); boardCount=detected.size();
+            } else {
+                probes=grid; boardCount=autoTapBoardProbeCount;
+            }
+            String summary=imageScanSummary(ocr[0], detected, probes.size()-boardCount, bw, bh);
+            renderImageScan(img, probes, boardCount, summary);
+        };
+        if(ocrCopy==null){ finish.run(); return; }
+        new ScreenScanner(this,null).scanBitmap(ocrCopy, new ScreenScanner.ScanCallback(){
+            public void onResult(ScreenScanner.ScanResult r){ ocr[0]=r; finish.run(); }
+            public void onError(String msg){ addScanLog("image OCR err: "+msg); finish.run(); }
+        }, ScreenScanner.MODE_FULL);
+    }
+
+    private String imageScanSummary(ScreenScanner.ScanResult r, java.util.List<int[]> detected,
+                                    int benchProbes, int bw, int bh){
+        StringBuilder sb=new StringBuilder();
+        if(r!=null){
+            sb.append("gold ").append(r.gold<0?"?":r.gold)
+              .append("  lvl ").append(r.level<0?"?":r.level);
+            if(r.xpNeed>0) sb.append("  xp ").append(r.xpCur).append("/").append(r.xpNeed);
+            if(!r.stageRound.isEmpty()) sb.append("  ").append(r.stageRound);
+            if(!r.shopChampions.isEmpty()) sb.append("\nshop: ").append(android.text.TextUtils.join(", ", r.shopChampions));
+            if(!r.benchChampions.isEmpty()) sb.append("\nbench: ").append(android.text.TextUtils.join(", ", r.benchChampions));
+            if(!r.augments.isEmpty()) sb.append("\naugs: ").append(android.text.TextUtils.join(", ", r.augments));
+        } else sb.append("OCR failed");
+        int units=detected==null?0:detected.size();
+        sb.append("\nhealth-bar units: ").append(units)
+          .append(units>0?(" (red dots)"):(" — using grid fallback"));
+        addScanLog("image scan: "+sb.toString().replace("\n"," · "));
+        return sb.toString();
+    }
+
+    // Draws the chosen image scaled-to-fit with the detected probe dots on top, plus
+    // a result banner. Tap anywhere to dismiss. This makes both the OCR and the grid
+    // verifiable against a real screenshot with no game running.
+    @SuppressWarnings("deprecation")
+    private void renderImageScan(final Bitmap img, final java.util.List<int[]> probes,
+                                 final int boardCount, final String summary){
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        final int sw=dm.widthPixels, sh=dm.heightPixels;
+        final float scale=Math.min((float)sw/img.getWidth(), (float)sh/img.getHeight());
+        final float dispW=img.getWidth()*scale, dispH=img.getHeight()*scale;
+        final float offX=(sw-dispW)/2f, offY=(sh-dispH)/2f;
+
+        imageScanBmp=img;
+        android.view.View v=new android.view.View(this){
+            @Override protected void onDraw(android.graphics.Canvas c){
+                android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                c.drawColor(0xFF000000);
+                if(!img.isRecycled())
+                    c.drawBitmap(img, null, new android.graphics.RectF(offX,offY,offX+dispW,offY+dispH), p);
+                float r=Math.max(6f, dispW/60f);
+                for(int i=0;i<probes.size();i++){
+                    int[] pt=probes.get(i);
+                    float x=offX+pt[0]*scale, y=offY+pt[1]*scale;
+                    boolean bench=(i>=boardCount);
+                    p.setStyle(android.graphics.Paint.Style.FILL);
+                    p.setColor(bench?0x880044FF:0x88FF2200);
+                    c.drawCircle(x,y,r,p);
+                    p.setStyle(android.graphics.Paint.Style.STROKE);
+                    p.setStrokeWidth(2); p.setColor(0xCCFFFFFF);
+                    c.drawCircle(x,y,r,p);
+                }
+                // result banner (multi-line) along the bottom
+                String[] lines=summary.split("\n");
+                p.setTextSize(Math.max(20f, sh*0.022f));
+                float lh=p.getTextSize()*1.35f;
+                float boxH=lh*(lines.length+1)+16;
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xE6000000);
+                c.drawRect(0, sh-boxH, sw, sh, p);
+                p.setColor(0xFFFFD24A);
+                float ty=sh-boxH+lh;
+                for(String ln:lines){ c.drawText(ln, 16, ty, p); ty+=lh; }
+                p.setColor(0xFF8A7A75); p.setTextSize(Math.max(16f, sh*0.016f));
+                c.drawText("tap to close", 16, sh-10, p);
+            }
+        };
+        v.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE,null);
+        v.setOnClickListener(view->hideImageScan());
+
+        WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
+            sw,sh,0,0,
+            Build.VERSION.SDK_INT>=26
+                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                :WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.OPAQUE);
+        lp.gravity=Gravity.TOP|Gravity.LEFT;
+        imageScanView=v;
+        try{ wm.addView(imageScanView,lp); }
+        catch(Exception e){ imageScanView=null; if(!img.isRecycled()) img.recycle(); imageScanBmp=null; }
+    }
+
+    private void hideImageScan(){
+        if(imageScanView!=null){
+            try{ wm.removeView(imageScanView); }catch(Exception e){}
+            imageScanView=null;
+        }
+        if(imageScanBmp!=null){
+            if(!imageScanBmp.isRecycled()) imageScanBmp.recycle();
+            imageScanBmp=null;
         }
     }
 
@@ -6080,6 +6238,7 @@ public class OverlayService extends Service {
         hidePlnCalView();
         hideGridAdjustView();
         hideProbeDots();
+        hideImageScan();
         hideStopButton();
         clearInjecting();
         stopGoldWatch();
