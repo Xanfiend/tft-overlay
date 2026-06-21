@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.92";
+    private static final String APP_VERSION = "v1.93";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -6357,6 +6357,9 @@ public class OverlayService extends Service {
         if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
+        // also drop the untracked anonymous boardHandler callbacks (flash restorers,
+        // hunt-buy chains, etc.) so none fire after shutdown holding a stale reference
+        boardHandler.removeCallbacksAndMessages(null);
         releaseHuntCapture();
         releaseScanCapture();
         autoTapHandler.removeCallbacksAndMessages(null);
