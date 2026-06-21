@@ -2,7 +2,7 @@
 
 ## Model
 
-Always use `claude-opus-4-8`. Never downgrade to Sonnet mid-session.
+Use the best available model: `claude-fable-5` if available, otherwise `claude-opus-4-8`. Never use Sonnet.
 
 ## Git workflow
 
