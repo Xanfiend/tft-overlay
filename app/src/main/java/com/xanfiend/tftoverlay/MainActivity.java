@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.92");
+        ver.setText("v1.93");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -405,6 +405,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.93  ·  2026-06-21","Reliability pass. When the overlay stops or the service shuts down, every pending timer is now cancelled - before, a few short-lived UI callbacks (label flashes, the auto-buy chain) could still fire for up to a second after shutdown, briefly holding the destroyed overlay in memory. Internal hardening only, no visible change. A full code review this pass also confirmed the screenshot bitmaps are recycled on every path and the launch-screen animation is leak-free."},
             {"v1.92  ·  2026-06-21","Launch screen polish. The hero symbol is now a drawn blood-red PENTACLE - inverted pentagram inside a circle - instead of a gold star (the old glyph rendered as a color emoji that ignored the theme color). And the faint occult background now tiles across the ENTIRE screen on any device: before it was a fixed block of text that didn't reach the edges of large tablets, so it only covered part of the screen. Both are drawn as vectors, so they can't break on any device's fonts."},
             {"v1.91  ·  2026-06-21","The occult symbols on the launch screen are now DRAWN (inverted pentagrams ringed Sigil-of-Baphomet style) instead of unicode text. The previous v1.89 fix swapped in plain symbols to stop the purple boxes on tablets whose fonts lack the occult glyphs; this brings the satanic look back properly by rendering the pentagrams as vectors in the theme color, so they look identical on every device and can never show as missing-glyph boxes again. Same color, fully on-theme, no font dependency."},
             {"v1.90  ·  2026-06-21","NEW COACH tab (under GUIDE) - tells you what line to play. After you scan your board it reads your units and recommends a comp to commit to, built around the strongest carry you have, with that carry's best-in-slot items and a one-line plan - all from the same verified patch-meta data the BUILDS tab uses (so it reflects what's actually strong, not guesses). It also lists your units colored by tier with a contest count (how many players you've seen on each), and gives a NEXT MOVE econ/tempo call (roll / level / save) based on your gold, level, and stage. Scan first (hold the sigil for Auto Scan), then open GUIDE > COACH."},
