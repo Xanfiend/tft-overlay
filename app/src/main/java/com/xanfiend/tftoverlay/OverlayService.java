@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.87";
+    private static final String APP_VERSION = "v1.88";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -51,6 +51,7 @@ public class OverlayService extends Service {
     // dev: "scan from saved image" overlay (validate OCR/detection without TFT)
     private View imageScanView = null;
     private Bitmap imageScanBmp = null;
+    private int devTapCount = 0; // taps on the version label toward unlocking dev tools
     private static final String RELEASES_URL = "https://github.com/Xanfiend/tft-overlay/releases/latest";
 
     // Shop odds live in SetData so set updates stay one-file
@@ -815,6 +816,20 @@ public class OverlayService extends Service {
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView verTv=new TextView(this); verTv.setText(APP_VERSION);
         verTv.setTextColor(DIM); verTv.setTextSize(9); verTv.setPadding(0,0,12,0);
+        // hidden dev-mode unlock: tap the version 7x (standard Android pattern)
+        verTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(pool.isDevMode()){
+                if(++devTapCount>=7){ pool.setDevMode(false); devTapCount=0;
+                    Toast.makeText(OverlayService.this,"Dev tools hidden",Toast.LENGTH_SHORT).show();
+                    if(mode==4) showPanel(); }
+                return;
+            }
+            if(++devTapCount>=7){ pool.setDevMode(true); devTapCount=0;
+                Toast.makeText(OverlayService.this,"Dev tools unlocked (SETUP tab)",Toast.LENGTH_SHORT).show();
+                if(mode==4) showPanel(); }
+            else if(devTapCount>=4)
+                Toast.makeText(OverlayService.this,(7-devTapCount)+" more to unlock dev tools",Toast.LENGTH_SHORT).show();
+        }});
         TextView close=new TextView(this); close.setText("\u2715"); close.setTextColor(BONE); close.setTextSize(18);
         close.setGravity(Gravity.CENTER); close.setBackground(box(BLOOD,6,BLOODL,2)); close.setPadding(22,14,22,14);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
@@ -2789,24 +2804,29 @@ public class OverlayService extends Service {
         autoCalHint.setTextColor(ASH); autoCalHint.setTextSize(10); autoCalHint.setPadding(2,0,0,10);
         root.addView(autoCalHint);
 
-        TextView imgScanBtn=new TextView(this); imgScanBtn.setText("SCAN FROM IMAGE (test, no game)");
-        imgScanBtn.setTextColor(BONE); imgScanBtn.setTextSize(13); imgScanBtn.setGravity(Gravity.CENTER);
-        imgScanBtn.setPadding(0,12,0,12); imgScanBtn.setBackground(box(CARD,6,ASH,2));
-        LinearLayout.LayoutParams isbl=new LinearLayout.LayoutParams(-1,-2); isbl.setMargins(0,0,0,6); imgScanBtn.setLayoutParams(isbl);
-        imgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            closePanel();
-            try{
-                Intent i=new Intent(OverlayService.this, ImageScanActivity.class);
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-            }catch(Exception e){ Toast.makeText(OverlayService.this,"could not open picker: "+e.getMessage(),Toast.LENGTH_LONG).show(); }
-        }});
-        root.addView(imgScanBtn);
+        // Dev-only testing tool — hidden unless dev mode is unlocked (tap version 7x).
+        // Lets the owner validate scanning on a saved screenshot; not for end users,
+        // who will test in a live game.
+        if(pool.isDevMode()){
+            TextView imgScanBtn=new TextView(this); imgScanBtn.setText("SCAN FROM IMAGE (dev test)");
+            imgScanBtn.setTextColor(BONE); imgScanBtn.setTextSize(13); imgScanBtn.setGravity(Gravity.CENTER);
+            imgScanBtn.setPadding(0,12,0,12); imgScanBtn.setBackground(box(CARD,6,ASH,2));
+            LinearLayout.LayoutParams isbl=new LinearLayout.LayoutParams(-1,-2); isbl.setMargins(0,0,0,6); imgScanBtn.setLayoutParams(isbl);
+            imgScanBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                closePanel();
+                try{
+                    Intent i=new Intent(OverlayService.this, ImageScanActivity.class);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                }catch(Exception e){ Toast.makeText(OverlayService.this,"could not open picker: "+e.getMessage(),Toast.LENGTH_LONG).show(); }
+            }});
+            root.addView(imgScanBtn);
 
-        TextView imgScanHint=new TextView(this);
-        imgScanHint.setText("Pick a saved TFT screenshot and run the full scan on it — see the OCR (gold/level/shop) and the detected unit dots drawn over the image. Validates scanning without being in a game.");
-        imgScanHint.setTextColor(ASH); imgScanHint.setTextSize(10); imgScanHint.setPadding(2,0,0,10);
-        root.addView(imgScanHint);
+            TextView imgScanHint=new TextView(this);
+            imgScanHint.setText("DEV: pick a saved TFT screenshot and run the full scan on it — OCR readout + detected unit dots over the image. Tap the version label 7x again to hide dev tools.");
+            imgScanHint.setTextColor(ASH); imgScanHint.setTextSize(10); imgScanHint.setPadding(2,0,0,10);
+            root.addView(imgScanHint);
+        }
 
         TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (manual)");
         tapCalBtn.setTextColor(BONE); tapCalBtn.setTextSize(13); tapCalBtn.setGravity(Gravity.CENTER);
