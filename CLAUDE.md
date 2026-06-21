@@ -24,7 +24,8 @@ app/src/main/java/com/xanfiend/tftoverlay/
   Pool.java             — SharedPreferences-backed pool state + pure math helpers
   ScreenScanner.java    — ML Kit OCR passes (shop / popup / bench)
   TFTAccessibilityService.java — takeScreenshot + dispatchGesture
-  SetData.java          — champion names + pool sizes per cost tier (update each set)
+  SetData.java          — champion names + pool sizes per cost tier (BUNDLED FALLBACK; per-set fields are non-final, overwritten by RemoteData at startup)
+  RemoteData.java       — remote set-data sync: pulls data/setdata.json from GitHub on launch, caches to disk, falls back to bundled
   AugmentData.java      — augment tier ratings + comp tags
   ItemData.java         — 9-component combination matrix
   TraitData.java        — trait breakpoints
@@ -37,6 +38,17 @@ app/src/main/java/com/xanfiend/tftoverlay/
 ```
 
 `assets/seticons/` — 48×48 PNG champion portraits for planner scan (bundle per set).
+`data/setdata.json` — remote set data the app fetches on launch (champs/sizes/gods). Keep in sync with `SetData.java` bundled fallback.
+
+## Set updates (remote data sync)
+
+Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, push to `main`, and the app pulls it on next launch (`RemoteData.syncAsync` → cache → applied at the *following* launch via `loadCachedOrBundled`). Network result never mutates `SetData` mid-session.
+
+- Runtime source: `https://raw.githubusercontent.com/Xanfiend/tft-overlay/main/data/setdata.json` (GitHub only — preserves the updater's privacy promise).
+- `SetData.java` is the **bundled fallback** (offline / pre-first-sync) — keep it current too.
+- Dev tooling: `scripts/gen_setdata.py --from-cdragon` regenerates the JSON from CommunityDragon (carries over `size`/`gods`, which CDragon doesn't publish); `--validate` checks it against the same rules `RemoteData.validate()` enforces (run before committing). CDragon is a **dev-time** source only — never a runtime dependency.
+- Schema: `{version, setName, patch, size[6], gods[], champs[6][]}` — `champs[0]` empty, `champs[1..5]` per cost tier, all non-empty. Bad/short payloads are rejected, never overwrite the set.
+- `SetData` per-set fields (`SET_NAME`, `PATCH`, `SIZE`, `CHAMPS`, `GODS`) are non-final and treated as read-only outside `RemoteData`. `Pool.invalidateData()` drops the cost cache after a swap.
 
 ## SharedPreferences keys (Pool.java)
 
@@ -126,6 +138,8 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.86 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
+| v1.85 | Fix level-1 OCR (Tocker's), fix gold fused-icon, AUTO-CALIBRATE FROM BOARD (hex mesh) |
 | v1.84 | Aspect-ratio-aware fallback hex grid (no more 16:9-only dot positions) |
 | v1.83 | Smart Scan dot-height nudge control + fix too-short landscape grid |
 | v1.82 | THE HUNT no longer overcounts bought copies (deferred confirm) |
@@ -140,6 +154,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 - `minSdk 24` (Android 7) — `takeScreenshot` and `dispatchGesture` require API 30; guard all calls.
 - All UI is programmatic Java — no XML layouts, no DI.
-- ML Kit bundled (`text-recognition:16.0.1`); no network needed at runtime.
-- Champion/pool data in `SetData.java` — update this file each TFT set; no other data files need touching for a set update.
+- ML Kit bundled (`text-recognition:16.0.1`); OCR/scan work fully offline.
+- Network is GitHub-only and optional: self-update (`Updater`) + set-data sync (`RemoteData`). App runs fully offline on bundled/cached data.
+- Set updates: edit `data/setdata.json` (runtime) AND `SetData.java` (bundled fallback). See "Set updates" above.
 - `lintOptions { abortOnError false }` — lint warnings do not fail the build.
