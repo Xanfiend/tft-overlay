@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
 
         // glow ring of symbols under sigil
         TextView sigilRing = new TextView(this);
-        sigilRing.setText("☽  ✡  ⛤  ♄  ✡  ☾");
+        sigilRing.setText("⛧  ·  ⛧  ·  ⛧  ·  ⛧  ·  ⛧");
         sigilRing.setTextColor(PURPL);
         sigilRing.setTextSize(13);
         sigilRing.setGravity(Gravity.CENTER);
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.88");
+        ver.setText("v1.89");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -284,7 +284,7 @@ public class MainActivity extends Activity {
             }
         }));
 
-        contentArea.addView(btnDestructive("☠  Stop overlay + reset pool", new View.OnClickListener(){
+        contentArea.addView(btnDestructive("×  Stop overlay + reset pool", new View.OnClickListener(){
             public void onClick(View v){
                 stopService(new Intent(MainActivity.this, OverlayService.class));
                 new Pool(MainActivity.this).reset();
@@ -312,7 +312,7 @@ public class MainActivity extends Activity {
 
         // tips section header
         TextView tipsHdr = new TextView(this);
-        tipsHdr.setText("⛤  HOW TO USE");
+        tipsHdr.setText("⛧  HOW TO USE");
         tipsHdr.setTextColor(GOLD); tipsHdr.setTextSize(11);
         tipsHdr.setTypeface(null, Typeface.BOLD); tipsHdr.setLetterSpacing(0.1f);
         LinearLayout.LayoutParams thl = new LinearLayout.LayoutParams(-1,-2);
@@ -401,6 +401,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.89  ·  2026-06-21","Fixed the launch screen showing rows of purple boxes on some tablets. The decorative occult symbols (moons, stars, planet signs) under the title and in the divider lines aren't present in every device's system font, so those tablets drew the 'missing glyph' box instead. Replaced them with symbols that are in every font, so the launch screen looks right everywhere. No functional change."},
             {"v1.88  ·  2026-06-21","Made the SCAN FROM IMAGE tool a hidden developer option instead of a permanent button - real testing happens in a live game, so this is just a stopgap for checking OCR/calibration on a saved screenshot when a match isn't handy. It no longer shows in SETUP by default. To use it, tap the version label (top of the panel) 7 times to unlock dev tools; tap 7 times again to hide them. Everything else about it is unchanged: pick a screenshot, it runs the full scan and draws the OCR readout plus detected unit dots over the image."},
             {"v1.87  ·  2026-06-21","Added SCAN FROM IMAGE - test scanning on a saved TFT screenshot without being in a game (runs the full OCR + unit detection and draws the result over the image). Now hidden behind dev tools as of v1.88."},
             {"v1.86  ·  2026-06-21","NEW remote set-data sync, so a new TFT set no longer needs a new app build. On launch the app now pulls the current set's champion list and pool sizes from a small JSON hosted in the project's GitHub repo (the same place the app already checks for updates - no new servers, no tracking), caches it on your phone, and uses it everywhere the pool is tracked. If you are offline or the fetch fails, it falls back to the data baked into the app, then to the on-disk cache from the last successful sync - so the tracker always has a valid set. The fetched data is only applied on the NEXT launch (never mid-session), so a sync can't desync a scan in progress, and a corrupt or half-downloaded file is rejected rather than wiping your set. For most updates this means you just get the new set automatically without waiting for an APK."},
@@ -518,11 +519,14 @@ public class MainActivity extends Activity {
     }
 
     private String buildPattern(){
+        // Only ⛧ and · — other occult glyphs (☽ ✡ ⛤ ♄ ☿ ☠) are missing from some
+        // device fonts (e.g. many tablets) and render as tofu boxes. These two are
+        // universally present, so the faint star field never breaks.
         String[] rows = {
-            "⛧  ✡  ☽  ⛤  ☾  ♄  ⛧  ✡  ☽  ⛤  ☾  ♄  ⛧  ✡  ☽  ⛤  ☾  ♄",
-            "☿  ⛧  ☠  ✡  ⛤  ☽  ♄  ☾  ⛧  ☿  ✡  ☠  ⛤  ☽  ⛧  ♄  ☾  ⛧",
-            "☽  ⛤  ⛧  ☾  ✡  ☿  ⛧  ♄  ☠  ⛧  ☽  ✡  ⛤  ☾  ☿  ⛧  ♄  ☠",
-            "✡  ☾  ♄  ⛧  ☿  ⛤  ☠  ☽  ✡  ⛧  ☾  ♄  ⛧  ☿  ⛤  ☠  ☽  ✡",
+            "⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·",
+            "·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·",
+            "·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧",
+            "·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·",
         };
         StringBuilder sb = new StringBuilder();
         for(int i = 0; i < 60; i++){
@@ -586,7 +590,7 @@ public class MainActivity extends Activity {
 
     private TextView divider(int top, int bot){
         TextView d = new TextView(this);
-        d.setText("⛧ · ☽ · ✡ · ☾ · ⛧ · ☽ · ✡");
+        d.setText("·  ⛧  ·  ⛧  ·  ⛧  ·  ⛧  ·");
         d.setTextColor(EDGE); d.setTextSize(9); d.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1,-2);
         dl.setMargins(0, top, 0, bot);
