@@ -35,6 +35,7 @@ app/src/main/java/com/xanfiend/tftoverlay/
   RollMath.java          — hit-probability tables
   MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION)
   ScanPermActivity.java  — MediaProjection fallback (API < 30)
+  ImageScanActivity.java — dev: pick a saved screenshot, run the scan pipeline on it (no TFT needed)
 ```
 
 `assets/seticons/` — 48×48 PNG champion portraits for planner scan (bundle per set).
@@ -138,6 +139,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.87 | SCAN FROM IMAGE dev mode — run the scan pipeline on a saved screenshot (no game) |
 | v1.86 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
 | v1.85 | Fix level-1 OCR (Tocker's), fix gold fused-icon, AUTO-CALIBRATE FROM BOARD (hex mesh) |
 | v1.84 | Aspect-ratio-aware fallback hex grid (no more 16:9-only dot positions) |
