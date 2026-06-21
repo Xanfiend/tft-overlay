@@ -141,6 +141,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.91 | Launch-screen occult symbols drawn as vector pentagrams (font-independent, can't tofu) |
 | v1.90 | COACH tab — recommend comp/items + econ call from scanned board (CompAdvisor + ChampItemData) |
 | v1.89 | Fix tofu glyphs on launch screen (tablet fonts) |
 | v1.88 | SCAN FROM IMAGE moved behind hidden dev mode (tap version 7x); `cfg_devmode` |
