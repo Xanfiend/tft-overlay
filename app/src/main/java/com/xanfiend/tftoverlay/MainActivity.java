@@ -47,16 +47,27 @@ public class MainActivity extends Activity {
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(VOID);
 
-        // occult background pattern
-        TextView pattern = new TextView(this);
-        pattern.setText(buildPattern());
-        pattern.setTextColor(0x18C1121F);
-        pattern.setTextSize(15);
-        pattern.setLetterSpacing(0.04f);
-        pattern.setLineSpacing(6, 1f);
-        pattern.setPadding(8, 0, 8, 0);
-        FrameLayout.LayoutParams patLp = new FrameLayout.LayoutParams(-1, -1);
-        frame.addView(pattern, patLp);
+        // occult background pattern — DRAWN and tiled across the whole canvas so it
+        // always fills the screen (the old fixed block of glyph-text couldn't reach the
+        // edges of a large tablet, leaving the pattern covering only part of the screen)
+        View pattern = new View(this){
+            @Override protected void onDraw(android.graphics.Canvas c){
+                android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                p.setStyle(android.graphics.Paint.Style.STROKE);
+                p.setStrokeWidth(1.5f);
+                p.setColor(0x1AC1121F);   // faint blood
+                float step = 60 * getResources().getDisplayMetrics().density;
+                float r = step * 0.30f;
+                int w = getWidth(), hh = getHeight(), rowi = 0;
+                for(float y = step * 0.5f; y < hh + r; y += step, rowi++){
+                    float ox = (rowi % 2 == 0) ? 0 : step * 0.5f;   // brick offset for a star-field feel
+                    for(float x = step * 0.5f + ox; x < w + r; x += step){
+                        drawPentagram(c, p, x, y, r, false);   // no circle — keep the field subtle
+                    }
+                }
+            }
+        };
+        frame.addView(pattern, new FrameLayout.LayoutParams(-1, -1));
 
         // animated ember layer: slow-drifting glowing particles behind the content
         EmberView embers = new EmberView(this);
@@ -70,12 +81,9 @@ public class MainActivity extends Activity {
         root.setPadding(48, 80, 48, 72);
         root.setBackgroundColor(0x00000000);
 
-        // hero sigil
-        TextView sigil = new TextView(this);
-        sigil.setText("⛧");
-        sigil.setTextColor(BLOODL);
-        sigil.setTextSize(80);
-        sigil.setGravity(Gravity.CENTER);
+        // hero pentacle — DRAWN blood-red inverted pentagram inside a circle. The old
+        // ⛧ glyph rendered as a gold color-emoji on some devices, ignoring our theme color
+        View sigil = heroPentacle();
         root.addView(sigil);
         pulseGlow(sigil);
 
@@ -105,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.91");
+        ver.setText("v1.92");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -186,7 +194,7 @@ public class MainActivity extends Activity {
     }
 
     // slow ambient glow pulse on the hero sigil
-    private void pulseGlow(final TextView v){
+    private void pulseGlow(final View v){
         android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0.55f, 1f);
         va.setDuration(1800);
         va.setRepeatMode(android.animation.ValueAnimator.REVERSE);
@@ -397,9 +405,12 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
-            {"v1.91  ·  2026-06-21","Launch-screen occult symbols fixed and upgraded. On some tablets the decorative unicode glyphs (moons, stars, planet signs) weren't in the system font and showed as rows of purple boxes. They're now DRAWN as vectors - inverted pentagrams, Sigil-of-Baphomet style - in the theme color, so they render identically on every device and can never show as missing-glyph boxes. Same satanic look, no font dependency."},
+            {"v1.92  ·  2026-06-21","Launch screen polish. The hero symbol is now a drawn blood-red PENTACLE - inverted pentagram inside a circle - instead of a gold star (the old glyph rendered as a color emoji that ignored the theme color). And the faint occult background now tiles across the ENTIRE screen on any device: before it was a fixed block of text that didn't reach the edges of large tablets, so it only covered part of the screen. Both are drawn as vectors, so they can't break on any device's fonts."},
+            {"v1.91  ·  2026-06-21","The occult symbols on the launch screen are now DRAWN (inverted pentagrams ringed Sigil-of-Baphomet style) instead of unicode text. The previous v1.89 fix swapped in plain symbols to stop the purple boxes on tablets whose fonts lack the occult glyphs; this brings the satanic look back properly by rendering the pentagrams as vectors in the theme color, so they look identical on every device and can never show as missing-glyph boxes again. Same color, fully on-theme, no font dependency."},
             {"v1.90  ·  2026-06-21","NEW COACH tab (under GUIDE) - tells you what line to play. After you scan your board it reads your units and recommends a comp to commit to, built around the strongest carry you have, with that carry's best-in-slot items and a one-line plan - all from the same verified patch-meta data the BUILDS tab uses (so it reflects what's actually strong, not guesses). It also lists your units colored by tier with a contest count (how many players you've seen on each), and gives a NEXT MOVE econ/tempo call (roll / level / save) based on your gold, level, and stage. Scan first (hold the sigil for Auto Scan), then open GUIDE > COACH."},
-            {"v1.88  ·  2026-06-21","NEW (developer tool) SCAN FROM IMAGE - test scanning on a saved TFT screenshot without being in a game: it runs the full OCR + unit detection and draws the result (gold/level/shop readout plus detected unit dots) over the image. It's a hidden dev option since real testing happens in a live game, so it doesn't show in SETUP by default - tap the version label at the top of the panel 7 times to unlock dev tools, 7 more to hide them."},
+            {"v1.89  ·  2026-06-21","Fixed the launch screen showing rows of purple boxes on some tablets. The decorative occult symbols (moons, stars, planet signs) under the title and in the divider lines aren't present in every device's system font, so those tablets drew the 'missing glyph' box instead. Replaced them with symbols that are in every font, so the launch screen looks right everywhere. No functional change."},
+            {"v1.88  ·  2026-06-21","Made the SCAN FROM IMAGE tool a hidden developer option instead of a permanent button - real testing happens in a live game, so this is just a stopgap for checking OCR/calibration on a saved screenshot when a match isn't handy. It no longer shows in SETUP by default. To use it, tap the version label (top of the panel) 7 times to unlock dev tools; tap 7 times again to hide them. Everything else about it is unchanged: pick a screenshot, it runs the full scan and draws the OCR readout plus detected unit dots over the image."},
+            {"v1.87  ·  2026-06-21","Added SCAN FROM IMAGE - test scanning on a saved TFT screenshot without being in a game (runs the full OCR + unit detection and draws the result over the image). Now hidden behind dev tools as of v1.88."},
             {"v1.86  ·  2026-06-21","NEW remote set-data sync, so a new TFT set no longer needs a new app build. On launch the app now pulls the current set's champion list and pool sizes from a small JSON hosted in the project's GitHub repo (the same place the app already checks for updates - no new servers, no tracking), caches it on your phone, and uses it everywhere the pool is tracked. If you are offline or the fetch fails, it falls back to the data baked into the app, then to the on-disk cache from the last successful sync - so the tracker always has a valid set. The fetched data is only applied on the NEXT launch (never mid-session), so a sync can't desync a scan in progress, and a corrupt or half-downloaded file is rejected rather than wiping your set. For most updates this means you just get the new set automatically without waiting for an APK."},
             {"v1.85  ·  2026-06-21","Three fixes. (1) FIXED level OCR never reading level 1 in Tocker's Trials - the regex only allowed levels 2-10 so auto scan would log level=-1 and the board tab could not compute gold-to-level-up correctly. Now matches 1-10. (2) FIXED gold not reading if the OCR fuses the coin glyph onto the number (reads the full string as the glyph + digits instead of just digits) - switched from exact-match to digit-find so fused glyphs are stripped. (3) ADDED AUTO-CALIBRATE FROM BOARD in the SETUP calibration section: open TFT to planning phase, tap the button, and the app detects the teal hex-outline grid automatically, computes the four corner hex centers, and saves them. Tap SHOW DOTS to verify before playing."},
             {"v1.84  ·  2026-06-19","Aspect-ratio-aware fallback grid so the calibration dots land on the board automatically, no manual adjustment. The old grid used fixed screen percentages for the board's left/right edges (8% to 88%), which is only right on a ~16:9 screen — on a tall/wide phone (e.g. 20:9) TFT draws the board height-fit and centered, so it takes up a much smaller slice of the width and the dots were thrown out past the sides. The grid now derives the board's horizontal span from your screen's aspect ratio (back row ~0.67x and front row ~0.98x the screen height, centered), so an uncalibrated grid fits the real board on any device. Vertical rows were also re-measured from a real 2400x1080 board: rows now sit at ~44/53/62/72% of height (the front row reaches the actual front hexes instead of stopping short). If you previously hand-calibrated, your settings are kept — tap RESET in the calibration section to switch to the new auto-fit. NOTE: the most precise, zero-setup option is still SMART SCAN (on by default), which finds your actual units by their health bars every scan and ignores the grid entirely; the grid is only the fallback when health-bar detection comes up empty."},
@@ -514,23 +525,6 @@ public class MainActivity extends Activity {
         contentArea.addView(footer);
     }
 
-    private String buildPattern(){
-        // Only ⛧ and · — other occult glyphs (☽ ✡ ⛤ ♄ ☿ ☠) are missing from some
-        // device fonts (e.g. many tablets) and render as tofu boxes. These two are
-        // universally present, so the faint star field never breaks.
-        String[] rows = {
-            "⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·",
-            "·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·",
-            "·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧",
-            "·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·  ·  ⛧  ·",
-        };
-        StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < 60; i++){
-            sb.append(rows[i % rows.length]).append("\n");
-        }
-        return sb.toString();
-    }
-
     private TextView btn(String txt, View.OnClickListener l){
         TextView b = new TextView(this); b.setText(txt); b.setGravity(Gravity.CENTER);
         b.setTextColor(BONE); b.setTextSize(15); b.setPadding(0,20,0,20);
@@ -607,7 +601,7 @@ public class MainActivity extends Activity {
                 p.setColor(color);
                 float cy = getHeight() / 2f;
                 for(int i = 0; i < count; i++){
-                    drawPentagram(c, p, getWidth() * (i + 0.5f) / count, cy, r);
+                    drawPentagram(c, p, getWidth() * (i + 0.5f) / count, cy, r, true);
                 }
             }
         };
@@ -615,9 +609,9 @@ public class MainActivity extends Activity {
         return v;
     }
 
-    // Inverted pentagram (one point down) with its enclosing circle.
+    // Inverted pentagram (one point down); `circle` adds the enclosing ring (pentacle).
     private static void drawPentagram(android.graphics.Canvas c, android.graphics.Paint p,
-                                      float cx, float cy, float r){
+                                      float cx, float cy, float r, boolean circle){
         float[] x = new float[5], y = new float[5];
         for(int k = 0; k < 5; k++){
             double a = Math.toRadians(90) + k * 2 * Math.PI / 5;  // 90° start = bottom vertex
@@ -630,7 +624,30 @@ public class MainActivity extends Activity {
         for(int k = 1; k < 5; k++) path.lineTo(x[order[k]], y[order[k]]);
         path.close();
         c.drawPath(path, p);
-        c.drawCircle(cx, cy, r, p);
+        if(circle) c.drawCircle(cx, cy, r, p);
+    }
+
+    // Big blood-red pentacle for the launch-screen hero — inverted pentagram in a circle,
+    // drawn so it's always our color (the ⛧ glyph renders as a color emoji on some fonts).
+    private View heroPentacle(){
+        final float density = getResources().getDisplayMetrics().density;
+        final int size = Math.round(116 * density);
+        View v = new View(this){
+            @Override protected void onDraw(android.graphics.Canvas c){
+                android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                p.setStyle(android.graphics.Paint.Style.STROKE);
+                p.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                p.setStrokeWidth(Math.max(3f, size * 0.035f));
+                p.setColor(BLOODL);
+                float cx = getWidth() / 2f, cy = getHeight() / 2f;
+                float r = Math.min(getWidth(), getHeight()) * 0.44f;
+                drawPentagram(c, p, cx, cy, r, true);
+            }
+        };
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+        lp.gravity = Gravity.CENTER_HORIZONTAL;
+        v.setLayoutParams(lp);
+        return v;
     }
 
     private boolean canDraw(){ return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this); }
