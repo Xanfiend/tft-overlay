@@ -79,15 +79,11 @@ public class MainActivity extends Activity {
         root.addView(sigil);
         pulseGlow(sigil);
 
-        // glow ring of symbols under sigil
-        TextView sigilRing = new TextView(this);
-        sigilRing.setText("⛧  ·  ⛧  ·  ⛧  ·  ⛧  ·  ⛧");
-        sigilRing.setTextColor(PURPL);
-        sigilRing.setTextSize(13);
-        sigilRing.setGravity(Gravity.CENTER);
-        sigilRing.setLetterSpacing(0.05f);
-        LinearLayout.LayoutParams ringLp = new LinearLayout.LayoutParams(-1,-2);
-        ringLp.setMargins(0, -4, 0, 0);
+        // ring of inverted pentagrams under the sigil — DRAWN (not font glyphs) so it
+        // renders identically on every device in our theme color (no missing-glyph boxes)
+        View sigilRing = pentRow(PURPL, 5, 8f);
+        LinearLayout.LayoutParams ringLp = new LinearLayout.LayoutParams(-1, sigilRing.getLayoutParams().height);
+        ringLp.setMargins(0, -2, 0, 0);
         sigilRing.setLayoutParams(ringLp);
         root.addView(sigilRing);
 
@@ -109,7 +105,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.90");
+        ver.setText("v1.91");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -401,6 +397,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.91  ·  2026-06-21","The occult symbols on the launch screen are now DRAWN (inverted pentagrams ringed Sigil-of-Baphomet style) instead of unicode text. The previous v1.89 fix swapped in plain symbols to stop the purple boxes on tablets whose fonts lack the occult glyphs; this brings the satanic look back properly by rendering the pentagrams as vectors in the theme color, so they look identical on every device and can never show as missing-glyph boxes again. Same color, fully on-theme, no font dependency."},
             {"v1.90  ·  2026-06-21","NEW COACH tab (under GUIDE) - tells you what line to play. After you scan your board it reads your units and recommends a comp to commit to, built around the strongest carry you have, with that carry's best-in-slot items and a one-line plan - all from the same verified patch-meta data the BUILDS tab uses (so it reflects what's actually strong, not guesses). It also lists your units colored by tier with a contest count (how many players you've seen on each), and gives a NEXT MOVE econ/tempo call (roll / level / save) based on your gold, level, and stage. Scan first (hold the sigil for Auto Scan), then open GUIDE > COACH."},
             {"v1.89  ·  2026-06-21","Fixed the launch screen showing rows of purple boxes on some tablets. The decorative occult symbols (moons, stars, planet signs) under the title and in the divider lines aren't present in every device's system font, so those tablets drew the 'missing glyph' box instead. Replaced them with symbols that are in every font, so the launch screen looks right everywhere. No functional change."},
             {"v1.88  ·  2026-06-21","Made the SCAN FROM IMAGE tool a hidden developer option instead of a permanent button - real testing happens in a live game, so this is just a stopgap for checking OCR/calibration on a saved screenshot when a match isn't handy. It no longer shows in SETUP by default. To use it, tap the version label (top of the panel) 7 times to unlock dev tools; tap 7 times again to hide them. Everything else about it is unchanged: pick a screenshot, it runs the full scan and draws the OCR readout plus detected unit dots over the image."},
@@ -589,14 +586,53 @@ public class MainActivity extends Activity {
         return (a<<24)|(r<<16)|(gC<<8)|b;
     }
 
-    private TextView divider(int top, int bot){
-        TextView d = new TextView(this);
-        d.setText("·  ⛧  ·  ⛧  ·  ⛧  ·  ⛧  ·");
-        d.setTextColor(EDGE); d.setTextSize(9); d.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1,-2);
+    private View divider(int top, int bot){
+        View d = pentRow(0x66C1121F, 7, 4.5f);   // muted blood — drawn, can't tofu
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, d.getLayoutParams().height);
         dl.setMargins(0, top, 0, bot);
         d.setLayoutParams(dl);
         return d;
+    }
+
+    // A horizontal row of `count` inverted pentagrams (each ringed, Sigil-of-Baphomet
+    // style) drawn on a Canvas in `color`. Drawn vectors instead of unicode glyphs, so
+    // the occult decoration looks the same on every device regardless of its fonts.
+    private View pentRow(final int color, final int count, final float radiusDp){
+        final float density = getResources().getDisplayMetrics().density;
+        final float r = radiusDp * density;
+        final int h = Math.round(r * 2 + 10 * density);
+        View v = new View(this){
+            @Override protected void onDraw(android.graphics.Canvas c){
+                android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                p.setStyle(android.graphics.Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1.5f, r * 0.07f));
+                p.setColor(color);
+                float cy = getHeight() / 2f;
+                for(int i = 0; i < count; i++){
+                    drawPentagram(c, p, getWidth() * (i + 0.5f) / count, cy, r);
+                }
+            }
+        };
+        v.setLayoutParams(new LinearLayout.LayoutParams(-1, h));
+        return v;
+    }
+
+    // Inverted pentagram (one point down) with its enclosing circle.
+    private static void drawPentagram(android.graphics.Canvas c, android.graphics.Paint p,
+                                      float cx, float cy, float r){
+        float[] x = new float[5], y = new float[5];
+        for(int k = 0; k < 5; k++){
+            double a = Math.toRadians(90) + k * 2 * Math.PI / 5;  // 90° start = bottom vertex
+            x[k] = cx + r * (float)Math.cos(a);
+            y[k] = cy + r * (float)Math.sin(a);
+        }
+        android.graphics.Path path = new android.graphics.Path();
+        int[] order = {0, 2, 4, 1, 3};   // {5/2} star: skip one vertex each step
+        path.moveTo(x[order[0]], y[order[0]]);
+        for(int k = 1; k < 5; k++) path.lineTo(x[order[k]], y[order[k]]);
+        path.close();
+        c.drawPath(path, p);
+        c.drawCircle(cx, cy, r, p);
     }
 
     private boolean canDraw(){ return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this); }
