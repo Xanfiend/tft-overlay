@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.89";
+    private static final String APP_VERSION = "v1.90";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2183,8 +2183,8 @@ public class OverlayService extends Service {
         buildGodTracker(root);
         // sub-tab row
         LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
-        String[] gtNames={"AUGMENTS","ITEMS"};
-        for(int i=0;i<2;i++){
+        String[] gtNames={"COACH","AUGMENTS","ITEMS"};
+        for(int i=0;i<3;i++){
             final int gi=i; boolean on=guideTab==gi;
             TextView gt=new TextView(this); gt.setText(gtNames[i]); gt.setGravity(Gravity.CENTER);
             gt.setTextColor(on?BONE:ASH); gt.setTextSize(10); gt.setLetterSpacing(0.05f);
@@ -2195,8 +2195,121 @@ public class OverlayService extends Service {
             gtRow.addView(gt);
         }
         root.addView(gtRow);
-        if(guideTab==0) buildAugments(root);
+        if(guideTab==0) buildCoach(root);
+        else if(guideTab==1) buildAugments(root);
         else buildItems(root);
+    }
+
+    // Champion names on your board right now, from the most recent scan (auto scan
+    // preferred, else the manual board scan). Stars are stripped.
+    private java.util.List<String> currentBoardNames(){
+        java.util.List<String> names=new java.util.ArrayList<>();
+        if(!autoScanResults.isEmpty()){
+            for(String e:autoScanResults) names.add(scanEntryName(e));
+        } else if(!boardScanResults.isEmpty()){
+            names.addAll(boardScanResults);
+        }
+        return names;
+    }
+
+    // COACH sub-tab: recommend a line from the scanned board + econ state.
+    private void buildCoach(LinearLayout root){
+        java.util.List<String> board=currentBoardNames();
+        CompAdvisor.Rec rec=CompAdvisor.recommend(board);
+
+        if(!rec.hasBoard){
+            addSecHdr(root, "COACH", GOLD);
+            TextView t=new TextView(this);
+            t.setText("Scan your board first — hold the sigil to Auto Scan (or use Board Scan in the POOL tab). Then come back here for a recommended line and your next move.");
+            t.setTextColor(ASH); t.setTextSize(12); t.setPadding(2,2,2,8); root.addView(t);
+            return;
+        }
+
+        // ---- recommended line ----
+        addSecHdr(root, "RECOMMENDED LINE", GOLD);
+        if(!rec.comp.isEmpty()){
+            LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(box(CARD,8,GOLD,2)); card.setPadding(14,12,14,12);
+            LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,-2); clp.setMargins(0,0,0,8); card.setLayoutParams(clp);
+
+            LinearLayout top=new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
+            TextView cn=new TextView(this); cn.setText(rec.comp);
+            cn.setTextColor(BONE); cn.setTextSize(16); cn.setTypeface(null,android.graphics.Typeface.BOLD);
+            cn.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            top.addView(cn);
+            if(!rec.tier.isEmpty()){
+                TextView tb=new TextView(this); tb.setText(rec.tier);
+                tb.setTextColor(VOID); tb.setTextSize(13); tb.setTypeface(null,android.graphics.Typeface.BOLD);
+                tb.setGravity(Gravity.CENTER); tb.setBackground(box(tierColor(rec.tier),5,tierColor(rec.tier),2));
+                tb.setPadding(16,3,16,3); top.addView(tb);
+            }
+            card.addView(top);
+
+            TextView carry=new TextView(this); carry.setText("Carry: "+rec.carry);
+            carry.setTextColor(GOLD); carry.setTextSize(13); carry.setPadding(0,6,0,0); card.addView(carry);
+
+            TextView items=new TextView(this);
+            items.setText("Items: "+android.text.TextUtils.join("  ·  ", rec.items));
+            items.setTextColor(BONE); items.setTextSize(12); items.setPadding(0,3,0,0); card.addView(items);
+
+            if(!rec.note.isEmpty()){
+                TextView note=new TextView(this); note.setText(rec.note);
+                note.setTextColor(ASH); note.setTextSize(11); note.setPadding(0,5,0,0); card.addView(note);
+            }
+            root.addView(card);
+
+            if(!rec.alsoCarries.isEmpty()){
+                TextView also=new TextView(this);
+                also.setText("Other carries on your board: "+android.text.TextUtils.join(", ", rec.alsoCarries));
+                also.setTextColor(DIM); also.setTextSize(11); also.setPadding(2,0,2,8); root.addView(also);
+            }
+        } else {
+            TextView t=new TextView(this);
+            t.setText("No marked meta carry on your board yet. Itemize your strongest, least-contested unit and look for a carry to commit to.");
+            t.setTextColor(ASH); t.setTextSize(12); t.setPadding(2,2,2,8); root.addView(t);
+        }
+
+        // ---- your units (ranked + contested) ----
+        addSecHdr(root, "YOUR UNITS", GOLD);
+        LinearLayout chips=new LinearLayout(this); chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setPadding(0,0,0,2);
+        java.util.LinkedHashSet<String> seen=new java.util.LinkedHashSet<>(board);
+        int perRow=0; LinearLayout row=null;
+        for(String name:seen){
+            if(perRow%3==0){ row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); root.addView(row); }
+            String t=ChampItemData.tierOf(name);
+            int contest=pool.oppCount(name);
+            TextView chip=new TextView(this);
+            String label=name+(t.isEmpty()?"":("  "+t))+(contest>0?("  ◉"+contest):"");
+            chip.setText(label);
+            chip.setTextColor(t.isEmpty()?ASH:tierColor(t)); chip.setTextSize(11); chip.setGravity(Gravity.CENTER);
+            chip.setBackground(box(CARD,6,t.isEmpty()?EDGE:tierColor(t),t.isEmpty()?1:2)); chip.setPadding(0,8,0,8);
+            LinearLayout.LayoutParams chl=new LinearLayout.LayoutParams(0,-2,1f); chl.setMargins(2,2,2,2); chip.setLayoutParams(chl);
+            row.addView(chip); perRow++;
+        }
+        // pad the last row so chips keep even widths
+        while(perRow%3!=0){ TextView sp=new TextView(this); LinearLayout.LayoutParams spl=new LinearLayout.LayoutParams(0,-2,1f); spl.setMargins(2,2,2,2); sp.setLayoutParams(spl); row.addView(sp); perRow++; }
+
+        TextView legend=new TextView(this);
+        legend.setText("◉ = players contesting this unit (from your scans)");
+        legend.setTextColor(DIM); legend.setTextSize(10); legend.setPadding(2,4,2,8); root.addView(legend);
+
+        // ---- next move (econ/tempo) ----
+        addSecHdr(root, "NEXT MOVE", GOLD);
+        TextView econ=new TextView(this);
+        econ.setText(CompAdvisor.econCall(pool.getLevel(), pool.getGold(), pool.getStageRound()));
+        econ.setTextColor(BONE); econ.setTextSize(12); econ.setPadding(2,2,2,6); root.addView(econ);
+
+        TextView ctx=new TextView(this);
+        String stage=pool.getStageRound();
+        ctx.setText("lv "+pool.getLevel()+"  ·  "+pool.getGold()+"g"+(stage.isEmpty()?"":("  ·  "+stage))
+                +"  ·  builds: patch "+ChampItemData.PATCH);
+        ctx.setTextColor(DIM); ctx.setTextSize(10); ctx.setPadding(2,0,2,4); root.addView(ctx);
+    }
+
+    private int tierColor(String t){
+        if(t==null) return ASH;
+        switch(t){ case "S": return GOLD; case "A": return GREEN; case "B": return BONE; case "C": return ASH; default: return ASH; }
     }
 
     // ⛧ REALM OF GODS tracker (Set 17 mechanic). Two gods appear per game in the

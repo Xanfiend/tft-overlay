@@ -31,7 +31,8 @@ app/src/main/java/com/xanfiend/tftoverlay/
   TraitData.java        — trait breakpoints
   ChampionTemplates.java — cosine-signature Visual ID templates
   SetIcons.java          — planner-scan 2D icon matching
-  ChampItemData.java     — champion-to-item mapping for BUILDS tab
+  ChampItemData.java     — champion-to-item mapping + carry→comp/tier (BUILDS tab + COACH); update PATCH each patch
+  CompAdvisor.java       — pure mid-game coach: board+econ → recommended comp/items + roll/level call (COACH sub-tab)
   RollMath.java          — hit-probability tables
   MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION)
   ScanPermActivity.java  — MediaProjection fallback (API < 30)
@@ -140,6 +141,8 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.90 | COACH tab — recommend comp/items + econ call from scanned board (CompAdvisor + ChampItemData) |
+| v1.89 | Fix tofu glyphs on launch screen (tablet fonts) |
 | v1.88 | SCAN FROM IMAGE moved behind hidden dev mode (tap version 7x); `cfg_devmode` |
 | v1.87 | SCAN FROM IMAGE dev mode — run the scan pipeline on a saved screenshot (no game) |
 | v1.86 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
