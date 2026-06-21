@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.84";
+    private static final String APP_VERSION = "v1.85";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2772,7 +2772,19 @@ public class OverlayService extends Service {
         calInfo.setTextColor(ASH); calInfo.setTextSize(10); calInfo.setPadding(2,0,0,8);
         root.addView(calInfo);
 
-        TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (recommended)");
+        TextView autoCalBtn=new TextView(this); autoCalBtn.setText("AUTO-CALIBRATE FROM BOARD");
+        autoCalBtn.setTextColor(BONE); autoCalBtn.setTextSize(13); autoCalBtn.setGravity(Gravity.CENTER);
+        autoCalBtn.setPadding(0,12,0,12); autoCalBtn.setBackground(box(0xFF0D1A1A,6,0xFF00B0B0,2));
+        LinearLayout.LayoutParams acbl=new LinearLayout.LayoutParams(-1,-2); acbl.setMargins(0,0,0,6); autoCalBtn.setLayoutParams(acbl);
+        autoCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ hexAutoCalibrate(); }});
+        root.addView(autoCalBtn);
+
+        TextView autoCalHint=new TextView(this);
+        autoCalHint.setText("Detects the teal hex grid outlines automatically. Open TFT to planning phase, tap this, then SHOW DOTS to verify.");
+        autoCalHint.setTextColor(ASH); autoCalHint.setTextSize(10); autoCalHint.setPadding(2,0,0,10);
+        root.addView(autoCalHint);
+
+        TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (manual)");
         tapCalBtn.setTextColor(BONE); tapCalBtn.setTextSize(13); tapCalBtn.setGravity(Gravity.CENTER);
         tapCalBtn.setPadding(0,12,0,12); tapCalBtn.setBackground(box(BLOOD,6,BLOODL,2));
         LinearLayout.LayoutParams tcbl=new LinearLayout.LayoutParams(-1,-2); tcbl.setMargins(0,0,0,12); tapCalBtn.setLayoutParams(tcbl);
@@ -2893,6 +2905,132 @@ public class OverlayService extends Service {
         nudgeHint.setTextColor(DIM); nudgeHint.setTextSize(10); nudgeHint.setPadding(2,2,0,0);
         root.addView(nudgeHint);
 
+    }
+
+    // ---- auto-calibrate from hex-outline detection ----
+
+    @android.annotation.SuppressLint("NewApi")
+    private void hexAutoCalibrate(){
+        if(Build.VERSION.SDK_INT<30||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,"Enable Accessibility first (SETUP tab)",Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this,"Detecting hex grid — be in planning phase",Toast.LENGTH_SHORT).show();
+        closePanel();
+        try {
+            TFTAccessibilityService.instance.takeScreenshot(
+                android.view.Display.DEFAULT_DISPLAY,
+                getMainExecutor(),
+                new android.accessibilityservice.AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(android.accessibilityservice.AccessibilityService.ScreenshotResult r){
+                        android.hardware.HardwareBuffer hb=r.getHardwareBuffer();
+                        android.graphics.Bitmap bmp=android.graphics.Bitmap.wrapHardwareBuffer(hb,null);
+                        if(bmp==null){ hb.close(); onHexCalFail("bitmap null"); return; }
+                        android.graphics.Bitmap soft=bmp.copy(android.graphics.Bitmap.Config.ARGB_8888,false);
+                        bmp.recycle(); hb.close();
+                        if(soft==null){ onHexCalFail("soft copy null"); return; }
+                        // pixel scan is O(W*H) — run on a background thread
+                        new Thread(()->applyHexCalibration(soft)).start();
+                    }
+                    @Override public void onFailure(int err){ onHexCalFail("screenshot err "+err); }
+                });
+        } catch(Exception e){ onHexCalFail(e.getMessage()); }
+    }
+
+    private void applyHexCalibration(android.graphics.Bitmap bmp){
+        int W=bmp.getWidth(), H=bmp.getHeight();
+        if(W<=H){ bmp.recycle(); onHexCalFail("rotate to landscape first"); return; }
+
+        // Downsample 4x for speed (still sub-pixel accurate at % level)
+        int step=4;
+        int xL=W/10, xR=W*9/10, yT=H*15/100, yB=H*85/100;
+
+        // Pass 1: bounding box of all teal/cyan hex-outline pixels
+        int minX=W,maxX=0,minY=H,maxY=0,count=0;
+        for(int y=yT;y<yB;y+=step){
+            for(int x=xL;x<xR;x+=step){
+                if(isTealHex(bmp.getPixel(x,y))){
+                    if(x<minX) minX=x; if(x>maxX) maxX=x;
+                    if(y<minY) minY=y; if(y>maxY) maxY=y;
+                    count++;
+                }
+            }
+        }
+        if(count<80||maxX-minX<W/5||maxY-minY<H/6){
+            bmp.recycle();
+            onHexCalFail("no hex grid found ("+count+" teal pixels) — must be in planning phase");
+            return;
+        }
+
+        // Pass 2: measure row widths at top and bottom to capture trapezoid perspective
+        int sH=(maxY-minY)/5;
+        int topMinX=W,topMaxX=0,botMinX=W,botMaxX=0;
+        for(int y=minY;y<minY+sH;y+=step){
+            for(int x=minX;x<=maxX;x+=step){
+                if(isTealHex(bmp.getPixel(x,y))){
+                    if(x<topMinX) topMinX=x; if(x>topMaxX) topMaxX=x;
+                }
+            }
+        }
+        for(int y=maxY-sH;y<=maxY;y+=step){
+            for(int x=minX;x<=maxX;x+=step){
+                if(isTealHex(bmp.getPixel(x,y))){
+                    if(x<botMinX) botMinX=x; if(x>botMaxX) botMaxX=x;
+                }
+            }
+        }
+        bmp.recycle();
+
+        if(topMaxX<=topMinX||botMaxX<=botMinX){
+            onHexCalFail("could not measure row widths");
+            return;
+        }
+
+        // Inset from outer outline edge to hex center (half a hex width for 7 cols,
+        // fraction of measured board height for vertical)
+        int hInsetTop=(topMaxX-topMinX)/14;
+        int hInsetBot=(botMaxX-botMinX)/14;
+        int vInset=(maxY-minY)/8;
+
+        int tlX=topMinX+hInsetTop, trX=topMaxX-hInsetTop;
+        int blX=botMinX+hInsetBot, brX=botMaxX-hInsetBot;
+        int topY=minY+vInset,      botY=maxY-vInset;
+
+        int calTL=tlX*100/W, calTR=trX*100/W;
+        int calBL=blX*100/W, calBR=brX*100/W;
+        int calTop=topY*100/H, calBot=botY*100/H;
+
+        if(calTop>=calBot||calTL<3||calBR>97||calTop<10||calBot>90){
+            onHexCalFail("detected bounds look implausible (tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot+")");
+            return;
+        }
+
+        pool.setBoardTopPct(calTop);
+        pool.setBoardBotPct(calBot);
+        pool.setBoardTopLeftPct(calTL);
+        pool.setBoardTopRightPct(calTR);
+        pool.setBoardBotLeftPct(calBL);
+        pool.setBoardBotRightPct(calBR);
+
+        android.util.Log.d("TFTScryer","hexCal: tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot);
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
+            Toast.makeText(this,"Grid detected — tap SHOW DOTS to verify",Toast.LENGTH_LONG).show();
+            showProbeDots();
+        });
+    }
+
+    // TFT planning-phase hex outlines are cyan/teal: high G and B, low R.
+    // Excludes health bars (green: low B), mana bars (blue: low G), white text (high R).
+    private boolean isTealHex(int px){
+        int r=(px>>16)&0xFF, g=(px>>8)&0xFF, b=px&0xFF;
+        return r<80 && g>120 && b>120 && Math.abs(g-b)<80;
+    }
+
+    private void onHexCalFail(String reason){
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
+            Toast.makeText(this,"Auto-cal: "+reason,Toast.LENGTH_LONG).show();
+            mode=4; showPanel();
+        });
     }
 
     // ---- tap-to-calibrate ----

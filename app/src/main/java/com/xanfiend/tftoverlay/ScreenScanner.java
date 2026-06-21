@@ -430,7 +430,7 @@ public class ScreenScanner {
                 continue;
             }
             // top-left band: level, XP progress, stage-round
-            if (r.level == -1 && raw.matches("[2-9]|10")) r.level = Integer.parseInt(raw);
+            if (r.level == -1 && raw.matches("[1-9]|10")) r.level = Integer.parseInt(raw);
             if (r.xpNeed < 0) {
                 java.util.regex.Matcher xm = java.util.regex.Pattern
                         .compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b").matcher(raw);
@@ -574,17 +574,21 @@ public class ScreenScanner {
             int cy = box.centerY();
             int cx = box.centerX();
 
-            // gold: standalone 0-99 in bottom-right corner
-            if (raw.matches("\\d{1,2}") && cy > bottomStart && cx > leftHalf) {
-                int val = Integer.parseInt(raw);
-                if (val >= 0 && val <= 99 && box.height() > goldBoxH) {
-                    r.gold = val;
-                    goldBoxH = box.height();
+            // gold: 0-99 in bottom-right corner. Use find() not matches() so a fused
+            // coin glyph like "⛃53" still yields 53 instead of being discarded.
+            if (cy > bottomStart && cx > leftHalf) {
+                java.util.regex.Matcher gm = java.util.regex.Pattern.compile("(\\d{1,2})").matcher(raw);
+                if (gm.find()) {
+                    int val = Integer.parseInt(gm.group(1));
+                    if (val >= 0 && val <= 99 && box.height() > goldBoxH) {
+                        r.gold = val;
+                        goldBoxH = box.height();
+                    }
                 }
             }
 
-            // level: standalone 2-10 in top-left corner
-            if (raw.matches("[2-9]|10") && cy < topEnd && cx < leftHalf && r.level == -1) {
+            // level: standalone 1-10 in top-left corner (1 = Tocker's Trials start)
+            if (raw.matches("[1-9]|10") && cy < topEnd && cx < leftHalf && r.level == -1) {
                 r.level = Integer.parseInt(raw);
             }
 
