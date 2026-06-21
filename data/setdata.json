@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "setName": "Set 17 - Space Gods",
+  "patch": "",
+  "size": [0, 29, 22, 18, 10, 9],
+  "gods": ["Ahri", "AurelionSol", "Ekko", "Evelynn", "Kayle", "Soraka", "Thresh", "Varus", "Yasuo"],
+  "champs": [
+    [],
+    ["Aatrox", "Briar", "Caitlyn", "Chogath", "Ezreal", "Leona", "Lissandra", "Nasus", "Poppy", "RekSai", "Talon", "Teemo", "TwistedFate", "Veigar"],
+    ["Akali", "Belveth", "Gnar", "Gragas", "Gwen", "Jax", "Jinx", "Meepsie", "Milio", "Mordekaiser", "Pantheon", "Pyke", "Zoe"],
+    ["Aurora", "Diana", "Fizz", "Illaoi", "Kaisa", "Lulu", "Maokai", "MissFortune", "Ornn", "Rhaast", "Samira", "Urgot", "Viktor"],
+    ["AurelionSol", "Corki", "Karma", "Kindred", "Leblanc", "MasterYi", "Morgana", "Nami", "Nunu", "Rammus", "Riven", "TahmKench", "MightyMech", "Xayah"],
+    ["Bard", "Blitzcrank", "Fiora", "Graves", "Jhin", "Shen", "Sona", "Vex"]
+  ]
+}

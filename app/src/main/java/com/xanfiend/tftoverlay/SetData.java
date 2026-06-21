@@ -14,6 +14,15 @@ package com.xanfiend.tftoverlay;
  *  Do NOT edit Pool.java, OverlayService.java, or anything else
  *  for a normal set update -- everything reads from here.
  *
+ *  When a new set drops you no longer need to ship an APK: edit
+ *  data/setdata.json in the repo and the app pulls it on next launch
+ *  (see RemoteData). The values below are the BUNDLED FALLBACK used
+ *  offline / before the first successful sync, so keep them current too.
+ *
+ *  The per-set fields (SET_NAME, PATCH, SIZE, CHAMPS, GODS) are non-final:
+ *  RemoteData overwrites them at startup from the cached remote JSON. Treat
+ *  them as read-only everywhere else.
+ *
  *  CHAMPS layout: index = cost. Index 0 is empty on purpose so
  *  CHAMPS[1] is 1-cost, CHAMPS[2] is 2-cost, etc.
  *  Strip spaces and apostrophes from names (e.g. "Bel'Veth" -> "Belveth",
@@ -23,12 +32,15 @@ package com.xanfiend.tftoverlay;
 public final class SetData {
 
     // Display name of the current set
-    public static final String SET_NAME = "Set 17 - Space Gods";
+    public static String SET_NAME = "Set 17 - Space Gods";
+
+    // Patch the bundled/synced data corresponds to (for the staleness banner).
+    public static String PATCH = "";
 
     // Pool sizes by cost: [unused, 1-cost, 2-cost, 3-cost, 4-cost, 5-cost]
     // Set 17 bag sizes: 29 / 22 / 18 / 10 / 9 (smaller 1c/2c bags than the
     // classic 30/25). Verify against the patch notes when a new set drops.
-    public static final int[] SIZE = {0, 29, 22, 18, 10, 9};
+    public static int[] SIZE = {0, 29, 22, 18, 10, 9};
 
     // Shop odds per level: row = player level (0-10), columns = 1c..5c, percent.
     // Set 17 values; verify rows 7-10 each set, Riot tunes these often.
@@ -51,12 +63,12 @@ public final class SetData {
     // Set 17 mechanic: 2 of these 9 gods appear per game in the Realm (replaces
     // carousels at 2-4 / 3-4 / 4-4). Picking one god's offerings 2+ times earns
     // their Boon armory at 4-7 plus recurring loot afterwards.
-    public static final String[] GODS = {
+    public static String[] GODS = {
         "Ahri","AurelionSol","Ekko","Evelynn","Kayle","Soraka","Thresh","Varus","Yasuo"
     };
 
     // Champions grouped by cost. Index 0 stays empty.
-    public static final String[][] CHAMPS = {
+    public static String[][] CHAMPS = {
         {}, // index 0 unused
 
         // 1-cost
