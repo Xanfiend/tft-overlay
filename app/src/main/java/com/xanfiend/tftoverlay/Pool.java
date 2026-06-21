@@ -21,9 +21,9 @@ import java.util.Set;
  */
 public class Pool {
 
-    public static final int[] SIZE = SetData.SIZE;
-    public static final String[][] CHAMPS = SetData.CHAMPS;
-    public static final String SET_NAME = SetData.SET_NAME;
+    // Set data is owned by SetData (which RemoteData may overwrite at startup
+    // from the cached remote JSON). Read it live there rather than capturing a
+    // copy here, so a synced new set is reflected everywhere.
 
     // costOf is called from nested loops when painting the grid and odds tabs
     // (every card recomputes its tier total, and each remaining() call needs the
@@ -34,12 +34,16 @@ public class Pool {
         Map<String,Integer> m = costLookup;
         if(m == null){
             m = new HashMap<>();
-            for(int c=1;c<=5;c++) for(String n : CHAMPS[c]) m.put(n, c);
+            for(int c=1;c<=5;c++) for(String n : SetData.CHAMPS[c]) m.put(n, c);
             costLookup = m;
         }
         Integer c = m.get(name);
         return c == null ? 0 : c;
     }
+
+    // Called by RemoteData after it swaps SetData's arrays at startup, so the
+    // cost cache is rebuilt against the new champion list on next use.
+    public static void invalidateData(){ costLookup = null; }
 
     private final SharedPreferences p;
     private final Map<String,Integer> seen = new HashMap<>();   // copies gone
@@ -71,7 +75,7 @@ public class Pool {
     public int seenCount(String c){ return seen.containsKey(c) ? seen.get(c) : 0; }
     public int remaining(String c){
         int co=costOf(c); if(co==0) return 0;
-        return Math.max(0, SIZE[co]-seenCount(c));
+        return Math.max(0, SetData.SIZE[co]-seenCount(c));
     }
 
     // ---- opponents contesting ----

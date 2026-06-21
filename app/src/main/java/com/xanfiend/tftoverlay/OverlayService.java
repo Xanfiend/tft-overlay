@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.85";
+    private static final String APP_VERSION = "v1.86";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -284,6 +284,7 @@ public class OverlayService extends Service {
         super.onCreate();
         _instance=this;
         goForeground(); // keep the process alive so the accessibility service isn't killed with it
+        RemoteData.loadCachedOrBundled(this); // overlay synced set data before anything reads it
         pool = new Pool(this);
         level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -907,7 +908,7 @@ public class OverlayService extends Service {
         int cost=Pool.costOf(name); if(cost==0) return 0;
         int slot=ODDS[level][cost-1]; if(slot==0) return 0;
         int rem=pool.remaining(name); if(rem<=0) return 0;
-        int total=0; for(String n:Pool.CHAMPS[cost]) total+=pool.remaining(n);
+        int total=0; for(String n:SetData.CHAMPS[cost]) total+=pool.remaining(n);
         // bench-thinning: junk units you hold are out of the pool, so the
         // effective competing total shrinks (but never below your target's own copies).
         total -= pool.getJunk(cost);
@@ -919,7 +920,7 @@ public class OverlayService extends Service {
 
     // ---- FAST SCOUT GRID: tap = instant +1, long-press chip = -1, live badge ----
     private void buildGrid(LinearLayout root){
-        int totalChamps=0; for(int c=1;c<=5;c++) totalChamps+=Pool.CHAMPS[c].length;
+        int totalChamps=0; for(int c=1;c<=5;c++) totalChamps+=SetData.CHAMPS[c].length;
         chipViews=new TextView[totalChamps];
         chipNames=new String[totalChamps];
         int idx=0;
@@ -1192,7 +1193,7 @@ public class OverlayService extends Service {
         for(int cost=1;cost<=5;cost++){
         addSecHdr(root, cost+"-COST", COSTC[cost]);
 
-            LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
+            LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
                 final String name=arr[j]; final int fc=cost;
@@ -1306,7 +1307,7 @@ public class OverlayService extends Service {
         // champion picker, grouped by cost
         for(int cost=1;cost<=5;cost++){
             addSecHdr(root, cost+"-COST", COSTC[cost]);
-            LinearLayout row=null; String[] arr=Pool.CHAMPS[cost];
+            LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
                 final String name=arr[j];
@@ -1725,7 +1726,7 @@ public class OverlayService extends Service {
         // tier totals (pool remaining per cost, minus junk) for the rolldown sim
         int[] tierTotal=new int[6];
         for(int co=1;co<=5;co++){
-            int t=0; for(String n:Pool.CHAMPS[co]) t+=pool.remaining(n);
+            int t=0; for(String n:SetData.CHAMPS[co]) t+=pool.remaining(n);
             t-=pool.getJunk(co); tierTotal[co]=Math.max(0,t);
         }
         int rollGold=Math.min(60, pool.getGold());
@@ -1733,7 +1734,7 @@ public class OverlayService extends Service {
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
             int players=pool.oppCount(name);
-            int poolSize=Pool.SIZE[co];
+            int poolSize=SetData.SIZE[co];
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
             final boolean pinned = pool.isPinned(name);
 

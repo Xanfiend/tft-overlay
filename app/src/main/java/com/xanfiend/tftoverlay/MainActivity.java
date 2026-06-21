@@ -40,6 +40,9 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle s){
         super.onCreate(s);
 
+        // overlay any synced set data before the UI reads SetData (set name, etc.)
+        RemoteData.loadCachedOrBundled(this);
+
         // root frame: pattern layer behind scroll
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(VOID);
@@ -106,7 +109,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.85");
+        ver.setText("v1.86");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -144,6 +147,9 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         frame.addView(scroll);
         setContentView(frame);
+
+        // refresh the cached set data in the background for next launch (silent)
+        RemoteData.syncAsync(this, null);
 
         // quiet auto-check on launch: only surfaces a dialog if a newer release
         // exists; silent on "up to date" or any network error
@@ -395,6 +401,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.86  ·  2026-06-21","NEW remote set-data sync, so a new TFT set no longer needs a new app build. On launch the app now pulls the current set's champion list and pool sizes from a small JSON hosted in the project's GitHub repo (the same place the app already checks for updates - no new servers, no tracking), caches it on your phone, and uses it everywhere the pool is tracked. If you are offline or the fetch fails, it falls back to the data baked into the app, then to the on-disk cache from the last successful sync - so the tracker always has a valid set. The fetched data is only applied on the NEXT launch (never mid-session), so a sync can't desync a scan in progress, and a corrupt or half-downloaded file is rejected rather than wiping your set. For most updates this means you just get the new set automatically without waiting for an APK."},
             {"v1.85  ·  2026-06-21","Three fixes. (1) FIXED level OCR never reading level 1 in Tocker's Trials - the regex only allowed levels 2-10 so auto scan would log level=-1 and the board tab could not compute gold-to-level-up correctly. Now matches 1-10. (2) FIXED gold not reading if the OCR fuses the coin glyph onto the number (reads the full string as the glyph + digits instead of just digits) - switched from exact-match to digit-find so fused glyphs are stripped. (3) ADDED AUTO-CALIBRATE FROM BOARD in the SETUP calibration section: open TFT to planning phase, tap the button, and the app detects the teal hex-outline grid automatically, computes the four corner hex centers, and saves them. Tap SHOW DOTS to verify before playing."},
             {"v1.84  ·  2026-06-19","Aspect-ratio-aware fallback grid so the calibration dots land on the board automatically, no manual adjustment. The old grid used fixed screen percentages for the board's left/right edges (8% to 88%), which is only right on a ~16:9 screen — on a tall/wide phone (e.g. 20:9) TFT draws the board height-fit and centered, so it takes up a much smaller slice of the width and the dots were thrown out past the sides. The grid now derives the board's horizontal span from your screen's aspect ratio (back row ~0.67x and front row ~0.98x the screen height, centered), so an uncalibrated grid fits the real board on any device. Vertical rows were also re-measured from a real 2400x1080 board: rows now sit at ~44/53/62/72% of height (the front row reaches the actual front hexes instead of stopping short). If you previously hand-calibrated, your settings are kept — tap RESET in the calibration section to switch to the new auto-fit. NOTE: the most precise, zero-setup option is still SMART SCAN (on by default), which finds your actual units by their health bars every scan and ignores the grid entirely; the grid is only the fallback when health-bar detection comes up empty."},
             {"v1.83  ·  2026-06-19","Two scan-accuracy fixes for dots that sit off your units. (1) NEW Smart Scan dot height adjustment (SETUP tab, under the calibration grid): if the red scan dots sit uniformly a little above or below your units — the same offset on every champion — you can now nudge every dot up or down with ▲/▼ buttons until they land on the champ bodies, and each tap previews the dots live over the game. This fixes the case where Smart Scan finds your units by their health bars but the tap point is offset on your specific device (the bar-to-body drop varies by screen). The nudge is remembered and applies to every Auto Scan; 0% is the default, range -8% to +8% of height. (2) FIXED the fallback calibration grid being too short in landscape — the front row default was at 66% of screen height and the bench at 80%, but TFT Mobile actually draws them lower (front row ~71%, bench ~89%), so an uncalibrated grid stopped short of the front row and looked compressed/offset upward. New installs (or RESET in the calibration section) now match the real board. If you already calibrated by hand, tap RESET to pick up the better defaults, or fine-tune with ADJUST GRID."},
