@@ -205,6 +205,11 @@ public class Pool {
         return 5 + interest(gold) + streakBonus(streak) + (streak > 0 ? 1 : 0);
     }
 
+    // ---- dev mode (hidden): unlocks testing tools like Scan From Image.
+    // Off by default; toggled by tapping the version label 7x. Not for end users.
+    public boolean isDevMode()        { return p.getBoolean("cfg_devmode", false); }
+    public void setDevMode(boolean d) { p.edit().putBoolean("cfg_devmode", d).apply(); }
+
     // ---- XP / leveling ----
     public static int xpToNext(int level){
         if (level < 1 || level >= SetData.XP_TO_NEXT.length) return 0;

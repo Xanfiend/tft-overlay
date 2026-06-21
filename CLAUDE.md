@@ -68,6 +68,7 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cfg_alpha` | 1.0 | overlay opacity |
 | `cfg_haptic` | true | vibration on |
 | `cfg_start` | 0 | 0=smart tab, 1=always grid |
+| `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
 
 `pool.hasLandscapeGridCal()` — true when any of `cal_tl/tr/bl/br/cal_left/cal_right` exist.
 
@@ -139,6 +140,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.88 | SCAN FROM IMAGE moved behind hidden dev mode (tap version 7x); `cfg_devmode` |
 | v1.87 | SCAN FROM IMAGE dev mode — run the scan pipeline on a saved screenshot (no game) |
 | v1.86 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
 | v1.85 | Fix level-1 OCR (Tocker's), fix gold fused-icon, AUTO-CALIBRATE FROM BOARD (hex mesh) |
