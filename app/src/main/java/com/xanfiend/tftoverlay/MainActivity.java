@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.89");
+        ver.setText("v1.90");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -401,6 +401,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.90  ·  2026-06-21","NEW COACH tab (under GUIDE) - tells you what line to play. After you scan your board it reads your units and recommends a comp to commit to, built around the strongest carry you have, with that carry's best-in-slot items and a one-line plan - all from the same verified patch-meta data the BUILDS tab uses (so it reflects what's actually strong, not guesses). It also lists your units colored by tier with a contest count (how many players you've seen on each), and gives a NEXT MOVE econ/tempo call (roll / level / save) based on your gold, level, and stage. Scan first (hold the sigil for Auto Scan), then open GUIDE > COACH."},
             {"v1.89  ·  2026-06-21","Fixed the launch screen showing rows of purple boxes on some tablets. The decorative occult symbols (moons, stars, planet signs) under the title and in the divider lines aren't present in every device's system font, so those tablets drew the 'missing glyph' box instead. Replaced them with symbols that are in every font, so the launch screen looks right everywhere. No functional change."},
             {"v1.88  ·  2026-06-21","Made the SCAN FROM IMAGE tool a hidden developer option instead of a permanent button - real testing happens in a live game, so this is just a stopgap for checking OCR/calibration on a saved screenshot when a match isn't handy. It no longer shows in SETUP by default. To use it, tap the version label (top of the panel) 7 times to unlock dev tools; tap 7 times again to hide them. Everything else about it is unchanged: pick a screenshot, it runs the full scan and draws the OCR readout plus detected unit dots over the image."},
             {"v1.87  ·  2026-06-21","Added SCAN FROM IMAGE - test scanning on a saved TFT screenshot without being in a game (runs the full OCR + unit detection and draws the result over the image). Now hidden behind dev tools as of v1.88."},
