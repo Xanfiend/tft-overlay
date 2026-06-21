@@ -2307,11 +2307,6 @@ public class OverlayService extends Service {
         ctx.setTextColor(DIM); ctx.setTextSize(10); ctx.setPadding(2,0,2,4); root.addView(ctx);
     }
 
-    private int tierColor(String t){
-        if(t==null) return ASH;
-        switch(t){ case "S": return GOLD; case "A": return GREEN; case "B": return BONE; case "C": return ASH; default: return ASH; }
-    }
-
     // ⛧ REALM OF GODS tracker (Set 17 mechanic). Two gods appear per game in the
     // Realm (replaces carousels at 2-4 / 3-4 / 4-4); favoring one with 2+ offering
     // picks earns their Boon armory at 4-7. Track your two gods and your picks.
