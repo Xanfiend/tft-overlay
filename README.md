@@ -11,7 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Xanfiend/tft-overlay/build.yml?branch=main&style=flat-square&label=build&color=2E7D32)](https://github.com/Xanfiend/tft-overlay/actions)
-[![Version](https://img.shields.io/badge/version-1.72-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Version](https://img.shields.io/badge/version-1.95-8B1A1A?style=flat-square)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-device-requirements)
 [![Offline gameplay](https://img.shields.io/badge/gameplay-offline-2E7D32?style=flat-square)](#-is-it-safe)
 [![No trackers](https://img.shields.io/badge/trackers-none-2E7D32?style=flat-square)](#-is-it-safe)
@@ -108,6 +108,20 @@ S to C tier ratings, comp tags, the full component build chart, and trait breakp
 
 </td>
 </tr>
+<tr>
+<td width="50%" valign="top">
+
+**◇ Coach**
+From your scanned board: the line to commit to, best-in-slot items for your carry, and your next econ/roll move.
+
+</td>
+<td width="50%" valign="top">
+
+**◇ Positioning**
+Sorts your board into front/back/flank, tells you which corner to hide your carry in, and the fundamentals that win unwinnable rounds.
+
+</td>
+</tr>
 </table>
 
 Everything runs on your phone. No accounts, no trackers, no data collection. The only time the app touches the network is the optional self-update check to GitHub (see [Auto-update](#-auto-update)); every tracking, scanning, and gameplay feature works fully offline.
@@ -137,7 +151,7 @@ Since the app is sideloaded (not on the Play Store), you have two ways to stay c
 |---|---|
 | **POOL** | Tap a champion to mark a copy as seen. Tap the number to remove one. The ◉ badge shows how many other players are on that unit. Champions you recently marked show at the top. Tap **Auto Scan Board** to auto-detect all units on your board; tap **Opp Board** to scan an opponent's board with star levels. Both require Accessibility service. |
 | **ODDS** | Shows copies left in the pool, how contested each unit is, and your odds of hitting per roll at your current level. Pin your carry to the top. Junk bench-thinning adjusts odds for units you are holding to block others. |
-| **GUIDE** | Two sub-tabs: AUGMENTS (S/A/B/C tier list with comp tags, priorities, exclusions, and armory rules) and ITEMS (tap two components to see the combined item, full trait breakpoints below). |
+| **GUIDE** | Four sub-tabs. **COACH**: from your scanned board, the recommended comp, your carry's best-in-slot items, and your next econ/roll move. **POSITION**: sorts your board into front/back/flank, names the corner to hide your carry in, and lists the positioning fundamentals. **AUGMENTS**: S/A/B/C tier list with comp tags, priorities, exclusions, and armory rules. **ITEMS**: tap two components to see the combined item, full trait breakpoints below. |
 | **GOLD** | Track your gold with live interest calculation, the 10/20/30/40/50g bracket ladder, win/loss streak tracking with bonus scale, and expected income next round. Hold + or - to change gold quickly. |
 | **SETUP** | Accessibility service status with setup instructions. Scan Now fills gold, level, and augments. Transparency, haptic, start-tab choice, button position reset, calibration controls, and debug log. |
 
@@ -227,6 +241,24 @@ Yes. The full source code is in this repo, so you can read exactly what it does 
 The app only needs the "draw over other apps" permission to show the overlay on top of TFT. The optional Scan Now feature asks for screen capture permission to read your gold, level, and augments. All of that stays on your phone. The only network use is the optional self-update check, which contacts GitHub and nothing else — no analytics, no accounts, no data collection. If a virus scanner flags it, that is a common false alarm for self-built APKs and not a real threat.
 
 ## ✦ Changelog
+
+### v1.95 - 2026-06-22
+- **Completed the POSITION tab's role data for the whole Set 17 roster.** All 62 champions are now explicitly sorted into FRONT (tanks, bruisers, melee), BACK (ranged carries, casters, enchanters), or FLANK (assassins and divers), so the placement map sorts your full board correctly instead of guessing for unrecognized units.
+
+### v1.94 - 2026-06-22
+- **NEW POSITION tab** (under GUIDE, next to COACH). After you scan your board it builds a placement map — back corner for your carry, front for tanks, flank for divers — names the corner to hide the carry in (and to switch it each round so it can't be pre-aimed), and lists the evergreen fundamentals: spread vs clump against AoE, body-block divers with your tank, scout before READY. Positioning is meta-stable, so this needs no per-patch upkeep.
+
+### v1.90 - 2026-06-21
+- **NEW COACH tab** (under GUIDE). Reads your scanned board and recommends the line to commit to, your carry's best-in-slot items, and your next econ/roll move from your gold, level, and stage.
+
+### v1.86 - 2026-06-21
+- **Remote set-data sync.** A new set no longer needs an app update — the app pulls the latest champion list and pool sizes from GitHub on launch and falls back to the bundled data offline.
+
+### v1.85 - 2026-06-21
+- **AUTO-CALIBRATE FROM BOARD** (SETUP): open TFT to the planning phase, tap the button, and the app detects the teal hex-outline grid automatically and saves the four corners. Plus fixes for level-1 OCR (Tocker's Trials) and gold reading when the coin glyph fuses onto the number.
+
+### v1.74 - 2026-06-17
+- **NEW BUILDS tab.** Tap any champion to see the items that are meta on them this patch, the comp they carry, and a one-line tip. Actual itemizers are marked with a gold border.
 
 ### v1.72 - 2026-06-16
 - **Fixed auto-buy stopping after one champion** and **planner calibration not opening the planner** — same root cause. An injected tap waited for the system's "gesture completed" callback before the next step, but Xiaomi/HyperOS routinely drops that callback, so the sequence stalled. Every tap now has a fallback timer that runs the next step even when the callback never arrives.
