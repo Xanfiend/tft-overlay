@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.98");
+        ver.setText("v1.99");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -151,6 +151,10 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         frame.addView(scroll);
         setContentView(frame);
+
+        // one-time privacy + permissions disclosure on very first launch
+        Pool prefs = new Pool(this);
+        if(!prefs.getPrivacySeen()) showPrivacyNotice(true);
 
         // refresh the cached set data in the background for next launch (silent)
         RemoteData.syncAsync(this, null);
@@ -324,6 +328,10 @@ public class MainActivity extends Activity {
         }});
         contentArea.addView(updBtn);
 
+        contentArea.addView(btn("🔒  Privacy & data", new View.OnClickListener(){
+            public void onClick(View v){ showPrivacyNotice(false); }
+        }));
+
         contentArea.addView(divider(14, 16));
 
         // tips section header
@@ -400,6 +408,68 @@ public class MainActivity extends Activity {
         contentArea.addView(card);
     }
 
+    // First-launch privacy & permissions disclosure. firstRun=true marks it seen on
+    // dismiss (and the button is "I understand"); firstRun=false is the re-open from
+    // SETUP (button is "Close"). Built as a themed dialog so it reads on our dark UI.
+    private void showPrivacyNotice(final boolean firstRun){
+        ScrollView sv = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundColor(VOID);
+        box.setPadding(56, 48, 56, 24);
+
+        TextView h = new TextView(this);
+        h.setText("PRIVACY & PERMISSIONS");
+        h.setTextColor(BLOODL); h.setTextSize(17); h.setTypeface(null, Typeface.BOLD);
+        h.setLetterSpacing(0.08f);
+        box.addView(h);
+
+        TextView body = new TextView(this);
+        body.setText(
+            "TFT Scryer runs on your device. It has no accounts, no analytics, no ads, "
+          + "and no third-party services. Your pool, gold and settings are stored only on this phone.\n\n"
+          + "WHAT IT USES\n"
+          + "•  Draw over other apps — to show the sigil and panel on top of TFT.\n"
+          + "•  Accessibility service — to take silent screenshots and tap for you during scans "
+          + "and auto-buy. Screenshots are read on-device for champion/gold OCR and never leave the phone.\n"
+          + "•  Internet — only to reach GitHub: to check for app updates and to fetch the current "
+          + "set's champion data. Nothing else is ever sent or received. The app works fully offline; "
+          + "the network is optional.\n\n"
+          + "WHAT IT NEVER DOES\n"
+          + "•  No telemetry, tracking, or crash reporting.\n"
+          + "•  No reading other apps or your personal data.\n"
+          + "•  No sending screenshots, game state, or device info anywhere.\n\n"
+          + "Install only from the project's GitHub releases. You can re-read this any time from the "
+          + "SETUP tab.");
+        body.setTextColor(BONE); body.setTextSize(12); body.setLineSpacing(5,1f);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1,-2);
+        bl.setMargins(0, 16, 0, 0); body.setLayoutParams(bl);
+        box.addView(body);
+
+        sv.addView(box);
+
+        final android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+            .setView(sv)
+            .setCancelable(!firstRun)
+            .create();
+
+        TextView ok = new TextView(this);
+        ok.setText(firstRun ? "I UNDERSTAND" : "CLOSE");
+        ok.setGravity(Gravity.CENTER); ok.setTextColor(BONE); ok.setTextSize(14);
+        ok.setTypeface(null, Typeface.BOLD); ok.setPadding(0, 22, 0, 22);
+        ok.setBackground(shape(BLOOD, BLOODL, 12, 2));
+        LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(-1,-2);
+        ol.setMargins(0, 20, 0, 0); ok.setLayoutParams(ol);
+        ok.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(firstRun) new Pool(MainActivity.this).setPrivacySeen(true);
+            dlg.dismiss();
+        }});
+        pressFeedback(ok);
+        box.addView(ok);
+
+        dlg.show();
+    }
+
     // amber informational card (no action button) — used for the integrity heads-up
     private void noticeCard(String title, String body){
         LinearLayout card = new LinearLayout(this);
@@ -438,6 +508,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99  ·  2026-06-22","Added a one-time privacy and permissions notice on first launch. It plainly states what the app uses each permission for - draw-over-apps for the overlay, the accessibility service for silent on-device screenshots and taps during scans, and internet ONLY to reach GitHub for updates and set data - and what it never does: no accounts, no analytics, no tracking, nothing sent anywhere. You acknowledge it once and it's gone; you can re-read it any time from the new Privacy and data button on the SETUP screen. No data collection was added - this just discloses, in plain language, what was already true. Final step of the security pass before the big stuff."},
             {"v1.98  ·  2026-06-22","Added a passive device-integrity heads-up on the SETUP screen. If the app notices it's running on a rooted device or an emulator, it shows a small amber notice suggesting you only install from the project's GitHub releases - because on those devices a sideloaded build is easier to tamper with. It's informational only: nothing is blocked, nothing is reported anywhere (the app still never phones home), and a normal phone shows nothing at all. Second step of the security pass toward 2.0."},
             {"v1.97  ·  2026-06-22","The release build is now obfuscated and shrunk (R8). Class and method names are stripped from the APK, dead code and unused resources are removed, and the bundled ML Kit OCR is preserved by explicit keep rules. No behavior change - the app runs exactly the same, the package is just smaller and harder to reverse-engineer. First step of the security pass on the road to 2.0."},
             {"v1.96  ·  2026-06-22","The COACH tab's next-move advice now includes a roll check: the real percent chance of hitting your recommended carry if you roll your current gold at your current level, plus a plain ROLL / bank / HOLD call. It's the same Monte-Carlo shop simulation the ODDS tab uses, so the shrinking pool is modeled exactly - the coach now answers should I roll with a number instead of a generalization."},

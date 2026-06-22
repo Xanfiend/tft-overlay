@@ -56,6 +56,10 @@ public class Pool {
         load();
     }
 
+    // first-launch privacy notice: true once the user has acknowledged it
+    public boolean getPrivacySeen(){ return p.getBoolean("cfg_privacy_seen", false); }
+    public void setPrivacySeen(boolean v){ p.edit().putBoolean("cfg_privacy_seen", v).apply(); }
+
     private void touchRecent(String champ){
         recent.remove(champ);
         recent.add(0, champ);

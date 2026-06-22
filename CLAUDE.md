@@ -77,6 +77,7 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cfg_haptic` | true | vibration on |
 | `cfg_start` | 0 | 0=smart tab, 1=always grid |
 | `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
+| `cfg_privacy_seen` | false | first-launch privacy notice acknowledged (MainActivity) |
 
 `pool.hasLandscapeGridCal()` — true when any of `cal_tl/tr/bl/br/cal_left/cal_right` exist.
 
@@ -155,6 +156,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.99 | First-launch privacy & permissions notice (re-openable from SETUP). v2.0 security step 3 (final) |
 | v1.98 | Passive root/emulator heads-up on SETUP (DeviceIntegrity; informational, never blocks/reports). v2.0 security step 2 |
 | v1.97 | R8 obfuscation + resource shrink on release build (proguard-rules.pro; ML Kit kept). First v2.0 security step |
 | v1.96 | COACH roll check — Monte-Carlo P(hit carry) at current gold/level + ROLL/bank/HOLD call (RollMath) |
