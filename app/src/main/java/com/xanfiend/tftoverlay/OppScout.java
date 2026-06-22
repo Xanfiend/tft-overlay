@@ -25,6 +25,7 @@ public final class OppScout {
         public int front = 0, back = 0, flank = 0;   // role counts across the lobby
         public int hooks = 0, aoe = 0;         // archetype counts (grab / area casters)
         public int apCarries = 0, adCarries = 0; // damage-type split across the lobby
+        public int apItems = 0, adItems = 0, healItems = 0; // item-evidence split (Phase 2)
         public boolean flankHeavy = false;     // assassin/diver-heavy lobby
         public String topThreat = "";          // single scariest unit (star x cost)
         public int topThreatStars = 0;
@@ -35,8 +36,25 @@ public final class OppScout {
         public boolean hasData(){ return boards > 0; }
     }
 
-    /** boards = each enemy board as name->stars; null/empty entries are skipped. */
+    /** Map-based entry (name->stars, no items): adapts to the unit-based analyzer
+     *  so callers that don't have item data keep working unchanged. */
     public static Profile analyze(List<Map<String,Integer>> boards){
+        List<List<Pool.OppUnit>> u = new ArrayList<>();
+        if(boards != null) for(Map<String,Integer> b : boards){
+            if(b == null) continue;
+            List<Pool.OppUnit> bu = new ArrayList<>();
+            for(Map.Entry<String,Integer> e : b.entrySet())
+                bu.add(new Pool.OppUnit(e.getKey(), e.getValue()==null?1:e.getValue(), null));
+            u.add(bu);
+        }
+        return analyzeUnits(u);
+    }
+
+    /** boards = each enemy board as rich units (name/stars/items); null/empty
+     *  entries skipped. Item fields sharpen the tech read when present (Phase 2),
+     *  and are simply absent until the scan fills them — identical output to the
+     *  Map-based path when no items are known. */
+    public static Profile analyzeUnits(List<List<Pool.OppUnit>> boards){
         Profile p = new Profile();
         if(boards == null) return p;
 
@@ -45,14 +63,19 @@ public final class OppScout {
         Map<String,Integer> backFreq = new LinkedHashMap<>();
         int bestThreatWeight = -1;   // star x cost — picks the single fed carry to respect
         int sumBoardVal = 0;         // for the lobby-power read (snowball detection)
-        for(Map<String,Integer> board : boards){
+        for(List<Pool.OppUnit> board : boards){
             if(board == null || board.isEmpty()) continue;
             p.boards++;
             int boardVal = 0;
-            for(Map.Entry<String,Integer> en : board.entrySet()){
-                String name = en.getKey();
-                int stars = en.getValue() == null ? 1 : Math.max(1, en.getValue());
+            for(Pool.OppUnit un : board){
+                String name = un.name;
+                int stars = Math.max(1, un.stars);
                 int cost = Math.max(1, Pool.costOf(name));
+                for(String it : un.items){
+                    if(ItemData.isApItem(it)) p.apItems++;
+                    else if(ItemData.isAdItem(it)) p.adItems++;
+                    if(ItemData.isHealItem(it)) p.healItems++;
+                }
                 // board strength ≈ cost x star multiplier (each star ~3x the unit)
                 boardVal += cost * (stars >= 3 ? 9 : stars == 2 ? 3 : 1);
                 String role = ThreatData.roleOf(name);
@@ -128,6 +151,15 @@ public final class OppScout {
         }
         if(p.front >= 4)
             p.techTips.add("Tanky lobby — pack anti-heal (Morellonomicon / Sunfire Cape) so their frontline actually dies.");
+
+        // ---- item-evidence tech read (Phase 2) — fires only once the scan has read
+        // enemy items; until then these counts are 0 and nothing extra is added ----
+        if(p.healItems > 0)
+            p.techTips.add("Item read: enemy carries hold healing items (" + p.healItems + " — Bloodthirster/Gunblade/Hand of Justice). Anti-heal (Morellonomicon/Sunfire) is high value here, not optional.");
+        if(p.adItems > p.apItems && p.adItems > 0)
+            p.techTips.add("Item read: enemy damage items skew AD (" + p.adItems + " AD / " + p.apItems + " AP). Prioritize Armor over MR.");
+        else if(p.apItems > p.adItems && p.apItems > 0)
+            p.techTips.add("Item read: enemy damage items skew AP (" + p.apItems + " AP / " + p.adItems + " AD). Prioritize Magic Resist over Armor.");
 
         return p;
     }

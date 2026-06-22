@@ -2441,7 +2441,7 @@ public class OverlayService extends Service {
         }
 
         // ---- tech vs the scouted lobby (OppScout) — defensive itemization ----
-        OppScout.Profile opp=OppScout.analyze(pool.getAllOppBoards());
+        OppScout.Profile opp=OppScout.analyzeUnits(pool.getAllOppUnits());
         if(!opp.techTips.isEmpty()){
             addSecHdr(root, "TECH vs LOBBY", BLOODL);
             for(String tip:opp.techTips){
@@ -2495,7 +2495,7 @@ public class OverlayService extends Service {
         // ---- counter the scouted lobby (OppScout) ----
         // Reads the enemy boards already remembered from manual scries (POOL tab);
         // when none exist this section is simply absent and POSITION behaves as before.
-        OppScout.Profile opp=OppScout.analyze(pool.getAllOppBoards());
+        OppScout.Profile opp=OppScout.analyzeUnits(pool.getAllOppUnits());
         if(opp.hasData()){
             addSecHdr(root, "COUNTER THE LOBBY", BLOODL);
             TextView mix=new TextView(this);
