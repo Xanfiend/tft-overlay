@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.97");
+        ver.setText("v1.98");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -274,6 +274,18 @@ public class MainActivity extends Activity {
             }));
         }
 
+        // ---- passive integrity heads-up (informational, never blocks) ----
+        // Only shown when something looks off, so a normal device stays uncluttered.
+        if(!DeviceIntegrity.looksClean()){
+            boolean rooted = DeviceIntegrity.isRooted();
+            String what = rooted && DeviceIntegrity.isEmulator() ? "Rooted device / emulator"
+                        : rooted ? "Rooted device" : "Emulator";
+            noticeCard("⚠  " + what + " detected",
+                "Heads up only — nothing is blocked and nothing is reported (the app never sends this anywhere). "
+                + "On a rooted or emulated device a sideloaded build is easier to tamper with, so only install TFT Scryer "
+                + "from the project's own GitHub releases. The app works exactly the same.");
+        }
+
         contentArea.addView(divider(8, 12));
 
         // main action
@@ -388,6 +400,27 @@ public class MainActivity extends Activity {
         contentArea.addView(card);
     }
 
+    // amber informational card (no action button) — used for the integrity heads-up
+    private void noticeCard(String title, String body){
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(shape(CARD, GOLD, 12, 1));
+        card.setPadding(20, 16, 20, 16);
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1,-2);
+        cl.setMargins(0, 0, 0, 10);
+        card.setLayoutParams(cl);
+        TextView lbl = new TextView(this);
+        lbl.setText(title);
+        lbl.setTextColor(GOLD); lbl.setTextSize(13);
+        lbl.setTypeface(null, Typeface.BOLD); card.addView(lbl);
+        TextView sub = new TextView(this); sub.setText(body);
+        sub.setTextColor(ASH); sub.setTextSize(11); sub.setLineSpacing(4,1f);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1,-2);
+        sl.setMargins(0, 4, 0, 0); sub.setLayoutParams(sl);
+        card.addView(sub);
+        contentArea.addView(card);
+    }
+
     private void openAccessibility(){
         try{
             Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
@@ -405,6 +438,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.98  ·  2026-06-22","Added a passive device-integrity heads-up on the SETUP screen. If the app notices it's running on a rooted device or an emulator, it shows a small amber notice suggesting you only install from the project's GitHub releases - because on those devices a sideloaded build is easier to tamper with. It's informational only: nothing is blocked, nothing is reported anywhere (the app still never phones home), and a normal phone shows nothing at all. Second step of the security pass toward 2.0."},
             {"v1.97  ·  2026-06-22","The release build is now obfuscated and shrunk (R8). Class and method names are stripped from the APK, dead code and unused resources are removed, and the bundled ML Kit OCR is preserved by explicit keep rules. No behavior change - the app runs exactly the same, the package is just smaller and harder to reverse-engineer. First step of the security pass on the road to 2.0."},
             {"v1.96  ·  2026-06-22","The COACH tab's next-move advice now includes a roll check: the real percent chance of hitting your recommended carry if you roll your current gold at your current level, plus a plain ROLL / bank / HOLD call. It's the same Monte-Carlo shop simulation the ODDS tab uses, so the shrinking pool is modeled exactly - the coach now answers should I roll with a number instead of a generalization."},
             {"v1.95  ·  2026-06-22","Completed the POSITION tab's role data for the whole Set 17 roster. Every champion is now assigned a placement role - FRONT (tanks, bruisers, melee), BACK (ranged carries, casters, enchanters), or FLANK (assassins and divers that hunt the enemy backline) - so the placement map sorts your full board correctly instead of guessing for unrecognized units. All 62 champions are covered."},

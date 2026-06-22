@@ -3,7 +3,7 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.97 (versionCode 97). R8 obfuscation + resource shrink on release (proguard-rules.pro keeps ML Kit). First v2.0 security step. CI must confirm the minified build + OCR still work.
+- Version: v1.98 (versionCode 98). Security pass toward 2.0: step 1 = R8 obfuscation + resource shrink (v1.97, CI green, ML Kit survived). Step 2 = DeviceIntegrity passive root/emulator heads-up on SETUP (v1.98, informational only, never blocks/reports). Remaining security item: first-launch privacy notice.
 - v1.96: COACH roll check (RollMath P(hit) + ROLL/bank/HOLD), pool-aware via pool.remaining().
 - Marching toward v2.0. Plan: small verifiable-without-a-game QoL through v1.9x; reserve opponent-board scan (per-enemy positioning) as the v2.0 headline. At v2.0 write a consolidated "what's new" reel re-highlighting COACH/POSITION/roll-check.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.

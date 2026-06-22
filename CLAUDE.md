@@ -40,6 +40,7 @@ app/src/main/java/com/xanfiend/tftoverlay/
   PositionAdvisor.java   — pure positioning coach: board → front/back/flank map + carry corner + evergreen fundamentals (POSITION sub-tab)
   ThreatData.java        — per-champ positioning role (FRONT/BACK/FLANK); meta-stable, per-SET refresh not per-patch
   RollMath.java          — hit-probability tables
+  DeviceIntegrity.java   — passive root/emulator heuristics; SETUP heads-up only (never blocks, never reports)
   MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION)
   ScanPermActivity.java  — MediaProjection fallback (API < 30)
   ImageScanActivity.java — dev: pick a saved screenshot, run the scan pipeline on it (no TFT needed)
@@ -154,6 +155,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.98 | Passive root/emulator heads-up on SETUP (DeviceIntegrity; informational, never blocks/reports). v2.0 security step 2 |
 | v1.97 | R8 obfuscation + resource shrink on release build (proguard-rules.pro; ML Kit kept). First v2.0 security step |
 | v1.96 | COACH roll check — Monte-Carlo P(hit carry) at current gold/level + ROLL/bank/HOLD call (RollMath) |
 | v1.95 | Complete ThreatData roles for full Set 17 roster (all 62 champs front/back/flank) |
