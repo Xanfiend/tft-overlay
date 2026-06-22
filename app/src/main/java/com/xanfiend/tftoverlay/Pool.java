@@ -310,6 +310,47 @@ public class Pool {
         p.edit().putString("oppboard"+slot, sb.toString()).apply();
     }
     public void clearOppBoard(int slot){ p.edit().remove("oppboard"+slot).apply(); }
+
+    // ---- richer per-unit enemy data (Phase 2: champion + stars + items) ----
+    // The oppboard string extends to "name|stars|item1,item2,item3;..." — the
+    // third field is optional, so old "name|stars" entries still parse and the
+    // Map<String,Integer> accessors above keep working (they ignore items).
+    // Item names never contain | ; or , so the join is unambiguous.
+    public static final class OppUnit {
+        public final String name; public final int stars;
+        public final java.util.List<String> items;
+        public OppUnit(String name, int stars, java.util.List<String> items){
+            this.name = name; this.stars = Math.max(1, stars);
+            this.items = items == null ? new java.util.ArrayList<String>() : items;
+        }
+    }
+    public java.util.List<OppUnit> getOppUnits(int slot){
+        java.util.List<OppUnit> out = new java.util.ArrayList<>();
+        for(String part : p.getString("oppboard"+slot,"").split(";")){
+            if(part.isEmpty()) continue;
+            String[] kv = part.split("\\|");
+            if(kv.length < 1 || kv[0].isEmpty()) continue;
+            int st = 1; if(kv.length >= 2){ try{ st = Integer.parseInt(kv[1]); }catch(Exception e){} }
+            java.util.List<String> items = new java.util.ArrayList<>();
+            if(kv.length >= 3 && !kv[2].isEmpty())
+                for(String it : kv[2].split(",")) if(!it.isEmpty()) items.add(it);
+            out.add(new OppUnit(kv[0], st, items));
+        }
+        return out;
+    }
+    public void setOppUnits(int slot, java.util.List<OppUnit> units){
+        StringBuilder sb = new StringBuilder();
+        for(OppUnit u : units){
+            sb.append(u.name).append("|").append(u.stars);
+            if(!u.items.isEmpty()){
+                sb.append("|");
+                for(int i=0;i<u.items.size();i++){ if(i>0) sb.append(","); sb.append(u.items.get(i)); }
+            }
+            sb.append(";");
+        }
+        p.edit().putString("oppboard"+slot, sb.toString()).apply();
+    }
+
     // every non-empty remembered enemy board, for OppScout lobby analysis
     public java.util.List<Map<String,Integer>> getAllOppBoards(){
         java.util.List<Map<String,Integer>> out = new java.util.ArrayList<>();

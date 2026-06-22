@@ -125,5 +125,15 @@ public final class ItemData {
         COMBOS[j][i] = name;
     }
 
+    /** Distinct completed-item names from the combine matrix, in first-seen order.
+     *  Used by ItemIcons to map a bundled icon filename to its canonical name. */
+    public static java.util.List<String> fullItems() {
+        java.util.LinkedHashSet<String> s = new java.util.LinkedHashSet<>();
+        for (int i = 1; i < COMBOS.length; i++)
+            for (int j = 1; j < COMBOS.length; j++)
+                if (COMBOS[i][j] != null && !COMBOS[i][j].isEmpty()) s.add(COMBOS[i][j]);
+        return new java.util.ArrayList<>(s);
+    }
+
     private ItemData() {}
 }
