@@ -37,6 +37,8 @@ app/src/main/java/com/xanfiend/tftoverlay/
   SetIcons.java          — planner-scan 2D icon matching
   ChampItemData.java     — champion-to-item mapping + carry→comp/tier (BUILDS tab + COACH); update PATCH each patch
   CompAdvisor.java       — pure mid-game coach: board+econ → recommended comp/items + roll/level call (COACH sub-tab)
+  PositionAdvisor.java   — pure positioning coach: board → front/back/flank map + carry corner + evergreen fundamentals (POSITION sub-tab)
+  ThreatData.java        — per-champ positioning role (FRONT/BACK/FLANK); meta-stable, per-SET refresh not per-patch
   RollMath.java          — hit-probability tables
   MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION)
   ScanPermActivity.java  — MediaProjection fallback (API < 30)
@@ -152,6 +154,9 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.94 | POSITION sub-tab — front/back/flank map + carry corner + evergreen fundamentals (PositionAdvisor + ThreatData) |
+| v1.93 | Cancel all pending overlay timers on shutdown (reliability) |
+| v1.92 | Red circled hero pentacle + full-screen drawn launch background |
 | v1.91 | Launch-screen occult symbols drawn as vector pentagrams (font-independent, can't tofu) |
 | v1.90 | COACH tab — recommend comp/items + econ call from scanned board (CompAdvisor + ChampItemData) |
 | v1.89 | Fix tofu glyphs on launch screen (tablet fonts) |
