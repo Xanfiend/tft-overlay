@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.94");
+        ver.setText("v1.95");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -405,6 +405,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.95  ·  2026-06-22","Completed the POSITION tab's role data for the whole Set 17 roster. Every champion is now assigned a placement role - FRONT (tanks, bruisers, melee), BACK (ranged carries, casters, enchanters), or FLANK (assassins and divers that hunt the enemy backline) - so the placement map sorts your full board correctly instead of guessing for unrecognized units. All 62 champions are covered."},
             {"v1.94  ·  2026-06-22","NEW POSITION tab (under GUIDE, next to COACH). After you scan your board it sorts every unit into a placement map - BACK for hypercarries and casters, FRONT for tanks and bruisers, FLANK for divers - tells you which corner to hide your carry in (and to switch corners each round so it can't be pre-aimed), and lists the evergreen positioning fundamentals that win otherwise-unwinnable rounds: spread vs clump against AoE, body-block divers with your tank, scout before READY. Unlike the build metas this is meta-stable - a backline carry stays backline across patches - so it needs no per-patch upkeep. Opponent boards still can't be read on mobile, so the advice is fundamentals plus your own board, not a per-enemy counter."},
             {"v1.93  ·  2026-06-21","Reliability pass. When the overlay stops or the service shuts down, every pending timer is now cancelled - before, a few short-lived UI callbacks (label flashes, the auto-buy chain) could still fire for up to a second after shutdown, briefly holding the destroyed overlay in memory. Internal hardening only, no visible change. A full code review this pass also confirmed the screenshot bitmaps are recycled on every path and the launch-screen animation is leak-free."},
             {"v1.92  ·  2026-06-21","Launch screen polish. The hero symbol is now a drawn blood-red PENTACLE - inverted pentagram inside a circle - instead of a gold star (the old glyph rendered as a color emoji that ignored the theme color). And the faint occult background now tiles across the ENTIRE screen on any device: before it was a fixed block of text that didn't reach the edges of large tablets, so it only covered part of the screen. Both are drawn as vectors, so they can't break on any device's fonts."},

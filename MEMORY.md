@@ -3,7 +3,7 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.94 (versionCode 94). POSITION sub-tab shipped.
+- Version: v1.95 (versionCode 95). POSITION sub-tab + full Set 17 ThreatData roles (all 62 champs).
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.
 - Dev device: Galaxy Tab A 2016 — 32-bit Android, ~2GB RAM. Cannot run Termux/Claude Code/claude-mem locally (no 32-bit Bun/Node20 build). Work happens in web sessions only.
 

@@ -36,17 +36,30 @@ public final class ThreatData {
     private static final Map<String,String> ROLE = new HashMap<>();
     private static void r(String champ, String role){ ROLE.put(champ, role); }
 
+    // Full Set 17 roster, every champion assigned by archetype. Keep in sync with
+    // SetData.CHAMPS / data/setdata.json when the set changes.
     static {
-        // ---- backline carries / casters ----
-        r("Corki",BACK); r("Jhin",BACK); r("Xayah",BACK); r("Kaisa",BACK);
-        r("MissFortune",BACK); r("AurelionSol",BACK); r("Karma",BACK); r("Vex",BACK);
-        r("Sona",BACK); r("Bard",BACK); r("Samira",BACK);
-        // ---- frontline tanks / bruisers ----
-        r("Rammus",FRONT); r("TahmKench",FRONT); r("Ornn",FRONT); r("Shen",FRONT);
-        r("Blitzcrank",FRONT); r("Riven",FRONT);
-        // ---- flankers: divers / assassins / blink that hunt the enemy backline ----
-        // (kept small — only units that genuinely want a flank, not a back corner)
-        r("Fiora",FLANK); r("Yasuo",FLANK); r("Akali",FLANK); r("Katarina",FLANK);
+        // ---- FRONT: tanks, bruisers, melee fighters (front two rows) ----
+        r("Aatrox",FRONT); r("Briar",FRONT); r("Chogath",FRONT); r("Leona",FRONT);
+        r("Nasus",FRONT); r("Poppy",FRONT); r("RekSai",FRONT); r("Belveth",FRONT);
+        r("Gnar",FRONT); r("Gragas",FRONT); r("Gwen",FRONT); r("Jax",FRONT);
+        r("Mordekaiser",FRONT); r("Pantheon",FRONT); r("Illaoi",FRONT); r("Maokai",FRONT);
+        r("Ornn",FRONT); r("Rhaast",FRONT); r("Urgot",FRONT); r("Nunu",FRONT);
+        r("Rammus",FRONT); r("Riven",FRONT); r("TahmKench",FRONT); r("MightyMech",FRONT);
+        r("Blitzcrank",FRONT); r("Shen",FRONT);
+
+        // ---- BACK: ranged carries, casters, enchanters (back two rows) ----
+        r("Caitlyn",BACK); r("Ezreal",BACK); r("Lissandra",BACK); r("Teemo",BACK);
+        r("TwistedFate",BACK); r("Veigar",BACK); r("Jinx",BACK); r("Meepsie",BACK);
+        r("Milio",BACK); r("Zoe",BACK); r("Aurora",BACK); r("Kaisa",BACK);
+        r("Lulu",BACK); r("MissFortune",BACK); r("Samira",BACK); r("Viktor",BACK);
+        r("AurelionSol",BACK); r("Corki",BACK); r("Karma",BACK); r("Kindred",BACK);
+        r("Morgana",BACK); r("Nami",BACK); r("Xayah",BACK); r("Bard",BACK);
+        r("Graves",BACK); r("Jhin",BACK); r("Sona",BACK); r("Vex",BACK);
+
+        // ---- FLANK: assassins / divers / blink that hunt the enemy backline ----
+        r("Talon",FLANK); r("Akali",FLANK); r("Pyke",FLANK); r("Diana",FLANK);
+        r("Fizz",FLANK); r("Leblanc",FLANK); r("MasterYi",FLANK); r("Fiora",FLANK);
     }
 
     /** Positioning role for a champion. Falls back to ChampItemData's role
