@@ -247,8 +247,8 @@ public class MainActivity extends Activity {
         tb.setText("A massive update is being forged — the biggest yet. New powers, soon. "
                  + "Keep the app updated so it lands the moment it's ready.");
         tb.setTextColor(BONE); tb.setTextSize(12); tb.setLineSpacing(4,1f);
-        LinearLayout.LayoutParams tbl = new LinearLayout.LayoutParams(-1,-2);
-        tbl.setMargins(0, 6, 0, 0); tb.setLayoutParams(tbl);
+        LinearLayout.LayoutParams teaserBl = new LinearLayout.LayoutParams(-1,-2);
+        teaserBl.setMargins(0, 6, 0, 0); tb.setLayoutParams(teaserBl);
         teaser.addView(tb);
         contentArea.addView(teaser);
 

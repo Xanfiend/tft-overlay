@@ -2367,6 +2367,23 @@ public class OverlayService extends Service {
         if(!p.flankers.isEmpty())
             addPlaceRow(root, "FLANK", p.flankers, GREEN, "divers — side/front corner toward their backline");
 
+        // ---- counter the scouted lobby (OppScout) ----
+        // Reads the enemy boards already remembered from manual scries (POOL tab);
+        // when none exist this section is simply absent and POSITION behaves as before.
+        OppScout.Profile opp=OppScout.analyze(pool.getAllOppBoards());
+        if(opp.hasData()){
+            addSecHdr(root, "COUNTER THE LOBBY", BLOODL);
+            TextView mix=new TextView(this);
+            mix.setText(opp.boards+" enem"+(opp.boards==1?"y":"ies")+" scouted  ·  "
+                +opp.flank+" diver"+(opp.flank==1?"":"s")+"  ·  "
+                +opp.back+" backline  ·  "+opp.front+" frontline");
+            mix.setTextColor(ASH); mix.setTextSize(11); mix.setPadding(2,0,2,6); root.addView(mix);
+            for(String tip:opp.tips){
+                TextView tv=new TextView(this); tv.setText("•  "+tip);
+                tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,3); root.addView(tv);
+            }
+        }
+
         // ---- fundamentals checklist ----
         addSecHdr(root, "FUNDAMENTALS", GOLD);
         for(String tip:p.tips){
@@ -2375,7 +2392,9 @@ public class OverlayService extends Service {
         }
 
         TextView foot=new TextView(this);
-        foot.setText("Positioning is meta-stable — these rules hold across patches. Opponent boards can't be read on mobile, so scout the lobby yourself before READY.");
+        foot.setText(opp.hasData()
+            ? "Positioning is meta-stable — these rules hold across patches. Counter advice above is built from the enemy boards you've scried."
+            : "Positioning is meta-stable — these rules hold across patches. Scry enemy boards (POOL tab) to unlock counter-positioning here.");
         foot.setTextColor(DIM); foot.setTextSize(10); foot.setPadding(2,8,2,4); root.addView(foot);
     }
 
