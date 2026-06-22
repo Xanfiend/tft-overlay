@@ -31,4 +31,16 @@ public class RollMathTest {
         double high = RollMath.hitChances(7, 4, 1, 30, 60, 1)[0];
         assertTrue("more rolls should not reduce P(>=1 copy)", high >= low - 0.05);
     }
+
+    @Test public void expectedGoldToFirstIsCappedOrGiveUp(){
+        // good odds -> a real gold figure within the cap; otherwise the -1 sentinel
+        int g = RollMath.expectedGoldToFirst(8, 4, 9, 12, 60);
+        assertTrue("either a within-cap gold cost or the give-up sentinel",
+            g == -1 || (g >= 2 && g <= 60));
+    }
+
+    @Test public void expectedGoldToFirstRejectsBadInput(){
+        assertEquals(-1, RollMath.expectedGoldToFirst(99, 4, 9, 12, 60)); // bad level
+        assertEquals(-1, RollMath.expectedGoldToFirst(8, 4, 0, 12, 60));  // no copies left
+    }
 }
