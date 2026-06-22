@@ -3,8 +3,9 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.99 (versionCode 99). Security pass toward 2.0 COMPLETE: (1) R8 obfuscation + resource shrink (v1.97, CI green); (2) DeviceIntegrity root/emulator heads-up on SETUP (v1.98); (3) first-launch privacy & permissions notice, re-openable from SETUP "Privacy & data" (v1.99, cfg_privacy_seen). All three are tap-path-free.
-- Next: 1.99.x = release-candidate runway (polish/bugfix only). Then the v2.0 HEADLINE = opponent board scan (auto-scan every enemy in one planning phase). Needs live-game testing.
+- Version: v2.0 (versionCode 110). REAPER cut. All security steps done; SCRY THE LOBBY Phase 1 scaffolded (CI-green); COACH on-curve level read added; OPENER sub-tab live.
+- v2.0 changelog entry in MainActivity. APP_VERSION = "v2.0" in OverlayService + MainActivity.
+- Next: SCRY THE LOBBY live tuning (needs laptop/real game — SCANALL_SETTLE_MS, portrait positions, per-board sweep). Phase 2 enemy items (visual icon-ID) after that. Path B semver relabel just before cutting the GitHub release tag.
 
 ## Branding / teaser
 - v2.0 release CODENAME = "TFT REAPER" (MainActivity.V2_CODENAME, one-line swap). Codename only — app stays "TFT Scryer" (package com.xanfiend.tftoverlay must NEVER change or the over-top updater orphans users). "TFT Killer" direction wanted; Reaper chosen (less cheat-tool read, fits THE HUNT/REAPING/pentacle lexicon).
@@ -29,6 +30,7 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Phase 2 (enemy items, visual icon-ID) still TODO after Phase 1 tunes.
 - SAFE FEATURE: OppScout "biggest threat" — single scariest enemy unit by star x cost (Pool.costOf), skips pure tanks; leads the COUNTER THE LOBBY tips ("Biggest threat: X ★★ — focus/body-block/tech"). Uses the per-unit star data already stored in oppboards; handles full 10-12 unit boards. Star = readable proxy for item/upgrade investment (enemy augments aren't scannable). versionCode 108.
 - SAFE FEATURE: OppScout "lobby power" — per-board strength = sum(cost x star-mult 1/3/9); tracks topBoardVal/avgBoardVal. Emits a snowball tip when one board >=1.5x the lobby avg ("don't take that fight thin; dodge"). Completes the threat readout: biggest UNIT (biggest-threat) + biggest PLAYER (lobby-power). Pure, uses stored stars. versionCode 109.
+- COACH on-curve level read: CompAdvisor.levelCurve/expectedLevel/roundOf added; wired in buildCoach() below econCall (green=ahead, gold=on, BLOODL=behind). Benchmarks: L4@2-1, L5@2-5, L6@3-2, L7@4-1, L8@4-5, L9@5-5. versionCode 110.
 
 ## No laptop today (maybe tomorrow) — keep doing pure/CI-verifiable work; live-tune of SCRY THE LOBBY + Phase 2 item visual-ID wait for the laptop.
 
