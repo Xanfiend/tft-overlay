@@ -11,9 +11,9 @@ import java.util.List;
  *
  * Deliberately meta-agnostic. It reads only slow-changing positioning roles
  * (ThreatData) and the same carry pick the COACH tab uses (ChampItemData tier),
- * so nothing here goes stale with item patches. Opponent boards can't be read on
- * mobile, so the advice is fundamentals + own-board sorting, not a per-enemy
- * counter — the reliable, low-upkeep half of positioning.
+ * so nothing here goes stale with item patches. The base plan is fundamentals +
+ * own-board sorting; the {@link #plan(List, String, OppScout.Profile)} overload
+ * adds rule-based counter-positioning once opponent boards have been scried.
  *
  * Pure logic, no Android — easy to unit test.
  */
@@ -27,6 +27,21 @@ public final class PositionAdvisor {
         public final List<String> frontline = new ArrayList<>(); // front two rows
         public final List<String> flankers  = new ArrayList<>(); // side/front corner
         public final List<String> tips = new ArrayList<>();      // evergreen checklist
+    }
+
+    /**
+     * As {@link #plan(List, String)} but folds in counter-positioning advice
+     * derived from scouted opponent boards (OppScout). When opp has no data the
+     * result is identical to the fundamentals-only plan — so the POSITION tab
+     * upgrades automatically once enemies have been scried, with no behavior
+     * change before that.
+     */
+    public static Plan plan(List<String> board, String stageRound, OppScout.Profile opp){
+        Plan p = plan(board, stageRound);
+        if(opp != null && opp.hasData()){
+            for(String t : opp.tips) p.tips.add(t);
+        }
+        return p;
     }
 
     /** board = champion names on your board (stars stripped). stageRound = "3-2" etc (may be ""). */
