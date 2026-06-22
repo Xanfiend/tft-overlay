@@ -10,6 +10,10 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - v2.0 release CODENAME = "TFT REAPER" (MainActivity.V2_CODENAME, one-line swap). Codename only — app stays "TFT Scryer" (package com.xanfiend.tftoverlay must NEVER change or the over-top updater orphans users). "TFT Killer" direction wanted; Reaper chosen (less cheat-tool read, fits THE HUNT/REAPING/pentacle lexicon).
 - SETUP teaser card (top of buildSetup): "⛧ TFT REAPER · v2.0 INCOMING" + vague hype, NO feature spoilers. versionCode bumped to 100, versionName stays "1.99" (teaser is the announcement, not a logged changelog feature).
 
+## REAPER feature build (user: "all of it, easiest/safest first")
+- Order: (1) deeper counter-positioning ✓ → (2) COACH tech vs lobby → (3) early-game opener guide → (4) opponent-scan automation (live-test gated, last).
+- (1) DONE: ThreatData archetypes isHook (Blitzcrank/Pyke) + isAoe (AurelionSol/Gragas/Viktor/Vex/Morgana/Veigar/Lissandra). OppScout tallies hooks/aoe → specific COUNTER THE LOBBY tips (don't isolate carry vs hook; spread vs AoE). Mix line shows hook/AoE counts. Pure, CI-verifiable. versionCode 103.
+
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.
 - PositionAdvisor.plan(board, stageRound, OppScout.Profile) overload: appends counter-positioning tips when opp data exists; identical to fundamentals-only plan when it doesn't (no behavior change until wired).

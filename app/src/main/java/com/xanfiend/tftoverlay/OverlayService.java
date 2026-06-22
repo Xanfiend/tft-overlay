@@ -2374,9 +2374,13 @@ public class OverlayService extends Service {
         if(opp.hasData()){
             addSecHdr(root, "COUNTER THE LOBBY", BLOODL);
             TextView mix=new TextView(this);
-            mix.setText(opp.boards+" enem"+(opp.boards==1?"y":"ies")+" scouted  ·  "
-                +opp.flank+" diver"+(opp.flank==1?"":"s")+"  ·  "
-                +opp.back+" backline  ·  "+opp.front+" frontline");
+            StringBuilder mx=new StringBuilder();
+            mx.append(opp.boards).append(opp.boards==1?" enemy scouted":" enemies scouted");
+            mx.append("  ·  ").append(opp.flank).append(opp.flank==1?" diver":" divers");
+            mx.append("  ·  ").append(opp.back).append(" backline  ·  ").append(opp.front).append(" frontline");
+            if(opp.hooks>0) mx.append("  ·  ").append(opp.hooks).append(" hook");
+            if(opp.aoe>0)   mx.append("  ·  ").append(opp.aoe).append(" AoE");
+            mix.setText(mx.toString());
             mix.setTextColor(ASH); mix.setTextSize(11); mix.setPadding(2,0,2,6); root.addView(mix);
             for(String tip:opp.tips){
                 TextView tv=new TextView(this); tv.setText("•  "+tip);
