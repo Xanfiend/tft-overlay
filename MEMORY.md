@@ -12,6 +12,12 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Auto meta-data updates for builds/comps: **declined** — no reliable on-device "what pros run" source; hand-maintaining metas unwanted.
 - Distribution: GitHub-only, no ads. Possible manual license monetization later.
 - claude-mem: **not viable** on this setup (needs persistent 64-bit machine). Using this file instead.
+- Tap rate-limiting on accessibility dispatchGesture: **declined** — speed is everything; THE HUNT + planner auto-tap already fight the 1-shot/sec ceiling, a forced delay works against us.
+
+## v2.0 plan
+- Headline: opponent board scan (auto-scan every enemy in one planning phase → per-player threat map). The deferred big task.
+- Security (required before 2.0): (1) ProGuard/R8 obfuscation — flip minifyEnabled true + rules; (2) root/emulator passive warning; (3) first-launch privacy notice (overlay+accessibility+screenshot, no telemetry/accounts, GitHub-only net). Tap rate-limit dropped.
+- Reel angles: roll check ("know who to roll before you roll"), POSITION, enemy scan, "offline, no login, no ads."
 
 ## Shipped recently
 - v1.93 reliability: cancel all pending overlay timers on shutdown.
