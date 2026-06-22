@@ -10,8 +10,8 @@ android {
         applicationId "com.xanfiend.tftoverlay"
         minSdk 24
         targetSdk 34
-        versionCode 96
-        versionName "1.96"
+        versionCode 97
+        versionName "1.97"
     }
 
     // Consistent signing: reads keystore + passwords from environment
@@ -33,7 +33,9 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
             // debug stays as-is for local/unsigned fallback
