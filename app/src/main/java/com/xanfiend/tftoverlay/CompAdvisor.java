@@ -60,6 +60,39 @@ public final class CompAdvisor {
         try { return Integer.parseInt(s.trim()); } catch(Exception e){ return 0; }
     }
 
+    /** Second number of a "3-2" stage string, or 0 if unknown. */
+    public static int roundOf(String stageRound){
+        if(stageRound == null) return 0;
+        int dash = stageRound.indexOf('-');
+        if(dash < 0 || dash + 1 >= stageRound.length()) return 0;
+        try { return Integer.parseInt(stageRound.substring(dash + 1).trim()); }
+        catch(Exception e){ return 0; }
+    }
+
+    /** Roughly the level a standard player holds at this stage-round (greedy-but-safe
+     *  benchmarks: L4 @2-1, L5 @2-5, L6 @3-2, L7 @4-1, L8 @4-5, L9 @5-5). 0 if unknown. */
+    public static int expectedLevel(String stageRound){
+        int stage = stageOf(stageRound), round = roundOf(stageRound);
+        if(stage <= 0) return 0;
+        if(stage == 1) return 3;
+        if(stage == 2) return round >= 5 ? 5 : 4;
+        if(stage == 3) return round >= 2 ? 6 : 5;
+        if(stage == 4) return round >= 5 ? 8 : 7;
+        if(stage == 5) return round >= 5 ? 9 : 8;
+        return 9; // stage 6+
+    }
+
+    /** "Are you on curve?" — your level vs the stage benchmark. "" if stage unknown. */
+    public static String levelCurve(int level, String stageRound){
+        int exp = expectedLevel(stageRound);
+        if(exp <= 0 || level <= 0) return "";
+        int d = level - exp;
+        if(d >= 1)  return "Ahead of curve (L" + level + " vs ~L" + exp + " standard) — press your HP lead; bank or push for 5-costs.";
+        if(d == 0)  return "On curve (L" + level + ") — standard tempo for " + stageRound + ".";
+        if(d == -1) return "Slightly behind (L" + level + " vs ~L" + exp + ") — get back on level unless you're slow-rolling on purpose.";
+        return "Behind curve (L" + level + " vs ~L" + exp + ") — stabilize HP first, then catch levels.";
+    }
+
     /** Standard tempo guidance from gold / level / stage. Meta-agnostic — the
      *  comp-specific roll plan comes from the carry note shown alongside this. */
     public static String econCall(int level, int gold, String stageRound){
