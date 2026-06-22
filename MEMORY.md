@@ -27,6 +27,7 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
   - UI: "◉ SCRY THE LOBBY" button in POOL tab (gated on hasOppPortraitCal); "CALIBRATE PORTRAITS" section in SETUP.
   - TUNE LIVE on laptop: SCANALL_SETTLE_MS (board-switch animation wait), portrait tap positions, whether the per-board auto-opp sweep reliably reads each enemy board after a portrait tap. Known rough edge: btnLabel "..."/stop-button flicker between boards (cosmetic).
 - Phase 2 (enemy items, visual icon-ID) still TODO after Phase 1 tunes.
+- SAFE FEATURE: OppScout "biggest threat" — single scariest enemy unit by star x cost (Pool.costOf), skips pure tanks; leads the COUNTER THE LOBBY tips ("Biggest threat: X ★★ — focus/body-block/tech"). Uses the per-unit star data already stored in oppboards; handles full 10-12 unit boards. Star = readable proxy for item/upgrade investment (enemy augments aren't scannable). versionCode 108.
 
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.
