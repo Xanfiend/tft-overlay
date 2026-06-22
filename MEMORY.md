@@ -43,6 +43,11 @@ Needs a laptop/emulator + real game; can't verify in CI.
 ## Future: key/license system (v2.x, NOT a 2.0 blocker)
 - Offline signed keys: generate locally with a private key; app bundles only the public key, verifies on-device. No server/phone-home. Payload = tier + optional expiry. Rollout: free "founder" keys first (build base), paid/time-limited later, founders keep theirs. R8 (done) is the prerequisite.
 
+## Tests (CI)
+- JVM unit suite added 06-22 in `app/src/test/java/...`: CompAdvisorTest, PoolMathTest, ItemDataTest, OppScoutTest, RollMathTest. Covers the pure logic (no Android calls → runs on the JVM with android.jar stubs). CI workflow runs `./gradlew testDebugUnitTest` before the APK build, so a logic regression fails CI. `testImplementation junit:junit:4.13.2`.
+- Locked-in facts worth knowing: streakBonus is ASYMMETRIC (win +1@3/+2@5/+3@6; loss +1@2/+2@4/+3@5) and expectedIncome adds a win-round +1 when streak>0. OppScout item tips only fire when items[] is populated.
+- Add tests alongside new pure logic. Only test classes free of Android calls (the *Data/*Advisor/OppScout/RollMath/Pool static helpers + Pool.OppUnit); Pool instance methods need SharedPreferences → not JVM-testable without Robolectric.
+
 ## Gotchas / known bugs
 - buildSetup() in MainActivity reuses local var names (tbl etc.) — new locals there must not collide (caused a build failure once).
 - Level OCR misses level 1 (Tocker's) — partial fix; needs in-game confirm log.
