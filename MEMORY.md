@@ -29,7 +29,8 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 
 ## v2.0 plan
 - 2.0 = "everything works as intended" milestone, NOT just a number. Don't release until it runs clean.
-- Versioning: public changelog jumps straight 1.99 → 2.0 (NO visible 1.99.x — it looks like the project stalled and undercuts the reveal). RC iterations are invisible: bump versionCode only (99,100,101…), keep versionName "1.99"/"2.0-rc" internally, and DON'T cut a GitHub release for RCs (so the in-app updater never offers them — playtest from CI artifacts). Next public changelog card after 1.99 is the single big 2.0 entry.
+- Versioning (settled): next PUBLIC release is 2.0 — adjacent to 1.99, so NO numbers are skipped. NO 1.99.x (looks stalled). NO long silent gap framed as "hidden" (looks stopped). Instead 2.0 is ONE big COMBINED changelog: counter-positioning wiring + opponent scan + a recap line of the security pass — several bullet sections under one version. Internally keep bumping versionCode for CI test builds (invisible); don't cut a GitHub release until 2.0 is ready.
+- Rule going forward: combine related small work under a meaningful version, never skip version numbers.
 - Headline: opponent board scan (auto-scan every enemy in one planning phase → per-player threat map). The deferred big task.
 - Security (required before 2.0): (1) ProGuard/R8 obfuscation — flip minifyEnabled true + rules; (2) root/emulator passive warning; (3) first-launch privacy notice (overlay+accessibility+screenshot, no telemetry/accounts, GitHub-only net). Tap rate-limit dropped.
 - Reel angles: roll check ("know who to roll before you roll"), POSITION, enemy scan, "offline, no login, no ads."
