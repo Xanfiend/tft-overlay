@@ -62,6 +62,18 @@ public final class ThreatData {
         r("Fizz",FLANK); r("Leblanc",FLANK); r("MasterYi",FLANK); r("Fiora",FLANK);
     }
 
+    // ---- threat archetypes (orthogonal to role) — drive counter-positioning ----
+    // HOOK: single-target grab/pull that snipes an isolated carry (don't leave a
+    //       carry alone in a corner). AOE: area magic that punishes clumping
+    //       (spread out). Meta-stable per set, like the roles above.
+    private static final java.util.Set<String> HOOK = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Blitzcrank", "Pyke"));
+    private static final java.util.Set<String> AOE = new java.util.HashSet<>(java.util.Arrays.asList(
+        "AurelionSol", "Gragas", "Viktor", "Vex", "Morgana", "Veigar", "Lissandra"));
+
+    public static boolean isHook(String champ){ return HOOK.contains(champ); }
+    public static boolean isAoe(String champ){ return AOE.contains(champ); }
+
     /** Positioning role for a champion. Falls back to ChampItemData's role
      *  string, then to BACK if nothing is known. Never returns null. */
     public static String roleOf(String champ){

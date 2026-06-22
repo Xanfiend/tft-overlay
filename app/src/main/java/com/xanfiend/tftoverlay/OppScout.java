@@ -23,6 +23,7 @@ public final class OppScout {
     public static final class Profile {
         public int boards = 0;                 // how many non-empty enemy boards seen
         public int front = 0, back = 0, flank = 0;   // role counts across the lobby
+        public int hooks = 0, aoe = 0;         // archetype counts (grab / area casters)
         public boolean flankHeavy = false;     // assassin/diver-heavy lobby
         public final List<String> topCarries = new ArrayList<>(); // most common backline threats
         public final List<String> tips = new ArrayList<>();       // counter-positioning advice
@@ -45,6 +46,8 @@ public final class OppScout {
                 if(ThreatData.FRONT.equals(role))      p.front++;
                 else if(ThreatData.FLANK.equals(role)) p.flank++;
                 else { p.back++; backFreq.merge(name, 1, Integer::sum); }
+                if(ThreatData.isHook(name)) p.hooks++;
+                if(ThreatData.isAoe(name))  p.aoe++;
             }
         }
         if(p.boards == 0) return p;
@@ -63,6 +66,14 @@ public final class OppScout {
             p.tips.add("Lobby is assassin/diver-heavy (" + p.flank + " flankers seen). Body-block your carry corner with a tank and keep a second-row guard so divers can't drop straight onto your backline.");
         else
             p.tips.add("Few divers seen so far — a standard back-corner carry is safe, but still switch corners each round so it can't be pre-aimed.");
+
+        if(p.hooks > 0)
+            p.tips.add("Hook threat in the lobby (" + p.hooks + " — Blitzcrank/Pyke). Don't leave your carry alone in a corner: keep a unit next to it so the grab can pull the wrong target.");
+
+        if(p.aoe >= 2)
+            p.tips.add("Multiple AoE casters (" + p.aoe + "). Spread your team a hex apart so a single cast can't catch your whole board.");
+        else if(p.aoe == 1)
+            p.tips.add("An AoE caster is around — don't stack your whole team in one corner where one spell hits everyone.");
 
         if(!p.topCarries.isEmpty())
             p.tips.add("Most common enemy carry: " + p.topCarries.get(0) + ". Position to survive its damage and consider teching/itemizing against it.");
