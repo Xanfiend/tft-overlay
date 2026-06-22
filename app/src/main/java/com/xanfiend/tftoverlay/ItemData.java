@@ -125,6 +125,19 @@ public final class ItemData {
         COMBOS[j][i] = name;
     }
 
+    // Evergreen damage/utility tags for the opponent tech read (Phase 2). These are
+    // item PROPERTIES (Infinity Edge is always AD, Rabadon's always AP), not "what
+    // pros run" meta, so upkeep is per-SET (new items / renames) not per-patch.
+    private static final java.util.Set<String> AP_ITEMS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Rabadon's Deathcap","Jeweled Gauntlet","Jeweled Lotus","Archangel's Staff","Ionic Spark","Blue Buff"));
+    private static final java.util.Set<String> AD_ITEMS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Infinity Edge","Deathblade","Kraken Slayer","Last Whisper","Runaan's Hurricane","Statikk Shiv","Guinsoo's Rageblade"));
+    private static final java.util.Set<String> HEAL_ITEMS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Bloodthirster","Hand of Justice","Hextech Gunblade"));
+    public static boolean isApItem(String item)   { return AP_ITEMS.contains(item); }
+    public static boolean isAdItem(String item)   { return AD_ITEMS.contains(item); }
+    public static boolean isHealItem(String item) { return HEAL_ITEMS.contains(item); }
+
     /** Distinct completed-item names from the combine matrix, in first-seen order.
      *  Used by ItemIcons to map a bundled icon filename to its canonical name. */
     public static java.util.List<String> fullItems() {

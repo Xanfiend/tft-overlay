@@ -351,6 +351,13 @@ public class Pool {
         p.edit().putString("oppboard"+slot, sb.toString()).apply();
     }
 
+    // every non-empty remembered enemy board as rich units (with items), for the
+    // item-aware OppScout read (Phase 2); empty items[] until the scan fills them
+    public java.util.List<java.util.List<OppUnit>> getAllOppUnits(){
+        java.util.List<java.util.List<OppUnit>> out = new java.util.ArrayList<>();
+        for(int s=1;s<=7;s++){ java.util.List<OppUnit> u = getOppUnits(s); if(!u.isEmpty()) out.add(u); }
+        return out;
+    }
     // every non-empty remembered enemy board, for OppScout lobby analysis
     public java.util.List<Map<String,Integer>> getAllOppBoards(){
         java.util.List<Map<String,Integer>> out = new java.util.ArrayList<>();
