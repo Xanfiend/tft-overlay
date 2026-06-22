@@ -154,6 +154,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.95 | Complete ThreatData roles for full Set 17 roster (all 62 champs front/back/flank) |
 | v1.94 | POSITION sub-tab — front/back/flank map + carry corner + evergreen fundamentals (PositionAdvisor + ThreatData) |
 | v1.93 | Cancel all pending overlay timers on shutdown (reliability) |
 | v1.92 | Red circled hero pentacle + full-screen drawn launch background |
