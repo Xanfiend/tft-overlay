@@ -10,8 +10,8 @@ android {
         applicationId "com.xanfiend.tftoverlay"
         minSdk 24
         targetSdk 34
-        versionCode 95
-        versionName "1.95"
+        versionCode 96
+        versionName "1.96"
     }
 
     // Consistent signing: reads keystore + passwords from environment

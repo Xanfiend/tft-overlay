@@ -3,7 +3,8 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.95 (versionCode 95). POSITION sub-tab + full Set 17 ThreatData roles (all 62 champs).
+- Version: v1.96 (versionCode 96). COACH roll check added (RollMath P(hit) + ROLL/bank/HOLD).
+- Marching toward v2.0. Plan: small verifiable-without-a-game QoL through v1.9x; reserve opponent-board scan (per-enemy positioning) as the v2.0 headline. At v2.0 write a consolidated "what's new" reel re-highlighting COACH/POSITION/roll-check.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.
 - Dev device: Galaxy Tab A 2016 — 32-bit Android, ~2GB RAM. Cannot run Termux/Claude Code/claude-mem locally (no 32-bit Bun/Node20 build). Work happens in web sessions only.
 

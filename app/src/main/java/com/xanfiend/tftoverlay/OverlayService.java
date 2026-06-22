@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.95";
+    private static final String APP_VERSION = "v1.96";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2300,6 +2300,30 @@ public class OverlayService extends Service {
         TextView econ=new TextView(this);
         econ.setText(CompAdvisor.econCall(pool.getLevel(), pool.getGold(), pool.getStageRound()));
         econ.setTextColor(BONE); econ.setTextSize(12); econ.setPadding(2,2,2,6); root.addView(econ);
+
+        // roll-or-hold: real Monte-Carlo odds of hitting the recommended carry
+        // rolling current gold at current level (same sim the ODDS tab uses), so
+        // the coach answers "should I roll?" with a number instead of a platitude.
+        if(!rec.carry.isEmpty()){
+            int co=Pool.costOf(rec.carry);
+            if(co>=1 && co<=5){
+                int rem=pool.remaining(rec.carry);
+                int tier=0; for(String n:SetData.CHAMPS[co]) tier+=pool.remaining(n);
+                tier=Math.max(0, tier-pool.getJunk(co));
+                int lvl=pool.getLevel(); int rollGold=Math.min(60, pool.getGold());
+                if(rem>0 && tier>0 && rollGold>=2 && lvl>=1 && lvl<=10){
+                    double pHit=RollMath.hitChances(lvl, co, Math.min(rem,tier), tier, rollGold, 1)[0];
+                    int pct=(int)Math.round(pHit*100);
+                    String verdict = pHit>=0.7 ? "ROLL — strong odds to hit."
+                                   : pHit>=0.4 ? "Roll only if you need the board now; otherwise bank."
+                                   :             "HOLD — bank or level up, the odds are thin.";
+                    TextView roll=new TextView(this);
+                    roll.setText("Roll check: "+pct+"% to hit "+rec.carry+" with "+rollGold+"g at lv"+lvl+".  "+verdict);
+                    roll.setTextColor(pHit>=0.7?GREEN:pHit>=0.4?GOLD:ASH); roll.setTextSize(12);
+                    roll.setPadding(2,0,2,6); root.addView(roll);
+                }
+            }
+        }
 
         TextView ctx=new TextView(this);
         String stage=pool.getStageRound();
