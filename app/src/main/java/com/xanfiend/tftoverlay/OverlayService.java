@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.93";
+    private static final String APP_VERSION = "v1.94";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2183,8 +2183,8 @@ public class OverlayService extends Service {
         buildGodTracker(root);
         // sub-tab row
         LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
-        String[] gtNames={"COACH","AUGMENTS","ITEMS"};
-        for(int i=0;i<3;i++){
+        String[] gtNames={"COACH","POSITION","AUGMENTS","ITEMS"};
+        for(int i=0;i<gtNames.length;i++){
             final int gi=i; boolean on=guideTab==gi;
             TextView gt=new TextView(this); gt.setText(gtNames[i]); gt.setGravity(Gravity.CENTER);
             gt.setTextColor(on?BONE:ASH); gt.setTextSize(10); gt.setLetterSpacing(0.05f);
@@ -2196,7 +2196,8 @@ public class OverlayService extends Service {
         }
         root.addView(gtRow);
         if(guideTab==0) buildCoach(root);
-        else if(guideTab==1) buildAugments(root);
+        else if(guideTab==1) buildPosition(root);
+        else if(guideTab==2) buildAugments(root);
         else buildItems(root);
     }
 
@@ -2305,6 +2306,71 @@ public class OverlayService extends Service {
         ctx.setText("lv "+pool.getLevel()+"  ·  "+pool.getGold()+"g"+(stage.isEmpty()?"":("  ·  "+stage))
                 +"  ·  builds: patch "+ChampItemData.PATCH);
         ctx.setTextColor(DIM); ctx.setTextSize(10); ctx.setPadding(2,0,2,4); root.addView(ctx);
+    }
+
+    // POSITION sub-tab: where to stand. Sorts the scanned board front/back/flank
+    // and lists the evergreen fundamentals (PositionAdvisor) — no opponent read,
+    // no per-patch upkeep, just the reliable half of positioning.
+    private void buildPosition(LinearLayout root){
+        java.util.List<String> board=currentBoardNames();
+        PositionAdvisor.Plan p=PositionAdvisor.plan(board, pool.getStageRound());
+
+        if(!p.hasBoard){
+            addSecHdr(root, "POSITION", GOLD);
+            TextView t=new TextView(this);
+            t.setText("Scan your board first — hold the sigil to Auto Scan (or use Board Scan in the POOL tab). Then come back here for a front/back placement map and the positioning checklist.");
+            t.setTextColor(ASH); t.setTextSize(12); t.setPadding(2,2,2,8); root.addView(t);
+            return;
+        }
+
+        // ---- carry corner callout ----
+        if(!p.carry.isEmpty()){
+            addSecHdr(root, "PROTECT YOUR CARRY", GOLD);
+            LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(box(CARD,8,GOLD,2)); card.setPadding(14,12,14,12);
+            LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,-2); clp.setMargins(0,0,0,8); card.setLayoutParams(clp);
+            TextView cn=new TextView(this); cn.setText(p.carry+"  →  "+p.carryCorner);
+            cn.setTextColor(BONE); cn.setTextSize(15); cn.setTypeface(null,android.graphics.Typeface.BOLD); card.addView(cn);
+            TextView sub=new TextView(this); sub.setText("Back row, hugging the wall. Switch corners next round so it can't be pre-aimed.");
+            sub.setTextColor(ASH); sub.setTextSize(11); sub.setPadding(0,5,0,0); card.addView(sub);
+            root.addView(card);
+        }
+
+        // ---- front / back / flank lists ----
+        addSecHdr(root, "PLACEMENT MAP", GOLD);
+        addPlaceRow(root, "BACK",  p.backline,  GOLD,  "hypercarries + casters, far from melee");
+        addPlaceRow(root, "FRONT", p.frontline, BLOODL,"tanks + bruisers, soak the damage");
+        if(!p.flankers.isEmpty())
+            addPlaceRow(root, "FLANK", p.flankers, GREEN, "divers — side/front corner toward their backline");
+
+        // ---- fundamentals checklist ----
+        addSecHdr(root, "FUNDAMENTALS", GOLD);
+        for(String tip:p.tips){
+            TextView tv=new TextView(this); tv.setText("•  "+tip);
+            tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,3); root.addView(tv);
+        }
+
+        TextView foot=new TextView(this);
+        foot.setText("Positioning is meta-stable — these rules hold across patches. Opponent boards can't be read on mobile, so scout the lobby yourself before READY.");
+        foot.setTextColor(DIM); foot.setTextSize(10); foot.setPadding(2,8,2,4); root.addView(foot);
+    }
+
+    // One labelled placement row: a colored zone tag + the units that go there.
+    private void addPlaceRow(LinearLayout root, String label, java.util.List<String> units, int color, String hint){
+        LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(-1,-2); rlp.setMargins(0,2,0,2); row.setLayoutParams(rlp);
+        TextView tag=new TextView(this); tag.setText(label); tag.setGravity(Gravity.CENTER);
+        tag.setTextColor(VOID); tag.setTextSize(11); tag.setTypeface(null,android.graphics.Typeface.BOLD);
+        tag.setBackground(box(color,5,color,2)); tag.setPadding(0,6,0,6);
+        LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,0.28f); tl.setMargins(0,0,8,0); tag.setLayoutParams(tl);
+        row.addView(tag);
+        TextView names=new TextView(this);
+        names.setText(units.isEmpty()?"—":android.text.TextUtils.join(", ", units));
+        names.setTextColor(units.isEmpty()?DIM:BONE); names.setTextSize(12);
+        names.setLayoutParams(new LinearLayout.LayoutParams(0,-2,0.72f)); row.addView(names);
+        root.addView(row);
+        TextView h=new TextView(this); h.setText(hint);
+        h.setTextColor(ASH); h.setTextSize(10); h.setPadding(2,0,2,4); root.addView(h);
     }
 
     // ⛧ REALM OF GODS tracker (Set 17 mechanic). Two gods appear per game in the
