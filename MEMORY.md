@@ -9,6 +9,12 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.
 - Dev device: Galaxy Tab A 2016 — 32-bit Android, ~2GB RAM. Cannot run Termux/Claude Code/claude-mem locally (no 32-bit Bun/Node20 build). Work happens in web sessions only.
 
+## Future direction: key/license system (v2.x, NOT a v2.0 blocker)
+- Offline signed keys: generate keys locally with a private key; app bundles only the public key and verifies signature on-device. No server, no phone-home — keeps the offline + no-telemetry promise.
+- Key payload encodes tier + optional expiry; checked locally. Revocation (if ever needed) could ride the existing GitHub-only RemoteData channel — defer.
+- Rollout: Phase 1 = free no-expiry "founder" keys to build base/goodwill; Phase 2 = new keys paid/time-limited, founders keep theirs. Early-adopter loyalty.
+- R8 obfuscation (v1.97) is the prerequisite — a key check is pointless if the APK is trivially patched to skip it.
+
 ## Decisions (so they aren't re-pitched)
 - Auto meta-data updates for builds/comps: **declined** — no reliable on-device "what pros run" source; hand-maintaining metas unwanted.
 - Distribution: GitHub-only, no ads. Possible manual license monetization later.
