@@ -74,6 +74,22 @@ public final class ThreatData {
     public static boolean isHook(String champ){ return HOOK.contains(champ); }
     public static boolean isAoe(String champ){ return AOE.contains(champ); }
 
+    // ---- damage type of the carries — drives defensive itemization (MR vs Armor) ----
+    // Only damage-dealing carries are classified; enchanters/utility are left blank.
+    private static final java.util.Set<String> AP = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Lissandra", "Teemo", "TwistedFate", "Veigar", "Zoe", "Aurora", "Viktor",
+        "AurelionSol", "Karma", "Vex", "Morgana", "Akali", "Diana", "Leblanc", "Fizz"));
+    private static final java.util.Set<String> AD = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Caitlyn", "Jinx", "Kaisa", "MissFortune", "Samira", "Corki", "Kindred", "Xayah",
+        "Graves", "Jhin", "Talon", "Pyke", "MasterYi", "Fiora"));
+
+    /** "AP", "AD", or "" if the champ isn't a classified damage carry. */
+    public static String damageType(String champ){
+        if(AP.contains(champ)) return "AP";
+        if(AD.contains(champ)) return "AD";
+        return "";
+    }
+
     /** Positioning role for a champion. Falls back to ChampItemData's role
      *  string, then to BACK if nothing is known. Never returns null. */
     public static String roleOf(String champ){

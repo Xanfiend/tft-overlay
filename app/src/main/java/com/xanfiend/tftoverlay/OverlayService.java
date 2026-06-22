@@ -2325,6 +2325,16 @@ public class OverlayService extends Service {
             }
         }
 
+        // ---- tech vs the scouted lobby (OppScout) — defensive itemization ----
+        OppScout.Profile opp=OppScout.analyze(pool.getAllOppBoards());
+        if(!opp.techTips.isEmpty()){
+            addSecHdr(root, "TECH vs LOBBY", BLOODL);
+            for(String tip:opp.techTips){
+                TextView tv=new TextView(this); tv.setText("•  "+tip);
+                tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,4); root.addView(tv);
+            }
+        }
+
         TextView ctx=new TextView(this);
         String stage=pool.getStageRound();
         ctx.setText("lv "+pool.getLevel()+"  ·  "+pool.getGold()+"g"+(stage.isEmpty()?"":("  ·  "+stage))

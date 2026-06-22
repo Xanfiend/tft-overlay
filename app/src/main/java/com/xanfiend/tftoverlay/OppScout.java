@@ -24,9 +24,11 @@ public final class OppScout {
         public int boards = 0;                 // how many non-empty enemy boards seen
         public int front = 0, back = 0, flank = 0;   // role counts across the lobby
         public int hooks = 0, aoe = 0;         // archetype counts (grab / area casters)
+        public int apCarries = 0, adCarries = 0; // damage-type split across the lobby
         public boolean flankHeavy = false;     // assassin/diver-heavy lobby
         public final List<String> topCarries = new ArrayList<>(); // most common backline threats
-        public final List<String> tips = new ArrayList<>();       // counter-positioning advice
+        public final List<String> tips = new ArrayList<>();       // counter-positioning advice (POSITION)
+        public final List<String> techTips = new ArrayList<>();   // defensive itemization advice (COACH)
         public boolean hasData(){ return boards > 0; }
     }
 
@@ -48,6 +50,9 @@ public final class OppScout {
                 else { p.back++; backFreq.merge(name, 1, Integer::sum); }
                 if(ThreatData.isHook(name)) p.hooks++;
                 if(ThreatData.isAoe(name))  p.aoe++;
+                String dt = ThreatData.damageType(name);
+                if("AP".equals(dt))      p.apCarries++;
+                else if("AD".equals(dt)) p.adCarries++;
             }
         }
         if(p.boards == 0) return p;
@@ -80,6 +85,18 @@ public final class OppScout {
 
         if(p.front >= p.back && p.front > 0)
             p.tips.add("Frontline-heavy lobby — expect long fights; spread a hex so their tanks can't clump your team for AoE.");
+
+        // ---- defensive itemization advice (COACH) ----
+        if(p.apCarries > 0 || p.adCarries > 0){
+            if(p.apCarries >= 2 && p.apCarries > p.adCarries * 2)
+                p.techTips.add("Lobby skews AP (" + p.apCarries + " magic carries). Slam Magic Resist on your front — Dragon's Claw on the most-targeted unit, Spectre's/Adaptive from Negatron.");
+            else if(p.adCarries >= 2 && p.adCarries > p.apCarries * 2)
+                p.techTips.add("Lobby skews AD (" + p.adCarries + " physical carries). Build Armor — Bramble Vest on melee-targeted units, Gargoyle on your tank.");
+            else
+                p.techTips.add("Mixed damage (" + p.adCarries + " AD / " + p.apCarries + " AP). Gargoyle Stoneplate, or split one Bramble + one Dragon's Claw across your front.");
+        }
+        if(p.front >= 4)
+            p.techTips.add("Tanky lobby — pack anti-heal (Morellonomicon / Sunfire Cape) so their frontline actually dies.");
 
         return p;
     }
