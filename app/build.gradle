@@ -10,7 +10,7 @@ android {
         applicationId "com.xanfiend.tftoverlay"
         minSdk 24
         targetSdk 34
-        versionCode 99
+        versionCode 100
         versionName "1.99"
     }
 

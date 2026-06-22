@@ -33,6 +33,9 @@ public class MainActivity extends Activity {
     private static final int PURP   = 0xFF6B1A6B;
     private static final int PURPL  = 0xFF9B2A9B;
 
+    // v2.0 release codename — used in the SETUP teaser. One-line swap to rename.
+    private static final String V2_CODENAME = "TFT REAPER";
+
     private int activeTab = 0;
     private LinearLayout contentArea;
     private final TextView[] tabViews = new TextView[2];
@@ -229,6 +232,26 @@ public class MainActivity extends Activity {
     }
 
     private void buildSetup(){
+        // ---- v2.0 teaser (hype, no spoilers) ----
+        LinearLayout teaser = new LinearLayout(this);
+        teaser.setOrientation(LinearLayout.VERTICAL);
+        teaser.setBackground(shape(0xFF1A0A0A, BLOODL, 12, 2));
+        teaser.setPadding(20, 18, 20, 18);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-1,-2);
+        tlp.setMargins(0, 0, 0, 14); teaser.setLayoutParams(tlp);
+        TextView tt = new TextView(this);
+        tt.setText("⛧  " + V2_CODENAME + "  ·  v2.0 INCOMING");
+        tt.setTextColor(GOLD); tt.setTextSize(15); tt.setTypeface(null, Typeface.BOLD);
+        tt.setLetterSpacing(0.06f); teaser.addView(tt);
+        TextView tb = new TextView(this);
+        tb.setText("A massive update is being forged — the biggest yet. New powers, soon. "
+                 + "Keep the app updated so it lands the moment it's ready.");
+        tb.setTextColor(BONE); tb.setTextSize(12); tb.setLineSpacing(4,1f);
+        LinearLayout.LayoutParams tbl = new LinearLayout.LayoutParams(-1,-2);
+        tbl.setMargins(0, 6, 0, 0); tb.setLayoutParams(tbl);
+        teaser.addView(tb);
+        contentArea.addView(teaser);
+
         boolean granted = canDraw();
         // Three states: connected (works), stuck (settings say ON but Android never
         // rebound the service — common right after an app update; needs an OFF/ON
