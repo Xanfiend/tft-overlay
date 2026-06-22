@@ -3,9 +3,11 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at start, append as decisions land. Terse. Architecture lives in CLAUDE.md; this is *state*: shipped / deferred / decided. Per-version detail is in git + the in-app changelog — don't duplicate it here.
 
 ## Current state
-- versionName "1.24.5"; versionCode 111 (plain int, bumps every CI build). versionName stays at the last changelog'd release until REAPER ships.
+- versionName "1.99.1"; versionCode 113 (plain int, bumps every CI build). VERSION NUMBERS ONLY GO FORWARD — the rolling GitHub release keys the updater on version numbers, so going backward breaks it (see below). Pre-2.0 dev builds march as 1.99.x.
 - REAPER = **2.0.0**, cut ONLY when the opponent-scan headline is LIVE-TESTED and working ("everything works as intended", not a number). Caught + reverted a premature 2.0 cut on 06-22.
-- All post-1.24.5 work (COACH on-curve read, OPENER tab, SCRY THE LOBBY scaffold, UI polish, DEV DIAGNOSTICS) is committed but UNlogged — it folds into the single combined 2.0.0 changelog.
+- **PATH B (semver relabel) REVERTED 06-22 — it was PREMATURE.** Backward-renumbering the live version (1.99→1.24.5) broke the updater: the rolling "latest" release accumulates every historical APK as an asset, and the old updater picked the HIGHEST asset number, so old assets v1.25–v1.99 (and a stray v2.0 from the reverted premature cut) all read as "newer" than 1.24.5 → permanent false "update available", showing phantom versions. Restored MainActivity/README/CLAUDE to pre-Path-B (01ff9a1) + forward versionName 1.99.1. **Do Path B AT the 2.0 cut** (fresh release, 2.0.0 supersedes everything, renumber is painless then) — exactly what the original plan said.
+- **Updater hardened (v1.99.1):** parseLatestVersion now trusts the release TITLE first (the build always sets it to current versionName), assets only as fallback — so a stray asset can't create a phantom. Bootstrap: installed apps have the OLD asset-max updater, so they may still show "v2.0" once; the download is always the rolling tft-scryer.apk (= newest build), so updating once lands the fixed updater. The stray `tft-scryer-v2.0.apk` should be deleted from the GitHub release for cleanliness (can't do via MCP — needs manual/gh; harmless once updater is title-based, but MUST be gone before real 2.0.0 ships or it'd tie/block it).
+- All post-1.99 work (COACH on-curve read, OPENER tab, both scan scaffolds, UI polish, DEV DIAGNOSTICS, updater fix) folds into the single combined 2.0.0 changelog.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push `main` too (standing authorization).
 - Dev device: Galaxy Tab A 2016 (32-bit, ~2GB) — can't run Termux/Claude Code locally. Web sessions only. Builds verify via CI (GitHub Actions); no local `./gradlew` (sandbox can't reach Maven Central).
 
@@ -27,8 +29,8 @@ Needs a laptop/emulator + real game; can't verify in CI.
 - Codename "TFT REAPER" (MainActivity.V2_CODENAME) — DISPLAY ONLY. App stays "TFT Scryer"; package `com.xanfiend.tftoverlay` must NEVER change (over-top updater orphans users otherwise). SETUP teaser card hypes 2.0, no spoilers.
 
 ## Versioning (settled)
-- Semver MAJOR.MINOR.PATCH. MINOR (x.y.0) = real feature/new tab/scan mode; PATCH (x.y.z) = fix/polish. REAPER = 2.0.0; next fix 2.0.1, next feature 2.1.0. versionCode = plain incrementing int regardless.
-- **Path B DONE (06-22):** full semver relabel of all history (changelog + README + CLAUDE.md table + version labels). v1.0→1.0.0 … v1.99→1.24.5. README probe-dot tail (old v1.17-v1.30) collapsed into v1.7.0+v1.7.1. Feature-highlight is now self-maintaining: version ends ".0" OR desc starts "NEW" → gold ✦ badge (FEATURE_VERS set deleted).
+- LIVE version number ONLY GOES FORWARD (rolling-release updater compares numbers). Pre-2.0 = 1.99.x. Target semver MAJOR.MINOR.PATCH lands AT the 2.0 cut: REAPER = 2.0.0, then 2.0.1 (fix), 2.1.0 (feature). versionCode = plain incrementing int.
+- **Path B (full semver relabel of history) = DEFERRED to the 2.0 cut.** Tried it early 06-22, reverted — backward renumber broke the updater (see Current state). At the 2.0 cut, relabel the in-app changelog/README display AND ship a fresh 2.0.0 that supersedes all old assets — painless then. Don't touch the live number scheme before that.
 - 2.0 ships as ONE combined changelog (counter-positioning + opponent scan + security recap). Never skip numbers; combine small work under a meaningful version.
 
 ## Decisions (don't re-pitch)
