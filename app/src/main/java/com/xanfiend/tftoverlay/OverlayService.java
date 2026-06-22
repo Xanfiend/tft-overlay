@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99";
+    private static final String APP_VERSION = "v2.0";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -2364,6 +2364,16 @@ public class OverlayService extends Service {
         TextView econ=new TextView(this);
         econ.setText(CompAdvisor.econCall(pool.getLevel(), pool.getGold(), pool.getStageRound()));
         econ.setTextColor(BONE); econ.setTextSize(12); econ.setPadding(2,2,2,6); root.addView(econ);
+
+        String lvCurve = CompAdvisor.levelCurve(pool.getLevel(), pool.getStageRound());
+        if(!lvCurve.isEmpty()){
+            TextView lvc = new TextView(this);
+            lvc.setText(lvCurve);
+            int lvExp = CompAdvisor.expectedLevel(pool.getStageRound());
+            int lvDiff = pool.getLevel() - lvExp;
+            lvc.setTextColor(lvDiff >= 1 ? GREEN : lvDiff == 0 ? GOLD : BLOODL);
+            lvc.setTextSize(12); lvc.setPadding(2,0,2,6); root.addView(lvc);
+        }
 
         // roll-or-hold: real Monte-Carlo odds of hitting the recommended carry
         // rolling current gold at current level (same sim the ODDS tab uses), so
