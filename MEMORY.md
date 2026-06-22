@@ -20,6 +20,7 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
   - Phase 2 = ENEMY ITEMS (user requirement): item icons are NOT text -> need VISUAL icon matching like SetIcons (bundle full-item icon PNGs, match the unit popup's item slots). Distinct subsystem, bigger lift. Then OppScout weights threats by items and TECH/COUNTER advice sharpens (anti-heal only if their front has sustain items; armor urgency scales with the AD carry's damage items).
   - DESIGN NOW so no rework: each scanned enemy unit = {name, stars, items[]}. Phase 1 leaves items[] empty; Phase 2 fills it. Pool oppboard storage format extends "name|stars" -> "name|stars|item1,item2,item3" (backward-compatible parse).
 - Laptop may arrive today -> build Phase 1 WITH live tuning (avoid blind rework on timing/positions); item visual-ID (Phase 2) after.
+- PREP DONE (safe, no rework risk): Pool enemy-portrait storage — setOppPortrait/getOppPortrait/oppPortraitCount/hasOppPortraitCal/clearOppPortraits (cal_opp1..7 keys). versionCode 106. Laptop session starts at: build calibration wizard (record portrait taps) + scan loop, tune timing live.
 
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.

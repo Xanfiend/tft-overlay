@@ -323,6 +323,30 @@ public class Pool {
         return s;
     }
 
+    // ---- enemy-portrait tap positions (one-pass opponent scan, REAPER) ----
+    // Raw screen px for the up-to-7 player portraits along the top HUD; the
+    // automation taps each to switch the viewed board, then runs the popup scan.
+    // Recorded once via calibration, like the cal_* board keys.
+    public void setOppPortrait(int i, int x, int y){
+        p.edit().putString("cal_opp" + i, x + "," + y).apply();
+    }
+    public int[] getOppPortrait(int i){
+        String s = p.getString("cal_opp" + i, "");
+        if(s.isEmpty()) return null;
+        String[] xy = s.split(",");
+        try { return new int[]{ Integer.parseInt(xy[0]), Integer.parseInt(xy[1]) }; }
+        catch(Exception e){ return null; }
+    }
+    public int oppPortraitCount(){
+        int n = 0; for(int i = 1; i <= 7; i++) if(getOppPortrait(i) != null) n++; return n;
+    }
+    public boolean hasOppPortraitCal(){ return getOppPortrait(1) != null; }
+    public void clearOppPortraits(){
+        android.content.SharedPreferences.Editor e = p.edit();
+        for(int i = 1; i <= 7; i++) e.remove("cal_opp" + i);
+        e.apply();
+    }
+
     // ---- god/boon tracker (set 17 Realm mechanic) ----
     // godA/godB = the two gods in this game ("" = unset); picks = offerings taken
     public String getGod(int which){ return p.getString("god_"+which, ""); }

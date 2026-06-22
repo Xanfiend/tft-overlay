@@ -71,6 +71,7 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cal_rowf1` | 33 | first board row from front (% height) |
 | `cal_rowf2` | 66 | second board row from front (% height) |
 | `cal_tl/tr/bl/br` | — | landscape grid corner taps (x,y raw px) |
+| `cal_opp1..7` | — | enemy-portrait tap positions for one-pass opponent scan (x,y raw px) |
 | `cal_left/right` | — | landscape grid left/right edges |
 | `cfg_smartnudge` | 0 | health-bar body-drop nudge (−8..+8 %) |
 | `econ_gold` | 0 | tracked gold |
