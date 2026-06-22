@@ -2,7 +2,7 @@
 
 ## Memory
 
-At session start, read `MEMORY.md` (running cross-session log: current state, decisions, open threads). Append to it as decisions land or work ships. Keep it terse.
+At session start, read `MEMORY.md` (running cross-session log: current state, decisions, open threads). Append to it as decisions land or work ships. Keep it terse. Compact it (rewrite to durable state, drop detail recoverable from git/changelog) whenever it bloats — standing authorization, don't wait to be asked.
 
 ## Model
 
