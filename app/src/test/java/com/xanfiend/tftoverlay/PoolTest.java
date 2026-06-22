@@ -30,8 +30,9 @@ public class PoolTest {
     }
 
     @Test public void econStatePersistsAndGoldClampsAtZero(){
-        pool.setGold(42); assertEquals(42, pool.getGold());
+        // clamp check first, then set the value we expect to persist
         pool.setGold(-5); assertEquals("gold never goes negative", 0, pool.getGold());
+        pool.setGold(42); assertEquals(42, pool.getGold());
         pool.setStreak(-3); assertEquals(-3, pool.getStreak());
         pool.setLevel(7);  assertEquals(7, pool.getLevel());
         pool.setStageRound("3-2"); assertEquals("3-2", pool.getStageRound());
@@ -39,6 +40,7 @@ public class PoolTest {
         Pool reopened = new Pool(ApplicationProvider.getApplicationContext());
         assertEquals(42, reopened.getGold());
         assertEquals(7, reopened.getLevel());
+        assertEquals("3-2", reopened.getStageRound());
     }
 
     @Test public void privacyFlagDefaultsFalseThenSticks(){
