@@ -20,7 +20,13 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
   - Phase 2 = ENEMY ITEMS (user requirement): item icons are NOT text -> need VISUAL icon matching like SetIcons (bundle full-item icon PNGs, match the unit popup's item slots). Distinct subsystem, bigger lift. Then OppScout weights threats by items and TECH/COUNTER advice sharpens (anti-heal only if their front has sustain items; armor urgency scales with the AD carry's damage items).
   - DESIGN NOW so no rework: each scanned enemy unit = {name, stars, items[]}. Phase 1 leaves items[] empty; Phase 2 fills it. Pool oppboard storage format extends "name|stars" -> "name|stars|item1,item2,item3" (backward-compatible parse).
 - Laptop may arrive today -> build Phase 1 WITH live tuning (avoid blind rework on timing/positions); item visual-ID (Phase 2) after.
-- PREP DONE (safe, no rework risk): Pool enemy-portrait storage — setOppPortrait/getOppPortrait/oppPortraitCount/hasOppPortraitCal/clearOppPortraits (cal_opp1..7 keys). versionCode 106. Laptop session starts at: build calibration wizard (record portrait taps) + scan loop, tune timing live.
+- PREP DONE (safe, no rework risk): Pool enemy-portrait storage — setOppPortrait/getOppPortrait/oppPortraitCount/hasOppPortraitCal/clearOppPortraits (cal_opp1..7 keys) + resetOppCursor.
+- PHASE 1 SCAFFOLDING DONE (versionCode 107, compiles in CI; needs LIVE TUNING):
+  - Orchestration: startScanAllOpponents → scanAllStep (tap portrait i → wait SCANALL_SETTLE_MS → startAutoOppScan) → finishAutoTapScan hooked: when scanAllMode, calls scanAllAdvance instead of reopening panel → next portrait → finishScanAll. stopScanAll wired into stopActiveMode (STOP button). Reuses the existing single-opp board sweep as the per-board worker; files OPP slots 1..N (clears stale + resetOppCursor at start).
+  - Calibration: startOppCalibration → full-screen overlay (showOppCalOverlay) records up to 7 portrait taps (bottom banner w/ DONE/CANCEL so it won't cover top portraits); finishOppCal/cancelOppCal/hideOppCalView; added to teardownStrayOverlays + onDestroy.
+  - UI: "◉ SCRY THE LOBBY" button in POOL tab (gated on hasOppPortraitCal); "CALIBRATE PORTRAITS" section in SETUP.
+  - TUNE LIVE on laptop: SCANALL_SETTLE_MS (board-switch animation wait), portrait tap positions, whether the per-board auto-opp sweep reliably reads each enemy board after a portrait tap. Known rough edge: btnLabel "..."/stop-button flicker between boards (cosmetic).
+- Phase 2 (enemy items, visual icon-ID) still TODO after Phase 1 tunes.
 
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.

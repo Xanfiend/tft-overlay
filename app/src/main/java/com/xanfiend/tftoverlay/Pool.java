@@ -322,6 +322,8 @@ public class Pool {
         p.edit().putInt("opp_slot_cursor", s).apply();
         return s;
     }
+    // reset the cursor so the next one-pass lobby scan fills slots from OPP 1
+    public void resetOppCursor(){ p.edit().putInt("opp_slot_cursor", 0).apply(); }
 
     // ---- enemy-portrait tap positions (one-pass opponent scan, REAPER) ----
     // Raw screen px for the up-to-7 player portraits along the top HUD; the
