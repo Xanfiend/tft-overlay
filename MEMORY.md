@@ -23,8 +23,8 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Tap rate-limiting on accessibility dispatchGesture: **declined** — speed is everything; THE HUNT + planner auto-tap already fight the 1-shot/sec ceiling, a forced delay works against us.
 
 ## v2.0 plan
-- 2.0 = "everything works as intended" milestone, NOT just a number. Don't release until the RC runs clean.
-- Versioning runway: 1.97→1.99 = feature work (one minor per feature). Then 1.99.1, 1.99.2… = release candidates (polish/bugfix only, no new scope). 2.0 = clean release + reel. versionCode keeps ticking as a plain int (96,97,98…) regardless of versionName string.
+- 2.0 = "everything works as intended" milestone, NOT just a number. Don't release until it runs clean.
+- Versioning: public changelog jumps straight 1.99 → 2.0 (NO visible 1.99.x — it looks like the project stalled and undercuts the reveal). RC iterations are invisible: bump versionCode only (99,100,101…), keep versionName "1.99"/"2.0-rc" internally, and DON'T cut a GitHub release for RCs (so the in-app updater never offers them — playtest from CI artifacts). Next public changelog card after 1.99 is the single big 2.0 entry.
 - Headline: opponent board scan (auto-scan every enemy in one planning phase → per-player threat map). The deferred big task.
 - Security (required before 2.0): (1) ProGuard/R8 obfuscation — flip minifyEnabled true + rules; (2) root/emulator passive warning; (3) first-launch privacy notice (overlay+accessibility+screenshot, no telemetry/accounts, GitHub-only net). Tap rate-limit dropped.
 - Reel angles: roll check ("know who to roll before you roll"), POSITION, enemy scan, "offline, no login, no ads."
