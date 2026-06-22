@@ -3,9 +3,10 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- versionName STAYS "1.99"; versionCode 110 (plain int, increments per CI build). DO NOT bump versionName to 2.0 until the headline (opponent scan) is LIVE-TESTED and working — 2.0 = "everything works as intended", not a number. (Caught a premature 2.0 cut on 06-22 and reverted it.)
+- versionName "1.24.5" (was "1.99"); versionCode 110 (plain int, increments per CI build). DO NOT bump to 2.0.0 until the headline (opponent scan) is LIVE-TESTED and working — 2.0.0 = "everything works as intended", not a number. (Caught a premature 2.0 cut on 06-22 and reverted it.) REAPER = 2.0.0.
+- PATH B DONE (06-22): full semver relabel of ALL history. In-app changelog (MainActivity), README, CLAUDE.md table, and the version labels all renumbered MAJOR.MINOR.PATCH. Latest shipped = v1.24.5 (was v1.99). Mapping anchors: v1.0→1.0.0, v1.59→1.14.0, v1.61(THE HUNT)→1.16.0, v1.74(BUILDS)→1.20.0, v1.90(COACH)→1.23.0, v1.94(POSITION)→1.24.0, v1.99→1.24.5. README probe-dot tail v1.17-v1.30 collapsed into v1.7.0 + v1.7.1 (matches the in-app collapse). Feature-highlight rule is now self-maintaining: a version ending ".0" (a MINOR) OR a desc starting "NEW" gets the gold ✦ FEATURE badge — FEATURE_VERS set deleted.
 - Security pass COMPLETE (R8 / DeviceIntegrity / privacy notice). SCRY THE LOBBY Phase 1 scaffolded (CI-green, UNTESTED on a real game). COACH on-curve level read shipped (folds into the eventual 2.0 changelog). OPENER sub-tab live.
-- Next without laptop: pure/CI-verifiable work only (see below). Live-gated: SCRY THE LOBBY tuning (SCANALL_SETTLE_MS, portrait positions, per-board sweep) + Phase 2 enemy-item visual-ID. Path B semver relabel just before cutting the 2.0 GitHub release.
+- Next without laptop: pure/CI-verifiable work only (see below). Live-gated: SCRY THE LOBBY tuning (SCANALL_SETTLE_MS, portrait positions, per-board sweep) + Phase 2 enemy-item visual-ID.
 
 ## Branding / teaser
 - v2.0 release CODENAME = "TFT REAPER" (MainActivity.V2_CODENAME, one-line swap). Codename only — app stays "TFT Scryer" (package com.xanfiend.tftoverlay must NEVER change or the over-top updater orphans users). "TFT Killer" direction wanted; Reaper chosen (less cheat-tool read, fits THE HUNT/REAPING/pentacle lexicon).
