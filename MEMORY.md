@@ -14,6 +14,8 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Order: (1) deeper counter-positioning ✓ → (2) COACH tech vs lobby → (3) early-game opener guide → (4) opponent-scan automation (live-test gated, last).
 - (1) DONE: ThreatData archetypes isHook (Blitzcrank/Pyke) + isAoe (AurelionSol/Gragas/Viktor/Vex/Morgana/Veigar/Lissandra). OppScout tallies hooks/aoe → specific COUNTER THE LOBBY tips (don't isolate carry vs hook; spread vs AoE). Mix line shows hook/AoE counts. versionCode 103.
 - (2) DONE: ThreatData.damageType (AP/AD sets for carries). OppScout tallies apCarries/adCarries + builds techTips (MR vs Armor vs mixed; anti-heal if front>=4). COACH renders "TECH vs LOBBY" section from OppScout.analyze(pool.getAllOppBoards()). Pure. versionCode 104.
+- (3) DONE: OpenerData.java (evergreen stage arc + item-slam priority + principles) + OPENER sub-tab under GUIDE (now 5 sub-tabs: COACH/POSITION/OPENER/AUGMENTS/ITEMS; guideTab dispatch updated: 0 coach,1 position,2 opener,3 augments,4 items). Pure static. versionCode 105.
+- (4) NEXT: opponent-scan automation — one-pass tap-through of enemy portraits. LIVE-TEST GATED on the tablet. Build flow + calibration; user playtests.
 
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.
