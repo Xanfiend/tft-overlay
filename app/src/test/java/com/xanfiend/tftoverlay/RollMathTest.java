@@ -23,8 +23,12 @@ public class RollMathTest {
     }
 
     @Test public void moreGoldNeverLowersHitChance(){
-        double low  = RollMath.hitChances(8, 4, 9, 12, 20, 1)[0];
-        double high = RollMath.hitChances(8, 4, 9, 12, 60, 1)[0];
-        assertTrue("more rolls should not reduce P(>=1 copy)", high >= low);
+        // single target in a deep tier so neither probability saturates near 1.0
+        // (saturation + Monte-Carlo noise could otherwise flip the comparison).
+        // Tolerance 0.05 sits well above the ~0.01 sampling noise at 3000 iters,
+        // so this never flakes but still catches a real monotonicity break.
+        double low  = RollMath.hitChances(7, 4, 1, 30, 20, 1)[0];
+        double high = RollMath.hitChances(7, 4, 1, 30, 60, 1)[0];
+        assertTrue("more rolls should not reduce P(>=1 copy)", high >= low - 0.05);
     }
 }
