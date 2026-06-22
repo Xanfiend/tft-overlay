@@ -26,6 +26,8 @@ public final class OppScout {
         public int hooks = 0, aoe = 0;         // archetype counts (grab / area casters)
         public int apCarries = 0, adCarries = 0; // damage-type split across the lobby
         public boolean flankHeavy = false;     // assassin/diver-heavy lobby
+        public String topThreat = "";          // single scariest unit (star x cost)
+        public int topThreatStars = 0;
         public final List<String> topCarries = new ArrayList<>(); // most common backline threats
         public final List<String> tips = new ArrayList<>();       // counter-positioning advice (POSITION)
         public final List<String> techTips = new ArrayList<>();   // defensive itemization advice (COACH)
@@ -40,10 +42,13 @@ public final class OppScout {
         // count roles across every scouted board; tally how often each backline
         // carry shows up so the most-contested threats float to the top
         Map<String,Integer> backFreq = new LinkedHashMap<>();
+        int bestThreatWeight = -1;   // star x cost — picks the single fed carry to respect
         for(Map<String,Integer> board : boards){
             if(board == null || board.isEmpty()) continue;
             p.boards++;
-            for(String name : board.keySet()){
+            for(Map.Entry<String,Integer> en : board.entrySet()){
+                String name = en.getKey();
+                int stars = en.getValue() == null ? 1 : Math.max(1, en.getValue());
                 String role = ThreatData.roleOf(name);
                 if(ThreatData.FRONT.equals(role))      p.front++;
                 else if(ThreatData.FLANK.equals(role)) p.flank++;
@@ -53,6 +58,13 @@ public final class OppScout {
                 String dt = ThreatData.damageType(name);
                 if("AP".equals(dt))      p.apCarries++;
                 else if("AD".equals(dt)) p.adCarries++;
+                // biggest single threat: weight star level by cost, skip pure tanks
+                if(!ThreatData.FRONT.equals(role)){
+                    int w = stars * 10 + Math.max(0, Pool.costOf(name));
+                    if(w > bestThreatWeight){
+                        bestThreatWeight = w; p.topThreat = name; p.topThreatStars = stars;
+                    }
+                }
             }
         }
         if(p.boards == 0) return p;
@@ -67,6 +79,12 @@ public final class OppScout {
         for(int i = 0; i < es.size() && i < 3; i++) p.topCarries.add(es.get(i).getKey());
 
         // ---- counter-positioning advice (rule-based, evergreen) ----
+        if(!p.topThreat.isEmpty()){
+            StringBuilder st = new StringBuilder();
+            for(int i = 0; i < p.topThreatStars; i++) st.append("★");
+            p.tips.add("Biggest threat: " + p.topThreat + (p.topThreatStars >= 2 ? " " + st : "")
+                + " — focus it, body-block its access, and tech against its damage.");
+        }
         if(p.flankHeavy)
             p.tips.add("Lobby is assassin/diver-heavy (" + p.flank + " flankers seen). Body-block your carry corner with a tank and keep a second-row guard so divers can't drop straight onto your backline.");
         else
