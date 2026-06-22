@@ -53,7 +53,7 @@ app/src/main/java/com/xanfiend/tftoverlay/
 
 ## Set updates (remote data sync)
 
-Since v1.21.0 a new set does **not** require an APK. Edit `data/setdata.json`, push to `main`, and the app pulls it on next launch (`RemoteData.syncAsync` → cache → applied at the *following* launch via `loadCachedOrBundled`). Network result never mutates `SetData` mid-session.
+Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, push to `main`, and the app pulls it on next launch (`RemoteData.syncAsync` → cache → applied at the *following* launch via `loadCachedOrBundled`). Network result never mutates `SetData` mid-session.
 
 - Runtime source: `https://raw.githubusercontent.com/Xanfiend/tft-overlay/main/data/setdata.json` (GitHub only — preserves the updater's privacy promise).
 - `SetData.java` is the **bundled fallback** (offline / pre-first-sync) — keep it current too.
@@ -159,30 +159,30 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
-| v1.24.5 | First-launch privacy & permissions notice (re-openable from SETUP). v2.0 security step 3 (final) |
-| v1.24.4 | Passive root/emulator heads-up on SETUP (DeviceIntegrity; informational, never blocks/reports). v2.0 security step 2 |
-| v1.24.3 | R8 obfuscation + resource shrink on release build (proguard-rules.pro; ML Kit kept). First v2.0 security step |
-| v1.24.2 | COACH roll check — Monte-Carlo P(hit carry) at current gold/level + ROLL/bank/HOLD call (RollMath) |
-| v1.24.1 | Complete ThreatData roles for full Set 17 roster (all 62 champs front/back/flank) |
-| v1.24.0 | POSITION sub-tab — front/back/flank map + carry corner + evergreen fundamentals (PositionAdvisor + ThreatData) |
-| v1.23.3 | Cancel all pending overlay timers on shutdown (reliability) |
-| v1.23.2 | Red circled hero pentacle + full-screen drawn launch background |
-| v1.23.1 | Launch-screen occult symbols drawn as vector pentagrams (font-independent, can't tofu) |
-| v1.23.0 | COACH tab — recommend comp/items + econ call from scanned board (CompAdvisor + ChampItemData) |
-| v1.22.2 | Fix tofu glyphs on launch screen (tablet fonts) |
-| v1.22.1 | SCAN FROM IMAGE moved behind hidden dev mode (tap version 7x); `cfg_devmode` |
-| v1.22.0 | SCAN FROM IMAGE dev mode — run the scan pipeline on a saved screenshot (no game) |
-| v1.21.0 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
-| v1.20.11 | Fix level-1 OCR (Tocker's), fix gold fused-icon, AUTO-CALIBRATE FROM BOARD (hex mesh) |
-| v1.20.10 | Aspect-ratio-aware fallback hex grid (no more 16:9-only dot positions) |
-| v1.20.9 | Smart Scan dot-height nudge control + fix too-short landscape grid |
-| v1.20.8 | THE HUNT no longer overcounts bought copies (deferred confirm) |
-| v1.20.7 | Fix planner calibration not opening planner; sigil tap only opens panel |
-| v1.20.6 | Sigil tap no longer cancels THE HUNT |
-| v1.20.5 | One-tap clear of auto-buy marks |
-| v1.20.4 | Fix bitmap leaks + planner-cal touch failsafe |
-| v1.20.3 | Fix planner calibration skipping steps |
-| v1.20.2 | Fix touch-blocking after scan + on orientation change |
+| v1.99 | First-launch privacy & permissions notice (re-openable from SETUP). v2.0 security step 3 (final) |
+| v1.98 | Passive root/emulator heads-up on SETUP (DeviceIntegrity; informational, never blocks/reports). v2.0 security step 2 |
+| v1.97 | R8 obfuscation + resource shrink on release build (proguard-rules.pro; ML Kit kept). First v2.0 security step |
+| v1.96 | COACH roll check — Monte-Carlo P(hit carry) at current gold/level + ROLL/bank/HOLD call (RollMath) |
+| v1.95 | Complete ThreatData roles for full Set 17 roster (all 62 champs front/back/flank) |
+| v1.94 | POSITION sub-tab — front/back/flank map + carry corner + evergreen fundamentals (PositionAdvisor + ThreatData) |
+| v1.93 | Cancel all pending overlay timers on shutdown (reliability) |
+| v1.92 | Red circled hero pentacle + full-screen drawn launch background |
+| v1.91 | Launch-screen occult symbols drawn as vector pentagrams (font-independent, can't tofu) |
+| v1.90 | COACH tab — recommend comp/items + econ call from scanned board (CompAdvisor + ChampItemData) |
+| v1.89 | Fix tofu glyphs on launch screen (tablet fonts) |
+| v1.88 | SCAN FROM IMAGE moved behind hidden dev mode (tap version 7x); `cfg_devmode` |
+| v1.87 | SCAN FROM IMAGE dev mode — run the scan pipeline on a saved screenshot (no game) |
+| v1.86 | Remote set-data sync (RemoteData) — new sets via data/setdata.json, no APK rebuild |
+| v1.85 | Fix level-1 OCR (Tocker's), fix gold fused-icon, AUTO-CALIBRATE FROM BOARD (hex mesh) |
+| v1.84 | Aspect-ratio-aware fallback hex grid (no more 16:9-only dot positions) |
+| v1.83 | Smart Scan dot-height nudge control + fix too-short landscape grid |
+| v1.82 | THE HUNT no longer overcounts bought copies (deferred confirm) |
+| v1.81 | Fix planner calibration not opening planner; sigil tap only opens panel |
+| v1.80 | Sigil tap no longer cancels THE HUNT |
+| v1.79 | One-tap clear of auto-buy marks |
+| v1.78 | Fix bitmap leaks + planner-cal touch failsafe |
+| v1.77 | Fix planner calibration skipping steps |
+| v1.76 | Fix touch-blocking after scan + on orientation change |
 
 ## Constraints
 
