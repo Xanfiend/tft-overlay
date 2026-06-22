@@ -73,6 +73,46 @@ public class OppScoutTest {
         assertEquals(2, viaMap.front + viaMap.back + viaMap.flank);
     }
 
+    @Test public void biggestThreatIsHighestStarNonTank(){
+        // two backline carries; the 3-star one outweighs the 1-star one
+        List<Pool.OppUnit> b = Arrays.asList(unit("Jhin", 3), unit("Xayah", 1));
+        OppScout.Profile p = OppScout.analyzeUnits(lobby(b));
+        assertEquals("Jhin", p.topThreat);
+        assertEquals(3, p.topThreatStars);
+        assertTrue(anyContains(p.tips, "Biggest threat: Jhin"));
+    }
+
+    @Test public void flankHeavyLobbyIsFlagged(){
+        List<Pool.OppUnit> b = Arrays.asList(
+            unit("Talon", 2), unit("Akali", 1), unit("Pyke", 2)); // all FLANK
+        OppScout.Profile p = OppScout.analyzeUnits(lobby(b));
+        assertEquals(3, p.flank);
+        assertTrue(p.flankHeavy);
+        assertTrue(anyContains(p.tips, "assassin"));
+    }
+
+    @Test public void snowballingOpponentIsCalledOut(){
+        // one fed board (5-cost 3-star) well above a thin board -> dodge advice
+        List<Pool.OppUnit> strong = Arrays.asList(unit(champ(5), 3));
+        List<Pool.OppUnit> weak   = Arrays.asList(unit(champ(1), 1));
+        OppScout.Profile p = OppScout.analyzeUnits(lobby(strong, weak));
+        assertEquals(2, p.boards);
+        assertTrue(p.topBoardVal >= p.avgBoardVal * 3 / 2);
+        assertTrue(anyContains(p.tips, "ahead of the lobby"));
+    }
+
+    @Test public void hookAndAoeProduceSpecificTips(){
+        OppScout.Profile hook = OppScout.analyzeUnits(lobby(
+            Arrays.asList(unit("Blitzcrank", 2))));
+        assertTrue(hook.hooks > 0);
+        assertTrue(anyContains(hook.tips, "Hook"));
+
+        OppScout.Profile aoe = OppScout.analyzeUnits(lobby(
+            Arrays.asList(unit("AurelionSol", 2), unit("Gragas", 2))));
+        assertEquals(2, aoe.aoe);
+        assertTrue(anyContains(aoe.tips, "AoE"));
+    }
+
     private static boolean anyContains(List<String> xs, String sub){
         for(String x : xs) if(x.contains(sub)) return true;
         return false;

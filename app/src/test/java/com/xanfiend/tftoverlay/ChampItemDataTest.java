@@ -49,4 +49,19 @@ public class ChampItemDataTest {
         assertTrue(r.hasBoard);     // a board was scanned
         assertEquals("", r.carry);  // but no itemizable carry on it
     }
+
+    @Test public void recommendPicksTheHigherTierCarry(){
+        // with two carries present, the higher-tier one is chosen and the other
+        // is listed as a secondary — robust to which specific tier each holds
+        CompAdvisor.Rec r = CompAdvisor.recommend(Arrays.asList("Kaisa", "Corki"));
+        assertTrue(r.carry.equals("Corki") || r.carry.equals("Kaisa"));
+        String other = r.carry.equals("Corki") ? "Kaisa" : "Corki";
+        assertTrue("chosen carry must rank >= the other",
+            rank(ChampItemData.tierOf(r.carry)) >= rank(ChampItemData.tierOf(other)));
+        assertTrue("the unchosen carry is a secondary", r.alsoCarries.contains(other));
+    }
+
+    private static int rank(String tier){
+        switch(tier){ case "S": return 4; case "A": return 3; case "B": return 2; case "C": return 1; default: return 0; }
+    }
 }
