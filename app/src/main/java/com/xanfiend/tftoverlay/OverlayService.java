@@ -407,9 +407,13 @@ public class OverlayService extends Service {
         View rule=new View(this);
         GradientDrawable rg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
             new int[]{(color&0x00FFFFFF)|0x77000000, color&0x00FFFFFF});
-        LinearLayout.LayoutParams rl=new LinearLayout.LayoutParams(0,2,1f); rl.setMargins(10,3,2,0);
+        LinearLayout.LayoutParams rl=new LinearLayout.LayoutParams(0,2,1f); rl.setMargins(10,3,8,0);
         rule.setLayoutParams(rl); rule.setBackground(rg);
         h.addView(rule);
+        // small ornament caps the rule on the right so each section reads as finished
+        TextView orn=new TextView(this); orn.setText("✦");
+        orn.setTextColor((color&0x00FFFFFF)|0x88000000); orn.setTextSize(8);
+        h.addView(orn);
         root.addView(h);
     }
     // small low-emphasis action chip (e.g. the "clear" links under scan results):
@@ -438,6 +442,35 @@ public class OverlayService extends Service {
             }
         });
     }
+    // One-shot diagnostics dump for dev mode: build/device/screen/integrity/state/
+    // calibration in a copyable block. Pure reads — useful when debugging a scan
+    // issue on a specific device (or on the laptop) without attaching a debugger.
+    private String devDiagnostics(){
+        String vn="?"; int vc=-1;
+        try{ android.content.pm.PackageInfo pi=getPackageManager().getPackageInfo(getPackageName(),0);
+             vn=pi.versionName; vc=pi.versionCode; }catch(Exception e){}
+        android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
+        boolean landscape=getResources().getConfiguration().orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        boolean acc=Build.VERSION.SDK_INT>=30 && TFTAccessibilityService.instance!=null;
+        StringBuilder s=new StringBuilder();
+        s.append("app ").append(APP_VERSION).append(" (name ").append(vn).append(", code ").append(vc).append(")\n");
+        s.append("device ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n");
+        s.append("android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        s.append("screen ").append(dm.widthPixels).append("x").append(dm.heightPixels)
+         .append(" @").append(dm.density).append("x ").append(landscape?"landscape":"portrait").append("\n");
+        s.append("accessibility ").append(acc?"bound":"OFF")
+         .append("  ·  root ").append(DeviceIntegrity.isRooted())
+         .append("  ·  emu ").append(DeviceIntegrity.isEmulator()).append("\n");
+        s.append("state  lvl ").append(pool.getLevel()).append("  gold ").append(pool.getGold())
+         .append("  streak ").append(pool.getStreak());
+        String st=pool.getStageRound(); s.append("  stage ").append(st.isEmpty()?"-":st).append("\n");
+        s.append("cal  landscapeGrid ").append(pool.hasLandscapeGridCal())
+         .append("  oppPortraits ").append(pool.oppPortraitCount()).append("/7\n");
+        s.append("set  ").append(SetData.SET_NAME).append(" patch ").append(SetData.PATCH)
+         .append("  builds patch ").append(ChampItemData.PATCH);
+        return s.toString();
+    }
+
     private void buzz(){ try{ if(pool.getHaptic() && vib!=null) vib.vibrate(18); }catch(Exception e){} }
     // distinct double pulse so a finished scan can be felt without looking at the screen
     @SuppressWarnings("deprecation")
@@ -866,11 +899,17 @@ public class OverlayService extends Service {
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
             pressFeedback(tab);
             tabWrap.addView(tab);
-            // gold underline marks the active tab
+            // active tab gets a gold underbar that glows from the center and fades at
+            // both ends (softer than a flat rule); inactive tabs reserve no height
             View underline=new View(this);
-            LinearLayout.LayoutParams ul=new LinearLayout.LayoutParams(-1,on?3:0); ul.setMargins(8,3,8,0);
+            LinearLayout.LayoutParams ul=new LinearLayout.LayoutParams(-1,on?3:0); ul.setMargins(6,4,6,0);
             underline.setLayoutParams(ul);
-            underline.setBackground(box(on?GOLD:0,2,0,0));
+            if(on){
+                GradientDrawable ug=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[]{GOLD&0x00FFFFFF, GOLD, GOLD&0x00FFFFFF});
+                ug.setCornerRadius(2);
+                underline.setBackground(ug);
+            }
             tabWrap.addView(underline);
             tabs.addView(tabWrap);
         }
@@ -3170,6 +3209,34 @@ public class OverlayService extends Service {
             imgScanHint.setText("DEV: pick a saved TFT screenshot and run the full scan on it — OCR readout + detected unit dots over the image. Tap the version label 7x again to hide dev tools.");
             imgScanHint.setTextColor(ASH); imgScanHint.setTextSize(10); imgScanHint.setPadding(2,0,0,10);
             root.addView(imgScanHint);
+
+            // DIAGNOSTICS — copyable build/device/state dump for debugging
+            LinearLayout diagRow=new LinearLayout(this); diagRow.setOrientation(LinearLayout.HORIZONTAL);
+            diagRow.setGravity(Gravity.CENTER_VERTICAL);
+            TextView diagHdr=new TextView(this); diagHdr.setText("◇ DIAGNOSTICS");
+            diagHdr.setTextColor(GOLD); diagHdr.setTextSize(11); diagHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+            diagHdr.setLetterSpacing(0.1f); diagHdr.setPadding(2,0,0,0);
+            diagRow.addView(diagHdr, new LinearLayout.LayoutParams(0,-2,1f));
+            TextView copyDiag=new TextView(this); copyDiag.setText("⎘ copy");
+            copyDiag.setTextColor(ASH); copyDiag.setTextSize(10); copyDiag.setGravity(Gravity.CENTER);
+            copyDiag.setBackground(box(CARD,5,EDGE,1)); copyDiag.setPadding(18,7,18,7);
+            pressFeedback(copyDiag);
+            copyDiag.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-diagnostics",devDiagnostics()));
+                Toast.makeText(OverlayService.this,"Diagnostics copied",Toast.LENGTH_SHORT).show();
+            }});
+            diagRow.addView(copyDiag);
+            LinearLayout.LayoutParams drp=new LinearLayout.LayoutParams(-1,-2); drp.setMargins(0,4,0,4); diagRow.setLayoutParams(drp);
+            root.addView(diagRow);
+
+            TextView diagBox=new TextView(this); diagBox.setText(devDiagnostics());
+            diagBox.setTextColor(ASH); diagBox.setTextSize(9);
+            diagBox.setTypeface(android.graphics.Typeface.MONOSPACE);
+            diagBox.setBackground(box(CARD,4,EDGE,1)); diagBox.setPadding(10,8,10,8);
+            diagBox.setLineSpacing(2,1f);
+            LinearLayout.LayoutParams dbxp=new LinearLayout.LayoutParams(-1,-2); dbxp.setMargins(0,0,0,10); diagBox.setLayoutParams(dbxp);
+            root.addView(diagBox);
         }
 
         TextView tapCalBtn=new TextView(this); tapCalBtn.setText("TAP TO CALIBRATE (manual)");
