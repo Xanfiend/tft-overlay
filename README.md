@@ -27,7 +27,7 @@
 
 <div align="center">
 
-**[Screenshots](#-screenshots) · [Features](#-what-you-get) · [Install](#-install) · [Tabs](#-tabs) · [Usage](#-usage) · [Requirements](#-device-requirements) · [FAQ](#-faq) · [Safety](#-is-it-safe) · [Changelog](#-changelog)**
+**[Features](#-what-you-get) · [Install](#-install) · [Tabs](#-tabs) · [Usage](#-usage) · [Requirements](#-device-requirements) · [FAQ](#-faq) · [Safety](#-is-it-safe) · [Changelog](#-changelog)**
 
 </div>
 
@@ -37,29 +37,6 @@
 
 </div>
 
-
-## ✦ Screenshots
-
-<div align="center">
-<table>
-<tr>
-<td align="center" width="50%">
-<img src="docs/screenshots/setup.jpg" alt="Setup screen" width="300"><br>
-<sub><b>Setup</b> · permissions, Start Overlay, and the how-to guide</sub>
-</td>
-<td align="center" width="50%">
-<img src="docs/screenshots/gold-tab.jpg" alt="Gold tab" width="420"><br>
-<sub><b>Gold tab</b> · live interest, bracket ladder, and streak tracking, shown right over the game</sub>
-</td>
-</tr>
-</table>
-</div>
-
-<div align="center">
-
-`❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
-
-</div>
 
 > **Note:** Android only. Not for PC.
 
