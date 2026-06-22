@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v2.0");
+        ver.setText("v1.99");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,7 +535,6 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
-            {"v2.0  ·  2026-06-22","NEW SCRY THE LOBBY (POOL tab): auto-scans all 7 enemy boards in one planning phase by replaying your calibrated portrait taps and running Auto Scan on each - covers every opponent in roughly 10 seconds flat instead of hand-navigating and scanning one at a time. Calibrate portrait positions once in SETUP and the button unlocks. NEW OPENER sub-tab under GUIDE with evergreen early-game arc (stage 1-5 phase map, item-slam priority by carry type, four principles). NEW COACH on-curve level check - after your stage and level are scanned the coach now tells you whether you are ahead, on, or behind the standard leveling curve for that spot in the game and what to do about it. Completed security pass (R8 obfuscation, device integrity heads-up, first-launch privacy notice). GUIDE tab expanded to COACH / POSITION / OPENER / AUGMENTS / ITEMS. POSITION counter-lobby section surfaces OppScout tips when you have scouted boards."},
             {"v1.99  ·  2026-06-22","Added a one-time privacy and permissions notice on first launch. It plainly states what the app uses each permission for - draw-over-apps for the overlay, the accessibility service for silent on-device screenshots and taps during scans, and internet ONLY to reach GitHub for updates and set data - and what it never does: no accounts, no analytics, no tracking, nothing sent anywhere. You acknowledge it once and it's gone; you can re-read it any time from the new Privacy and data button on the SETUP screen. No data collection was added - this just discloses, in plain language, what was already true. Final step of the security pass before the big stuff."},
             {"v1.98  ·  2026-06-22","Added a passive device-integrity heads-up on the SETUP screen. If the app notices it's running on a rooted device or an emulator, it shows a small amber notice suggesting you only install from the project's GitHub releases - because on those devices a sideloaded build is easier to tamper with. It's informational only: nothing is blocked, nothing is reported anywhere (the app still never phones home), and a normal phone shows nothing at all. Second step of the security pass toward 2.0."},
             {"v1.97  ·  2026-06-22","The release build is now obfuscated and shrunk (R8). Class and method names are stripped from the APK, dead code and unused resources are removed, and the bundled ML Kit OCR is preserved by explicit keep rules. No behavior change - the app runs exactly the same, the package is just smaller and harder to reverse-engineer. First step of the security pass on the road to 2.0."},

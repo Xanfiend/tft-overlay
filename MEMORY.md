@@ -3,9 +3,9 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v2.0 (versionCode 110). REAPER cut. All security steps done; SCRY THE LOBBY Phase 1 scaffolded (CI-green); COACH on-curve level read added; OPENER sub-tab live.
-- v2.0 changelog entry in MainActivity. APP_VERSION = "v2.0" in OverlayService + MainActivity.
-- Next: SCRY THE LOBBY live tuning (needs laptop/real game — SCANALL_SETTLE_MS, portrait positions, per-board sweep). Phase 2 enemy items (visual icon-ID) after that. Path B semver relabel just before cutting the GitHub release tag.
+- versionName STAYS "1.99"; versionCode 110 (plain int, increments per CI build). DO NOT bump versionName to 2.0 until the headline (opponent scan) is LIVE-TESTED and working — 2.0 = "everything works as intended", not a number. (Caught a premature 2.0 cut on 06-22 and reverted it.)
+- Security pass COMPLETE (R8 / DeviceIntegrity / privacy notice). SCRY THE LOBBY Phase 1 scaffolded (CI-green, UNTESTED on a real game). COACH on-curve level read shipped (folds into the eventual 2.0 changelog). OPENER sub-tab live.
+- Next without laptop: pure/CI-verifiable work only (see below). Live-gated: SCRY THE LOBBY tuning (SCANALL_SETTLE_MS, portrait positions, per-board sweep) + Phase 2 enemy-item visual-ID. Path B semver relabel just before cutting the 2.0 GitHub release.
 
 ## Branding / teaser
 - v2.0 release CODENAME = "TFT REAPER" (MainActivity.V2_CODENAME, one-line swap). Codename only — app stays "TFT Scryer" (package com.xanfiend.tftoverlay must NEVER change or the over-top updater orphans users). "TFT Killer" direction wanted; Reaper chosen (less cheat-tool read, fits THE HUNT/REAPING/pentacle lexicon).
