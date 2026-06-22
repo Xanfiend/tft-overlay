@@ -467,7 +467,9 @@ public class OverlayService extends Service {
         s.append("cal  landscapeGrid ").append(pool.hasLandscapeGridCal())
          .append("  oppPortraits ").append(pool.oppPortraitCount()).append("/7\n");
         s.append("set  ").append(SetData.SET_NAME).append(" patch ").append(SetData.PATCH)
-         .append("  builds patch ").append(ChampItemData.PATCH);
+         .append("  builds patch ").append(ChampItemData.PATCH).append("\n");
+        s.append("icons  champ ").append(SetIcons.champCount())
+         .append("  item ").append(ItemIcons.itemCount()).append(ItemIcons.isReady()?"":" (none bundled yet)");
         return s.toString();
     }
 
@@ -3053,6 +3055,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "PLANNER SCAN", GOLD);
 
         SetIcons.load(this);
+        ItemIcons.load(this); // Phase 2 scaffold: loads enemy-item icons if bundled (no-op until then)
         boolean plnCal=pool.plannerCalibrated();
         int plnIcons=SetIcons.champCount();
         TextView plnInfo=new TextView(this);
