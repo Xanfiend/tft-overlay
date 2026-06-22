@@ -2183,7 +2183,7 @@ public class OverlayService extends Service {
         buildGodTracker(root);
         // sub-tab row
         LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
-        String[] gtNames={"COACH","POSITION","AUGMENTS","ITEMS"};
+        String[] gtNames={"COACH","POSITION","OPENER","AUGMENTS","ITEMS"};
         for(int i=0;i<gtNames.length;i++){
             final int gi=i; boolean on=guideTab==gi;
             TextView gt=new TextView(this); gt.setText(gtNames[i]); gt.setGravity(Gravity.CENTER);
@@ -2197,8 +2197,45 @@ public class OverlayService extends Service {
         root.addView(gtRow);
         if(guideTab==0) buildCoach(root);
         else if(guideTab==1) buildPosition(root);
-        else if(guideTab==2) buildAugments(root);
+        else if(guideTab==2) buildOpener(root);
+        else if(guideTab==3) buildAugments(root);
         else buildItems(root);
+    }
+
+    // OPENER sub-tab: evergreen early-game tempo/econ arc + item-slam priority.
+    // Static reference (OpenerData) — no scan needed, holds across patches.
+    private void buildOpener(LinearLayout root){
+        addSecHdr(root, "EARLY GAME", GOLD);
+        for(String[] ph:OpenerData.PHASES){
+            LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(box(CARD,8,EDGE,1)); card.setPadding(14,10,14,10);
+            LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,-2); clp.setMargins(0,0,0,6); card.setLayoutParams(clp);
+            TextView h=new TextView(this); h.setText(ph[0]);
+            h.setTextColor(GOLD); h.setTextSize(12); h.setTypeface(null,android.graphics.Typeface.BOLD); card.addView(h);
+            TextView b=new TextView(this); b.setText(ph[1]);
+            b.setTextColor(BONE); b.setTextSize(11); b.setLineSpacing(4,1f); b.setPadding(0,3,0,0); card.addView(b);
+            root.addView(card);
+        }
+
+        addSecHdr(root, "ITEM SLAM PRIORITY", GOLD);
+        for(String[] s:OpenerData.SLAMS){
+            LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(-1,-2); rlp.setMargins(0,1,0,1); row.setLayoutParams(rlp);
+            TextView tag=new TextView(this); tag.setText(s[0]); tag.setGravity(Gravity.CENTER);
+            tag.setTextColor(GOLD); tag.setTextSize(11); tag.setTypeface(null,android.graphics.Typeface.BOLD);
+            LinearLayout.LayoutParams tl=new LinearLayout.LayoutParams(0,-2,0.32f); tl.setMargins(0,0,8,0); tag.setLayoutParams(tl);
+            row.addView(tag);
+            TextView d=new TextView(this); d.setText(s[1]);
+            d.setTextColor(BONE); d.setTextSize(11); d.setLineSpacing(3,1f);
+            d.setLayoutParams(new LinearLayout.LayoutParams(0,-2,0.68f)); row.addView(d);
+            root.addView(row);
+        }
+
+        addSecHdr(root, "PRINCIPLES", GOLD);
+        for(String pr:OpenerData.PRINCIPLES){
+            TextView tv=new TextView(this); tv.setText("•  "+pr);
+            tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,3); root.addView(tv);
+        }
     }
 
     // Champion names on your board right now, from the most recent scan (auto scan
