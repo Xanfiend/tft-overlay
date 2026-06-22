@@ -5,6 +5,11 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 ## Current state
 - Version: v1.99 (versionCode 99). Security pass toward 2.0 COMPLETE: (1) R8 obfuscation + resource shrink (v1.97, CI green); (2) DeviceIntegrity root/emulator heads-up on SETUP (v1.98); (3) first-launch privacy & permissions notice, re-openable from SETUP "Privacy & data" (v1.99, cfg_privacy_seen). All three are tap-path-free.
 - Next: 1.99.x = release-candidate runway (polish/bugfix only). Then the v2.0 HEADLINE = opponent board scan (auto-scan every enemy in one planning phase). Needs live-game testing.
+
+## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
+- OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.
+- PositionAdvisor.plan(board, stageRound, OppScout.Profile) overload: appends counter-positioning tips when opp data exists; identical to fundamentals-only plan when it doesn't (no behavior change until wired).
+- Still TODO for the headline: (a) wire POSITION tab to call the overload with OppScout.analyze(pool.getAllOppBoards()); (b) the actual one-pass automation = tap through the 7 enemy portraits in a single planning phase, scry each board, file into slots — THIS needs live-game testing on the tablet (can't verify in CI).
 - v1.96: COACH roll check (RollMath P(hit) + ROLL/bank/HOLD), pool-aware via pool.remaining().
 - Marching toward v2.0. Plan: small verifiable-without-a-game QoL through v1.9x; reserve opponent-board scan (per-enemy positioning) as the v2.0 headline. At v2.0 write a consolidated "what's new" reel re-highlighting COACH/POSITION/roll-check.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.

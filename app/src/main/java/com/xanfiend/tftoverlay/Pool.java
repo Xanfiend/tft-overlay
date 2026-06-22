@@ -310,6 +310,12 @@ public class Pool {
         p.edit().putString("oppboard"+slot, sb.toString()).apply();
     }
     public void clearOppBoard(int slot){ p.edit().remove("oppboard"+slot).apply(); }
+    // every non-empty remembered enemy board, for OppScout lobby analysis
+    public java.util.List<Map<String,Integer>> getAllOppBoards(){
+        java.util.List<Map<String,Integer>> out = new java.util.ArrayList<>();
+        for(int s=1;s<=7;s++){ Map<String,Integer> b=getOppBoard(s); if(!b.isEmpty()) out.add(b); }
+        return out;
+    }
     // cycling slot assignment so repeated enemy scries file under OPP 1..7
     public int nextOppSlot(){
         int s = p.getInt("opp_slot_cursor", 0) % 7 + 1;

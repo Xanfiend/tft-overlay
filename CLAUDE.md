@@ -38,6 +38,7 @@ app/src/main/java/com/xanfiend/tftoverlay/
   ChampItemData.java     — champion-to-item mapping + carry→comp/tier (BUILDS tab + COACH); update PATCH each patch
   CompAdvisor.java       — pure mid-game coach: board+econ → recommended comp/items + roll/level call (COACH sub-tab)
   PositionAdvisor.java   — pure positioning coach: board → front/back/flank map + carry corner + evergreen fundamentals (POSITION sub-tab)
+  OppScout.java          — pure opponent threat model: aggregates remembered enemy boards (Pool slots 1-7) → lobby role mix + top carries + counter tips. v2.0 opponent-scan brain (consumes Pool.getAllOppBoards; feeds PositionAdvisor.plan overload)
   ThreatData.java        — per-champ positioning role (FRONT/BACK/FLANK); meta-stable, per-SET refresh not per-patch
   RollMath.java          — hit-probability tables
   DeviceIntegrity.java   — passive root/emulator heuristics; SETUP heads-up only (never blocks, never reports)
