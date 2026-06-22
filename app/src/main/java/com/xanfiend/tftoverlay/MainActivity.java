@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.96");
+        ver.setText("v1.97");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -405,6 +405,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.97  ·  2026-06-22","The release build is now obfuscated and shrunk (R8). Class and method names are stripped from the APK, dead code and unused resources are removed, and the bundled ML Kit OCR is preserved by explicit keep rules. No behavior change - the app runs exactly the same, the package is just smaller and harder to reverse-engineer. First step of the security pass on the road to 2.0."},
             {"v1.96  ·  2026-06-22","The COACH tab's next-move advice now includes a roll check: the real percent chance of hitting your recommended carry if you roll your current gold at your current level, plus a plain ROLL / bank / HOLD call. It's the same Monte-Carlo shop simulation the ODDS tab uses, so the shrinking pool is modeled exactly - the coach now answers should I roll with a number instead of a generalization."},
             {"v1.95  ·  2026-06-22","Completed the POSITION tab's role data for the whole Set 17 roster. Every champion is now assigned a placement role - FRONT (tanks, bruisers, melee), BACK (ranged carries, casters, enchanters), or FLANK (assassins and divers that hunt the enemy backline) - so the placement map sorts your full board correctly instead of guessing for unrecognized units. All 62 champions are covered."},
             {"v1.94  ·  2026-06-22","NEW POSITION tab (under GUIDE, next to COACH). After you scan your board it sorts every unit into a placement map - BACK for hypercarries and casters, FRONT for tanks and bruisers, FLANK for divers - tells you which corner to hide your carry in (and to switch corners each round so it can't be pre-aimed), and lists the evergreen positioning fundamentals that win otherwise-unwinnable rounds: spread vs clump against AoE, body-block divers with your tank, scout before READY. Unlike the build metas this is meta-stable - a backline carry stays backline across patches - so it needs no per-patch upkeep. Opponent boards still can't be read on mobile, so the advice is fundamentals plus your own board, not a per-enemy counter."},

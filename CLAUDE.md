@@ -154,6 +154,7 @@ GREEN   = 0xFF4CAF50   // win streak / positive
 
 | Version | Change |
 |---|---|
+| v1.97 | R8 obfuscation + resource shrink on release build (proguard-rules.pro; ML Kit kept). First v2.0 security step |
 | v1.96 | COACH roll check — Monte-Carlo P(hit carry) at current gold/level + ROLL/bank/HOLD call (RollMath) |
 | v1.95 | Complete ThreatData roles for full Set 17 roster (all 62 champs front/back/flank) |
 | v1.94 | POSITION sub-tab — front/back/flank map + carry corner + evergreen fundamentals (PositionAdvisor + ThreatData) |

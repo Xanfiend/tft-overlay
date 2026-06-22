@@ -3,7 +3,8 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.96 (versionCode 96). COACH roll check added (RollMath P(hit) + ROLL/bank/HOLD).
+- Version: v1.97 (versionCode 97). R8 obfuscation + resource shrink on release (proguard-rules.pro keeps ML Kit). First v2.0 security step. CI must confirm the minified build + OCR still work.
+- v1.96: COACH roll check (RollMath P(hit) + ROLL/bank/HOLD), pool-aware via pool.remaining().
 - Marching toward v2.0. Plan: small verifiable-without-a-game QoL through v1.9x; reserve opponent-board scan (per-enemy positioning) as the v2.0 headline. At v2.0 write a consolidated "what's new" reel re-highlighting COACH/POSITION/roll-check.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.
 - Dev device: Galaxy Tab A 2016 — 32-bit Android, ~2GB RAM. Cannot run Termux/Claude Code/claude-mem locally (no 32-bit Bun/Node20 build). Work happens in web sessions only.
@@ -15,6 +16,8 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - Tap rate-limiting on accessibility dispatchGesture: **declined** — speed is everything; THE HUNT + planner auto-tap already fight the 1-shot/sec ceiling, a forced delay works against us.
 
 ## v2.0 plan
+- 2.0 = "everything works as intended" milestone, NOT just a number. Don't release until the RC runs clean.
+- Versioning runway: 1.97→1.99 = feature work (one minor per feature). Then 1.99.1, 1.99.2… = release candidates (polish/bugfix only, no new scope). 2.0 = clean release + reel. versionCode keeps ticking as a plain int (96,97,98…) regardless of versionName string.
 - Headline: opponent board scan (auto-scan every enemy in one planning phase → per-player threat map). The deferred big task.
 - Security (required before 2.0): (1) ProGuard/R8 obfuscation — flip minifyEnabled true + rules; (2) root/emulator passive warning; (3) first-launch privacy notice (overlay+accessibility+screenshot, no telemetry/accounts, GitHub-only net). Tap rate-limit dropped.
 - Reel angles: roll check ("know who to roll before you roll"), POSITION, enemy scan, "offline, no login, no ads."
