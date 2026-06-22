@@ -11,7 +11,7 @@ android {
         minSdk 24
         targetSdk 34
         versionCode 110
-        versionName "1.99"
+        versionName "1.24.5"
     }
 
     // Consistent signing: reads keystore + passwords from environment
