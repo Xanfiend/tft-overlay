@@ -28,6 +28,7 @@ public final class OppScout {
         public boolean flankHeavy = false;     // assassin/diver-heavy lobby
         public String topThreat = "";          // single scariest unit (star x cost)
         public int topThreatStars = 0;
+        public int topBoardVal = 0, avgBoardVal = 0; // strongest vs average enemy board strength
         public final List<String> topCarries = new ArrayList<>(); // most common backline threats
         public final List<String> tips = new ArrayList<>();       // counter-positioning advice (POSITION)
         public final List<String> techTips = new ArrayList<>();   // defensive itemization advice (COACH)
@@ -43,12 +44,17 @@ public final class OppScout {
         // carry shows up so the most-contested threats float to the top
         Map<String,Integer> backFreq = new LinkedHashMap<>();
         int bestThreatWeight = -1;   // star x cost — picks the single fed carry to respect
+        int sumBoardVal = 0;         // for the lobby-power read (snowball detection)
         for(Map<String,Integer> board : boards){
             if(board == null || board.isEmpty()) continue;
             p.boards++;
+            int boardVal = 0;
             for(Map.Entry<String,Integer> en : board.entrySet()){
                 String name = en.getKey();
                 int stars = en.getValue() == null ? 1 : Math.max(1, en.getValue());
+                int cost = Math.max(1, Pool.costOf(name));
+                // board strength ≈ cost x star multiplier (each star ~3x the unit)
+                boardVal += cost * (stars >= 3 ? 9 : stars == 2 ? 3 : 1);
                 String role = ThreatData.roleOf(name);
                 if(ThreatData.FRONT.equals(role))      p.front++;
                 else if(ThreatData.FLANK.equals(role)) p.flank++;
@@ -60,14 +66,17 @@ public final class OppScout {
                 else if("AD".equals(dt)) p.adCarries++;
                 // biggest single threat: weight star level by cost, skip pure tanks
                 if(!ThreatData.FRONT.equals(role)){
-                    int w = stars * 10 + Math.max(0, Pool.costOf(name));
+                    int w = stars * 10 + cost;
                     if(w > bestThreatWeight){
                         bestThreatWeight = w; p.topThreat = name; p.topThreatStars = stars;
                     }
                 }
             }
+            sumBoardVal += boardVal;
+            if(boardVal > p.topBoardVal) p.topBoardVal = boardVal;
         }
         if(p.boards == 0) return p;
+        p.avgBoardVal = sumBoardVal / p.boards;
 
         // assassin-heavy = flankers are a meaningful slice of the lobby's units
         int total = p.front + p.back + p.flank;
@@ -103,6 +112,10 @@ public final class OppScout {
 
         if(p.front >= p.back && p.front > 0)
             p.tips.add("Frontline-heavy lobby — expect long fights; spread a hex so their tanks can't clump your team for AoE.");
+
+        // lobby-power read: one board clearly above the field = a snowballing player
+        if(p.boards >= 2 && p.avgBoardVal > 0 && p.topBoardVal >= p.avgBoardVal * 3 / 2)
+            p.tips.add("One opponent is ahead of the lobby on board strength — don't take that fight with a thin board; dodge to a weaker matchup when you can.");
 
         // ---- defensive itemization advice (COACH) ----
         if(p.apCarries > 0 || p.adCarries > 0){
