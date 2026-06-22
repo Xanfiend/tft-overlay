@@ -12,7 +12,8 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 
 ## REAPER feature build (user: "all of it, easiest/safest first")
 - Order: (1) deeper counter-positioning ✓ → (2) COACH tech vs lobby → (3) early-game opener guide → (4) opponent-scan automation (live-test gated, last).
-- (1) DONE: ThreatData archetypes isHook (Blitzcrank/Pyke) + isAoe (AurelionSol/Gragas/Viktor/Vex/Morgana/Veigar/Lissandra). OppScout tallies hooks/aoe → specific COUNTER THE LOBBY tips (don't isolate carry vs hook; spread vs AoE). Mix line shows hook/AoE counts. Pure, CI-verifiable. versionCode 103.
+- (1) DONE: ThreatData archetypes isHook (Blitzcrank/Pyke) + isAoe (AurelionSol/Gragas/Viktor/Vex/Morgana/Veigar/Lissandra). OppScout tallies hooks/aoe → specific COUNTER THE LOBBY tips (don't isolate carry vs hook; spread vs AoE). Mix line shows hook/AoE counts. versionCode 103.
+- (2) DONE: ThreatData.damageType (AP/AD sets for carries). OppScout tallies apCarries/adCarries + builds techTips (MR vs Armor vs mixed; anti-heal if front>=4). COACH renders "TECH vs LOBBY" section from OppScout.analyze(pool.getAllOppBoards()). Pure. versionCode 104.
 
 ## Opponent-scan groundwork (started, invisible — no UI/version bump yet)
 - OppScout.java (pure): Pool.getAllOppBoards() → Profile (role mix front/back/flank, flankHeavy flag, top enemy carries, counter tips). Consumes the EXISTING per-opp board storage (setOppBoard/getOppBoard slots 1-7), so it works off manually-scried enemies today and scales into the one-pass scan later.
