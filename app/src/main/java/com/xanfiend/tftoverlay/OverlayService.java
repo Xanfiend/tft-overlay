@@ -161,6 +161,18 @@ public class OverlayService extends Service {
     private Runnable oppPollRunnable;
     private Runnable oppCountdownRunnable;
 
+    // SCRY THE LOBBY (REAPER): one-pass scan of every calibrated enemy portrait.
+    // Wraps the existing auto-opp board sweep; taps portrait i, sweeps that board,
+    // files OPP slot, advances. Portrait positions + the settle delay are tuned
+    // live (the only device-dependent bits) — see Pool cal_opp* and SCANALL_SETTLE_MS.
+    private boolean scanAllMode = false;
+    private int scanAllIdx = 0, scanAllTotal = 0;
+    // wait after tapping a portrait for TFT's board-switch animation before scanning
+    private static final long SCANALL_SETTLE_MS = 1200;
+    // portrait-calibration overlay (records up to 7 tap positions)
+    private View oppCalView;
+    private int oppCalCount = 0;
+
     // debug scan: close panel, scan, reopen settings so user sees results
     private boolean debugScanPending = false;
     // last known screen orientation — updated in showPanel() and used by calGet/calSet
@@ -1034,6 +1046,21 @@ public class OverlayService extends Service {
                 startPlannerScan();
             }});
             root.addView(plnBtn);
+
+            // SCRY THE LOBBY \u2014 one-pass scan of every enemy board (REAPER)
+            final boolean lobbyReady = accAvail && pool.hasOppPortraitCal();
+            int lobbyN = pool.oppPortraitCount();
+            LinearLayout lobbyBtn=ritualBtn("\u25c9 SCRY THE LOBBY",
+                    lobbyReady ? ("scan all "+lobbyN+" enemy boards in one pass")
+                               : "calibrate enemy portraits in SETUP first",
+                    lobbyReady?0xFF1A1400:0xFF0D0909, lobbyReady?GOLD:DIM, lobbyReady);
+            LinearLayout.LayoutParams lbl2=new LinearLayout.LayoutParams(-1,-2); lbl2.setMargins(0,0,0,4); lobbyBtn.setLayoutParams(lbl2);
+            lobbyBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                if(!accAvail){ openAccessibilitySettings(); return; }
+                if(!pool.hasOppPortraitCal()){ Toast.makeText(OverlayService.this,"Calibrate enemy portraits in the SETUP tab first",Toast.LENGTH_LONG).show(); return; }
+                startScanAllOpponents();
+            }});
+            root.addView(lobbyBtn);
 
             // THE HUNT \u2014 shop watcher / auto-buy
             final java.util.List<String> huntList=pool.getHunt();
@@ -3016,6 +3043,45 @@ public class OverlayService extends Service {
         if(plnCal){
             root.addView(miniChip("✕ clear planner calibration", new View.OnClickListener(){ public void onClick(View v){
                 pool.clearPlannerCal(); showPanel();
+            }}));
+        }
+
+        // ---- one-pass lobby scan calibration (REAPER) ----
+        addSecHdr(root, "SCRY THE LOBBY", GOLD);
+        boolean oppCal=pool.hasOppPortraitCal();
+        int oppCalN=pool.oppPortraitCount();
+        TextView oppInfo=new TextView(this);
+        oppInfo.setText("Scan every opponent's board in one pass. Calibrate by tapping each enemy "
+                +"portrait (the player health icons) once; the scan then taps through them in turn, "
+                +"reading each board and filing it under OPP 1-7. Do this during a planning phase.");
+        oppInfo.setTextColor(ASH); oppInfo.setTextSize(10); oppInfo.setPadding(2,0,0,6); root.addView(oppInfo);
+
+        TextView oppStatus=new TextView(this);
+        oppStatus.setText(oppCal?("✓ "+oppCalN+" portrait"+(oppCalN==1?"":"s")+" calibrated"):"not calibrated yet");
+        oppStatus.setTextColor(oppCal?GREEN:DIM); oppStatus.setTextSize(10);
+        oppStatus.setPadding(2,0,0,6); root.addView(oppStatus);
+
+        TextView oppCalBtn=new TextView(this);
+        oppCalBtn.setText(oppCal?"RECALIBRATE PORTRAITS":"CALIBRATE PORTRAITS");
+        oppCalBtn.setTextColor(BONE); oppCalBtn.setTextSize(13); oppCalBtn.setGravity(Gravity.CENTER);
+        oppCalBtn.setPadding(0,12,0,12); oppCalBtn.setBackground(box(oppCal?CARD:BLOOD,6,oppCal?GOLD:BLOODL,2));
+        LinearLayout.LayoutParams ocbl=new LinearLayout.LayoutParams(-1,-2); ocbl.setMargins(0,0,0,4); oppCalBtn.setLayoutParams(ocbl);
+        oppCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+                Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
+            }
+            startOppCalibration();
+        }});
+        root.addView(oppCalBtn);
+
+        TextView oppHint=new TextView(this);
+        oppHint.setText("Tap each enemy portrait in turn (up to 7), then ✓ DONE. The banner sits at the "
+                +"bottom so it won't cover the portraits. Re-run SCRY THE LOBBY from the POOL tab.");
+        oppHint.setTextColor(ASH); oppHint.setTextSize(10); oppHint.setPadding(2,0,0,6); root.addView(oppHint);
+
+        if(oppCal){
+            root.addView(miniChip("✕ clear portrait calibration", new View.OnClickListener(){ public void onClick(View v){
+                pool.clearOppPortraits(); showPanel();
             }}));
         }
 
@@ -5339,6 +5405,9 @@ public class OverlayService extends Service {
                 +autoScanVisualCount+" visual) in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
         autoOppMode=false;
         buzzDone();
+        // one-pass lobby scan: don't reopen the panel between boards — advance to
+        // the next calibrated portrait instead.
+        if(scanAllMode){ scanAllAdvance(); return; }
         mode=0; showPanel();
     }
 
@@ -5989,6 +6058,7 @@ public class OverlayService extends Service {
     }
     // stop whichever long-running mode is active (called by the STOP button)
     private void stopActiveMode(){
+        if(scanAllMode){ stopScanAll(); return; }
         if(huntMode){ stopHuntMode(); return; }
         if(boardScanMode){ stopBoardScanMode(); return; }
         if(oppScanMode){ stopOppScanMode(); return; }
@@ -6004,6 +6074,7 @@ public class OverlayService extends Service {
         hideCalCaptureView();
         hideGridAdjustView();
         hidePlnCalView();
+        hideOppCalView();
         hideProbeDots();
         clearInjecting();
         setOverlaysTouchable(true);
@@ -6434,6 +6505,158 @@ public class OverlayService extends Service {
         mode=0; showPanel();
     }
 
+    // ---- SCRY THE LOBBY: one-pass scan of all calibrated enemy portraits ----
+    private void startScanAllOpponents(){
+        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
+        }
+        int n=pool.oppPortraitCount();
+        if(n<1){ Toast.makeText(this,"Calibrate enemy portraits in SETUP first",Toast.LENGTH_LONG).show(); return; }
+        // fresh lobby read: drop stale boards and file from OPP 1
+        for(int i=1;i<=7;i++) pool.clearOppBoard(i);
+        pool.resetOppCursor();
+        scanAllMode=true; scanAllIdx=1; scanAllTotal=n;
+        closePanel(); teardownStrayOverlays();
+        showStopButton("✦ STOP SCAN");
+        addScanLog("scan-all: starting "+n+" opponents");
+        scanAllStep();
+    }
+
+    // tap the current portrait, wait for the board switch, then sweep that board
+    private void scanAllStep(){
+        if(!scanAllMode) return;
+        if(scanAllIdx>scanAllTotal){ finishScanAll(); return; }
+        final int[] pos=pool.getOppPortrait(scanAllIdx);
+        if(pos==null){ scanAllIdx++; scanAllStep(); return; }
+        // the per-board sweep hides the STOP button on finish; re-show it so the
+        // user can abort the lobby pass at any point
+        showStopButton("✦ STOP SCAN");
+        if(btnLabel!=null) btnLabel.setText("OPP "+scanAllIdx+"/"+scanAllTotal);
+        addScanLog("scan-all: tap portrait "+scanAllIdx+" ("+pos[0]+","+pos[1]+")");
+        dispatchTap(pos[0],pos[1],new Runnable(){ public void run(){
+            boardHandler.postDelayed(new Runnable(){ public void run(){
+                if(!scanAllMode) return;
+                // reuse the single-opponent board sweep; it ends in finishAutoTapScan,
+                // which files the slot and (because scanAllMode is set) advances us
+                startAutoOppScan();
+            }}, SCANALL_SETTLE_MS);
+        }});
+    }
+
+    // called from finishAutoTapScan after one board is filed, in scan-all mode
+    private void scanAllAdvance(){
+        if(!scanAllMode) return;
+        scanAllIdx++;
+        scanAllStep();
+    }
+
+    private void finishScanAll(){
+        scanAllMode=false;
+        hideStopButton();
+        teardownStrayOverlays();
+        setOverlaysTouchable(true);
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        addScanLog("scan-all: done, "+pool.oppPortraitCount()+" portraits swept");
+        buzzDone();
+        mode=0; showPanel();
+    }
+
+    private void stopScanAll(){
+        scanAllMode=false;
+        autoScanPending=false; autoOppMode=false;
+        autoTapHandler.removeCallbacksAndMessages(null);
+        hideStopButton();
+        teardownStrayOverlays();
+        setOverlaysTouchable(true);
+        if(btnLabel!=null) btnLabel.setText("SCRY");
+        addScanLog("scan-all: stopped by user");
+        mode=0; showPanel();
+    }
+
+    // ---- enemy-portrait calibration: record up to 7 portrait tap positions ----
+    private void startOppCalibration(){
+        clearInjecting();
+        oppCalCount=0;
+        pool.clearOppPortraits();   // start clean so re-calibrating doesn't mix old points
+        closePanel();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+            new Runnable(){ public void run(){ showOppCalOverlay(); }}, 250);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showOppCalOverlay(){
+        hideOppCalView();
+        final float spx=getResources().getDisplayMetrics().scaledDensity;
+        oppCalView=new View(OverlayService.this){
+            private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private android.graphics.RectF doneRect(){
+                int W=getWidth(),H=getHeight(); float h=H*0.07f, w=W*0.30f, top=H*0.90f;
+                return new android.graphics.RectF(W*0.55f, top, W*0.55f+w, top+h);
+            }
+            private android.graphics.RectF cancelRect(){
+                int W=getWidth(),H=getHeight(); float h=H*0.07f, w=W*0.30f, top=H*0.90f;
+                return new android.graphics.RectF(W*0.15f, top, W*0.15f+w, top+h);
+            }
+            @Override protected void onDraw(android.graphics.Canvas c){
+                int W=getWidth(),H=getHeight();
+                p.setStyle(android.graphics.Paint.Style.FILL);
+                p.setColor(0x66000000); c.drawRect(0,0,W,H,p);
+                p.setColor(0xF00B0709); c.drawRect(0,H*0.83f,W,H,p);
+                p.setTextAlign(android.graphics.Paint.Align.CENTER);
+                p.setColor(0xFFE0D5C0); p.setTextSize(13*spx); p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                c.drawText("Tap each ENEMY PORTRAIT  ·  "+oppCalCount+"/7", W/2f, H*0.865f, p);
+                p.setTypeface(android.graphics.Typeface.DEFAULT); p.setTextSize(9*spx); p.setColor(0xFFC9A227);
+                c.drawText("tap the player health icons in turn, then DONE", W/2f, H*0.885f, p);
+                // recorded points
+                for(int i=1;i<=oppCalCount;i++){
+                    int[] pt=pool.getOppPortrait(i); if(pt==null) continue;
+                    p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC1121F);
+                    c.drawCircle(pt[0],pt[1],14,p);
+                    p.setColor(0xFFE0D5C0); p.setTextSize(11*spx); c.drawText(""+i, pt[0], pt[1]+4*spx, p);
+                }
+                android.graphics.RectF dr=doneRect(), cr=cancelRect();
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A1400); c.drawRoundRect(dr,12,12,p);
+                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(0xFFC9A227); c.drawRoundRect(dr,12,12,p);
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC9A227); p.setTextSize(12*spx);
+                c.drawText("✓ DONE", dr.centerX(), dr.centerY()+4*spx, p);
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A0E10); c.drawRoundRect(cr,12,12,p);
+                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(0xFFC1121F); c.drawRoundRect(cr,12,12,p);
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC1121F); p.setTextSize(12*spx);
+                c.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, p);
+            }
+            @Override public boolean onTouchEvent(android.view.MotionEvent e){
+                if(e.getAction()!=android.view.MotionEvent.ACTION_DOWN) return true;
+                float x=e.getX(), y=e.getY();
+                if(doneRect().contains(x,y)){ finishOppCal(); return true; }
+                if(cancelRect().contains(x,y)){ cancelOppCal(); return true; }
+                if(oppCalCount>=7) return true;
+                oppCalCount++;
+                pool.setOppPortrait(oppCalCount,(int)x,(int)y);
+                invalidate();
+                return true;
+            }
+        };
+        WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-1,-1,wtype(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+        try{ wm.addView(oppCalView,lp); }catch(Exception e){ oppCalView=null; }
+    }
+
+    private void finishOppCal(){
+        hideOppCalView();
+        int n=pool.oppPortraitCount();
+        Toast.makeText(this,"⛧ "+n+" enemy portrait"+(n==1?"":"s")+" calibrated — SCRY THE LOBBY is ready",Toast.LENGTH_LONG).show();
+        mode=4; showPanel();
+    }
+    private void cancelOppCal(){
+        hideOppCalView();
+        pool.clearOppPortraits();
+        mode=4; showPanel();
+    }
+    private void hideOppCalView(){
+        if(oppCalView!=null){ try{ wm.removeView(oppCalView); }catch(Exception e){} oppCalView=null; }
+    }
+
     private void applyOppPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
         if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()){ sourceBmp.recycle(); return; }
         final String name=r.detectedBoardUnit;
@@ -6525,8 +6748,10 @@ public class OverlayService extends Service {
         autoTapHandler.removeCallbacksAndMessages(null);
         plannerHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
+        scanAllMode=false;
         hideCalCaptureView();
         hidePlnCalView();
+        hideOppCalView();
         hideGridAdjustView();
         hideProbeDots();
         hideImageScan();
