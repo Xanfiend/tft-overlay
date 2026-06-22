@@ -3,7 +3,7 @@
 Standing memory across sessions (tablet/web setup, no claude-mem). Read at session start, append as decisions land. Keep terse — bullets, not prose. Architecture/instructions live in CLAUDE.md; this is *state*: what shipped, what's deferred, open threads.
 
 ## Current state
-- Version: v1.93 (versionCode 93). CI green on main @ b75df1c.
+- Version: v1.94 (versionCode 94). POSITION sub-tab shipped.
 - Active dev branch: `claude/test-coverage-analysis-PAGmD`. Always push main too.
 - Dev device: Galaxy Tab A 2016 — 32-bit Android, ~2GB RAM. Cannot run Termux/Claude Code/claude-mem locally (no 32-bit Bun/Node20 build). Work happens in web sessions only.
 
@@ -19,11 +19,13 @@ Standing memory across sessions (tablet/web setup, no claude-mem). Read at sessi
 - v1.88 SCAN FROM IMAGE behind dev mode (tap version 7x).
 - v1.86 RemoteData: new sets via data/setdata.json, no APK rebuild.
 
+## Already shipped (do NOT rebuild — the plan file is stale)
+- **Planner Snapshot scan**: DONE. SetIcons.java + 122 bundled seticons PNGs + startPlannerScan/calibration in OverlayService. Own-board ID in ~3 taps.
+- **Hex-mesh auto-calibrate**: DONE (v1.85). hexAutoCalibrate/applyHexCalibration/isTealHex in OverlayService; "AUTO-CALIBRATE FROM BOARD" button in SETUP.
+
 ## Open threads / next candidates
-- **Planner Snapshot scan** (highest-leverage, researched + planned in plan file): own-board ID in ~3 taps via Team Planner snapshot + bundled seticons match. Stars still from health-bar colors. Not started.
-- **Hex-mesh auto-calibrate**: finish "AUTO-CALIBRATE FROM BOARD" (HSV teal-hex detect → fit 4×7 grid).
-- **Positioning helper**: rule-based counter-positioning off slow-changing per-champ threat tags. High value; static version works without opponent scan.
-- Deferred (big): scan every opponent in one planning phase.
+- **Positioning helper**: DONE (v1.94). ThreatData.java (FRONT/BACK/FLANK roles) + PositionAdvisor.java (pure) + POSITION sub-tab under GUIDE. To extend per set: add champs to ThreatData.ROLE. To improve: opponent-board read would enable per-enemy counter-positioning (currently fundamentals + own-board sort only).
+- Deferred (big): scan every opponent in one planning phase (unlocks per-enemy positioning).
 
 ## Known bugs (detail in CLAUDE.md)
 - Level OCR misses level 1 (Tocker's) — partial fix shipped; needs in-game confirm log.
