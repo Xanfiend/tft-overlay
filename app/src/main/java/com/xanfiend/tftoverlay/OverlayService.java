@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.16";
+    private static final String APP_VERSION = "v1.99.17";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -87,7 +87,7 @@ public class OverlayService extends Service {
     private TextView[] econLadderTvs;
     private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
     private TextView econNextRoundBtn;
-    private TextView econHpTv, econStageTv, econEventTv;
+    private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
 
     // hold-to-repeat gold buttons
@@ -892,7 +892,7 @@ public class OverlayService extends Service {
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
-        econHpTv=null; econStageTv=null; econEventTv=null;
+        econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -906,7 +906,7 @@ public class OverlayService extends Service {
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
-        econHpTv=null; econStageTv=null; econEventTv=null;
+        econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1158,6 +1158,25 @@ public class OverlayService extends Service {
         }});
         root.addView(undoBar);
         refreshUndoBar();
+
+        // contest alert: flag any tracked champ with ≥2 opponents and ≤3 copies left
+        java.util.List<String> hotList = new java.util.ArrayList<>();
+        for(String ch : pool.seenSorted()){
+            if(pool.oppCount(ch)>=2 && pool.remaining(ch)<=3) hotList.add(ch);
+        }
+        if(!hotList.isEmpty()){
+            StringBuilder sb=new StringBuilder("⚠ CONTESTED:");
+            for(int i=0;i<hotList.size();i++){
+                if(i>0) sb.append(" ·");
+                sb.append(" ").append(hotList.get(i)).append("(").append(pool.remaining(hotList.get(i))).append(" left)");
+            }
+            TextView alertTv=new TextView(this);
+            alertTv.setText(sb.toString());
+            alertTv.setTextColor(BLOODL); alertTv.setTextSize(11); alertTv.setGravity(Gravity.CENTER);
+            alertTv.setBackground(box(0xFF1A0806,6,BLOODL,2)); alertTv.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams al=new LinearLayout.LayoutParams(-1,-2); al.setMargins(0,0,0,6); alertTv.setLayoutParams(al);
+            root.addView(alertTv);
+        }
 
         // quick-access row: show tracked champs (those with seen or opp count > 0) at the
         // top so the player doesn't hunt through the grid every round
@@ -1805,6 +1824,20 @@ public class OverlayService extends Service {
 
     // AUGMENTS TAB: per-augment tier list + comp priorities + exclusions + mechanics.
     private void buildAugments(LinearLayout root){
+        // augment round context banner
+        int augStg=pool.getStageNum(), augRnd=pool.getRoundNum();
+        boolean isAugRound=(augStg==2&&augRnd==1)||(augStg==3&&augRnd==2)||(augStg==4&&augRnd==2);
+        if(isAugRound){
+            int augNum=(augStg==2)?1:(augStg==3)?2:3;
+            TextView augBanner=new TextView(this);
+            augBanner.setText("★ AUGMENT OFFER NOW ("+augNum+"/3)  ·  pick S or A tier");
+            augBanner.setTextColor(0xFF0A0800); augBanner.setTextSize(12);
+            augBanner.setTypeface(null,android.graphics.Typeface.BOLD);
+            augBanner.setGravity(android.view.Gravity.CENTER);
+            augBanner.setBackground(box(GOLD,6,0xFFE8C030,2)); augBanner.setPadding(10,10,10,10);
+            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,10); augBanner.setLayoutParams(abl);
+            root.addView(augBanner);
+        }
         // set label
         TextView lbl=new TextView(this); lbl.setText(AugmentData.SET_LABEL);
         lbl.setTextColor(DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
@@ -2194,6 +2227,11 @@ public class OverlayService extends Service {
             gqRow.addView(b);
         }
         root.addView(gqRow);
+        econRollBudgetTv=new TextView(this);
+        econRollBudgetTv.setTextColor(ASH); econRollBudgetTv.setTextSize(10);
+        econRollBudgetTv.setPadding(2,3,2,0);
+        econRollBudgetTv.setText(rollBudgetHint(gold));
+        root.addView(econRollBudgetTv);
 
         // interest info
         LinearLayout iRow=new LinearLayout(this); iRow.setOrientation(LinearLayout.VERTICAL);
@@ -2419,6 +2457,7 @@ public class OverlayService extends Service {
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
         if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
+        if(econRollBudgetTv!=null) econRollBudgetTv.setText(rollBudgetHint(gold));
         if(econHpTv!=null){
             int hp=pool.getHp();
             econHpTv.setText(hp+" HP");
@@ -2429,6 +2468,12 @@ public class OverlayService extends Service {
             econStageTv.setText(stg>0?stg+"-"+rnd:"?");
             if(econEventTv!=null) econEventTv.setText(stg>0?nextTFTEvent(stg,rnd):"tap ▶ to set stage");
         }
+    }
+
+    private static String rollBudgetHint(int gold){
+        if(gold>=50) return "max interest locked  ·  safe to level or roll freely";
+        if(gold>=30) return "roll budget: "+(gold-30)+"g  (save at 30g)";
+        return "below 30g  ·  build back before rolling";
     }
 
     private void advanceRound(int delta){
