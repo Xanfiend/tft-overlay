@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.6";
+    private static final String APP_VERSION = "v1.99.7";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -522,13 +522,24 @@ public class OverlayService extends Service {
         if(panelDismissRunnable!=null){ panelDismissHandler.removeCallbacks(panelDismissRunnable); panelDismissRunnable=null; }
     }
 
+    // Recreate the floating sigil (e.g. after a size change) without moving it.
+    private void rebuildButton(){
+        int x = btnLp!=null?btnLp.x:20, y = btnLp!=null?btnLp.y:300;
+        if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
+        if(button!=null){ try{ wm.removeView(button); }catch(Exception e){} button=null; }
+        addButton();
+        btnLp.x=x; btnLp.y=y;
+        try{ wm.updateViewLayout(button, btnLp); }catch(Exception e){}
+    }
+
     private void addButton(){
+        final float sig = pool.getSigilScalePct()/100f; // 0.8 / 1.0 / 1.25
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL); c.setGravity(Gravity.CENTER);
-        c.setBackground(box(0xF20B0709,40,BLOOD,3)); c.setPadding(28,18,28,18);
+        c.setBackground(box(0xF20B0709,40,BLOOD,3)); c.setPadding((int)(28*sig),(int)(18*sig),(int)(28*sig),(int)(18*sig));
         // all-seeing sigil over the wordmark
-        TextView g=new TextView(this); g.setText("\u29BF"); g.setTextColor(BLOODL); g.setTextSize(22); g.setGravity(Gravity.CENTER);
-        btnLabel=new TextView(this); btnLabel.setText("SCRY"); btnLabel.setTextColor(GOLD); btnLabel.setTextSize(8);
+        TextView g=new TextView(this); g.setText("\u29BF"); g.setTextColor(BLOODL); g.setTextSize(22*sig); g.setGravity(Gravity.CENTER);
+        btnLabel=new TextView(this); btnLabel.setText("SCRY"); btnLabel.setTextColor(GOLD); btnLabel.setTextSize(8*sig);
         btnLabel.setGravity(Gravity.CENTER); btnLabel.setLetterSpacing(0.25f); btnLabel.setPadding(0,2,0,0);
         c.addView(g); c.addView(btnLabel);
 
@@ -539,10 +550,10 @@ public class OverlayService extends Service {
         GradientDrawable glowD=new GradientDrawable();
         glowD.setShape(GradientDrawable.OVAL);
         glowD.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        glowD.setGradientRadius(85f);
+        glowD.setGradientRadius(85f*sig);
         glowD.setColors(new int[]{0x66C1121F, 0x00C1121F});
         glowView.setBackground(glowD);
-        FrameLayout.LayoutParams glp=new FrameLayout.LayoutParams(170,170); glp.gravity=Gravity.CENTER;
+        FrameLayout.LayoutParams glp=new FrameLayout.LayoutParams((int)(170*sig),(int)(170*sig)); glp.gravity=Gravity.CENTER;
         fc.addView(glowView, glp);
         FrameLayout.LayoutParams clp=new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         clp.gravity=Gravity.CENTER;
@@ -3186,6 +3197,25 @@ public class OverlayService extends Service {
         root.addView(wRow);
         TextView wHint=new TextView(this); wHint.setText("slim = less game obstruction  ·  full = default");
         wHint.setTextColor(DIM); wHint.setTextSize(10); wHint.setPadding(2,4,2,0); root.addView(wHint);
+
+        // sigil size
+        int curSig=pool.getSigilScalePct();
+        int[] sigVals={80,100,125}; String[] sigLabels={"small","normal","large"};
+        LinearLayout sigRow=new LinearLayout(this); sigRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams sigrl=new LinearLayout.LayoutParams(-1,-2); sigrl.setMargins(0,10,0,0); sigRow.setLayoutParams(sigrl);
+        for(int i=0;i<3;i++){
+            final int sv=sigVals[i]; boolean sel=(curSig==sv);
+            TextView btn=new TextView(this); btn.setText(sigLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(0,-2,1f); slp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(slp);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setSigilScalePct(sv); rebuildButton(); showPanel(); }});
+            pressFeedback(btn); sigRow.addView(btn);
+        }
+        TextView sigLbl=new TextView(this); sigLbl.setText("SIGIL SIZE");
+        sigLbl.setTextColor(ASH); sigLbl.setTextSize(10); sigLbl.setLetterSpacing(0.08f); sigLbl.setPadding(2,12,0,2);
+        root.addView(sigLbl);
+        root.addView(sigRow);
 
         addSecHdr(root, "POSITION", GOLD);
 

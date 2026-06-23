@@ -208,4 +208,10 @@ public class PoolTest {
         assertTrue(re.getAutoScanOnOpen());
         assertFalse(re.getSmartLanding());
     }
+
+    @Test public void sigilScaleDefaultsTo100AndRoundTrips(){
+        assertEquals("normal size by default", 100, pool.getSigilScalePct());
+        pool.setSigilScalePct(80);
+        assertEquals(80, new Pool(ApplicationProvider.getApplicationContext()).getSigilScalePct());
+    }
 }
