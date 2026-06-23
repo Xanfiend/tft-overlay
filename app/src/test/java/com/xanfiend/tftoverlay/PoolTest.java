@@ -166,4 +166,33 @@ public class PoolTest {
         for (int i = 0; i < 10; i++) pool.addOpp("Jinx", 1);
         assertEquals("opp count capped at 7", 7, pool.oppCount("Jinx"));
     }
+
+    @Test public void settingsDefaultsAndRoundTrip(){
+        // defaults match the documented values
+        assertEquals("startTab default smart", 0, pool.getStartTab());
+        assertEquals("lastTab default 0", 0, pool.getLastTab());
+        assertEquals("panel timeout default 30s", 30, pool.getPanelTimeout());
+        assertEquals("panel width default 96%", 96, pool.getPanelWidthPct());
+        assertFalse("compact tabs off by default", pool.getCompactTabs());
+        assertFalse("large text off by default", pool.getLargeText());
+
+        // each persists across a fresh Pool over the same context
+        pool.setLastTab(3);
+        pool.setPanelTimeout(15);
+        pool.setPanelWidthPct(60);
+        pool.setCompactTabs(true);
+        pool.setLargeText(true);
+        Pool re = new Pool(ApplicationProvider.getApplicationContext());
+        assertEquals(3, re.getLastTab());
+        assertEquals(15, re.getPanelTimeout());
+        assertEquals(60, re.getPanelWidthPct());
+        assertTrue(re.getCompactTabs());
+        assertTrue(re.getLargeText());
+    }
+
+    @Test public void panelTimeoutOffIsZero(){
+        // "off" maps to 0 — the dismiss scheduler treats 0 as never-close
+        pool.setPanelTimeout(0);
+        assertEquals(0, pool.getPanelTimeout());
+    }
 }
