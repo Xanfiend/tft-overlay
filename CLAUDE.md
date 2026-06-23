@@ -43,7 +43,7 @@ app/src/main/java/com/xanfiend/tftoverlay/
   ThreatData.java        — per-champ positioning role (FRONT/BACK/FLANK); meta-stable, per-SET refresh not per-patch
   RollMath.java          — hit-probability tables
   DeviceIntegrity.java   — passive root/emulator heuristics; SETUP heads-up only (never blocks, never reports)
-  MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION)
+  MainActivity.java      — permission screen + changelog (keep in sync with APP_VERSION). CHANGELOG ENTRIES STAY GENERAL: describe the user-facing benefit only, never the implementation (no scan internals, OCR/health-bar/template/snapshot mechanics, crop zones, timings, coordinates, color thresholds, build-hardening specifics). Keeps the "secret sauce" out of a public, decompilable APK — anti-clone + anti-tamper.
   ScanPermActivity.java  — MediaProjection fallback (API < 30)
   ImageScanActivity.java — dev: pick a saved screenshot, run the scan pipeline on it (no TFT needed)
 ```
