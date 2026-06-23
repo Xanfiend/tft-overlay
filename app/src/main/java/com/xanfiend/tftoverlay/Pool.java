@@ -144,6 +144,20 @@ public class Pool {
     // overlay reopens where you left off instead of jumping to smart/grid
     public int  getLastTab()       { return p.getInt("cfg_lasttab", 0); }
     public void setLastTab(int m)  { p.edit().putInt("cfg_lasttab", m).apply(); }
+    // panel auto-dismiss: seconds of inactivity before the panel closes itself.
+    // 0 = never, otherwise the planning phase length (15s quick / 30s default).
+    public int  getPanelTimeout()       { return p.getInt("cfg_paneltimeout", 30); }
+    public void setPanelTimeout(int s)  { p.edit().putInt("cfg_paneltimeout", s).apply(); }
+    // compact tab row: show only the glyph icon, no text label below it —
+    // saves ~25px panel height and keeps the tab row unobtrusive
+    public boolean getCompactTabs()         { return p.getBoolean("cfg_compacttabs", false); }
+    public void    setCompactTabs(boolean v){ p.edit().putBoolean("cfg_compacttabs", v).apply(); }
+    // panel width as a percentage of screen width (96 = default full-bleed)
+    public int  getPanelWidthPct()      { return p.getInt("cfg_panelwidth", 96); }
+    public void setPanelWidthPct(int w) { p.edit().putInt("cfg_panelwidth", w).apply(); }
+    // large text: bump core panel text by +2sp for easier reading mid-game
+    public boolean getLargeText()         { return p.getBoolean("cfg_largetext", false); }
+    public void    setLargeText(boolean v){ p.edit().putBoolean("cfg_largetext", v).apply(); }
 
     // ---- planner scan calibration ----
     // Screen-percent positions of the Team Planner controls, recorded by the

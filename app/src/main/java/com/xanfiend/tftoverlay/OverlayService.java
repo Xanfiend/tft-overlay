@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.4";
+    private static final String APP_VERSION = "v1.99.5";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -83,6 +83,10 @@ public class OverlayService extends Service {
     private static final float DIM_ALPHA   = 0.18f;
     private final android.os.Handler dimHandler = new android.os.Handler();
     private Runnable dimRunnable = null;
+    // panel auto-dismiss: close the panel after the configured timeout so it
+    // never stays up through an entire planning phase without user interaction
+    private final android.os.Handler panelDismissHandler = new android.os.Handler();
+    private Runnable panelDismissRunnable = null;
     private Runnable goldRepeat;
 
     // floating button layout params promoted to field so buildSettings() can update alpha/position
@@ -385,6 +389,10 @@ public class OverlayService extends Service {
     }
     // subtle vertical gradient (lighter top, darker bottom) on every box, with a
     // brightened pressed state so buttons visibly react to touch
+    // large-text helper: adds +2sp when the user has enabled large-text mode.
+    // Use at the most-read text: chip names, section headers, major value displays.
+    private float ts(float sp){ return pool!=null && pool.getLargeText() ? sp+2f : sp; }
+
     private Drawable box(int c,int r,int sc,int sw){
         GradientDrawable normal=grad(c,r,sc,sw);
         GradientDrawable pressed=grad(shade(c,1.35f),r,sc,sw);
@@ -411,7 +419,7 @@ public class OverlayService extends Service {
         LinearLayout h=new LinearLayout(this); h.setOrientation(LinearLayout.HORIZONTAL);
         h.setGravity(Gravity.CENTER_VERTICAL); h.setPadding(2,12,0,7);
         TextView t=new TextView(this); t.setText("◇ "+text);
-        t.setTextColor(color); t.setTextSize(11); t.setTypeface(null,android.graphics.Typeface.BOLD);
+        t.setTextColor(color); t.setTextSize(ts(11)); t.setTypeface(null,android.graphics.Typeface.BOLD);
         t.setLetterSpacing(0.12f);
         h.addView(t);
         View rule=new View(this);
@@ -502,6 +510,16 @@ public class OverlayService extends Service {
     private void cancelDim(){
         if(dimRunnable!=null){ dimHandler.removeCallbacks(dimRunnable); dimRunnable=null; }
         if(button!=null) button.animate().alpha(pool.getAlpha()).setDuration(150).start();
+    }
+    private void schedulePanelDismiss(){
+        if(panelDismissRunnable!=null) panelDismissHandler.removeCallbacks(panelDismissRunnable);
+        int secs=pool.getPanelTimeout();
+        if(secs==0) return;
+        panelDismissRunnable=new Runnable(){ public void run(){ if(panel!=null) closePanel(); } };
+        panelDismissHandler.postDelayed(panelDismissRunnable, secs*1000L);
+    }
+    private void cancelPanelDismiss(){
+        if(panelDismissRunnable!=null){ panelDismissHandler.removeCallbacks(panelDismissRunnable); panelDismissRunnable=null; }
     }
 
     private void addButton(){
@@ -801,6 +819,7 @@ public class OverlayService extends Service {
     }
 
     private void closePanel(){
+        cancelPanelDismiss();
         if(panel!=null){ try{wm.removeView(panel);}catch(Exception e){} panel=null; panelLp=null; }
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
@@ -833,7 +852,7 @@ public class OverlayService extends Service {
             scroll.addView(root);
             panel=scroll;
             panelLp=new WindowManager.LayoutParams(
-                (int)(getResources().getDisplayMetrics().widthPixels*0.96),
+                (int)(getResources().getDisplayMetrics().widthPixels*(pool.getPanelWidthPct()/100f)),
                 (int)(getResources().getDisplayMetrics().heightPixels*0.86),
                 wtype(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -846,9 +865,12 @@ public class OverlayService extends Service {
             panel.setOnTouchListener(new View.OnTouchListener(){
                 public boolean onTouch(View v, MotionEvent e){
                     if(e.getAction()==MotionEvent.ACTION_OUTSIDE){ itemA=-1; itemB=-1; closePanel(); return true; }
+                    // any touch inside the panel extends the auto-dismiss window
+                    if(e.getAction()==MotionEvent.ACTION_DOWN) schedulePanelDismiss();
                     return false;
                 }
             });
+            schedulePanelDismiss();
             wm.addView(panel,panelLp);
             // entrance: panel scales and fades in from the floating button. The
             // animation must start on the panel's FIRST DRAWN FRAME, not now: the
@@ -884,7 +906,7 @@ public class OverlayService extends Service {
         sigil.setTextColor(BLOODL); sigil.setTextSize(16); sigil.setPadding(0,0,10,0);
         TextView title=new TextView(this);
         title.setText(mode==5?"\u2694 BUILDS":mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
-        title.setTextColor(BLOODL); title.setTextSize(14); title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextColor(BLOODL); title.setTextSize(ts(14)); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView verTv=new TextView(this); verTv.setText(APP_VERSION);
@@ -920,13 +942,14 @@ public class OverlayService extends Service {
             LinearLayout tabWrap=new LinearLayout(this); tabWrap.setOrientation(LinearLayout.VERTICAL);
             LinearLayout.LayoutParams twl=new LinearLayout.LayoutParams(0,-2,1f); twl.setMargins(2,0,2,0); tabWrap.setLayoutParams(twl);
             TextView tab=new TextView(this); tab.setText(tabGlyphs[t]+"\n"+tabNames[t]); tab.setGravity(Gravity.CENTER);
-            tab.setTextColor(on?BONE:ASH); tab.setTextSize(9); tab.setLetterSpacing(0.05f);
+            tab.setTextColor(on?BONE:ASH); tab.setTextSize(ts(9)); tab.setLetterSpacing(0.05f);
             tab.setLineSpacing(2,1f);
             tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,11,0,11);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; pool.setLastTab(tm); showPanel(); } });
             pressFeedback(tab);
             tabWrap.addView(tab);
+            if(pool.getCompactTabs()) tab.setText(tabGlyphs[t]); // glyph only, no label
             // active tab gets a gold underbar that glows from the center and fades at
             // both ends (softer than a flat rule); inactive tabs reserve no height
             View underline=new View(this);
@@ -1578,7 +1601,7 @@ public class OverlayService extends Service {
             nameTv.setText((pool.isHunted(name)?"✦ ":"")+name);
             nameTv.setTextColor(0xFF000000);
             nameTv.setTypeface(null, android.graphics.Typeface.BOLD);
-            nameTv.setTextSize(15);
+            nameTv.setTextSize(ts(15));
             nameTv.setGravity(Gravity.CENTER);
             nameTv.setPadding(10,22,4,22);
             LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(0,-2,1f); nameTv.setLayoutParams(nlp);
@@ -1587,7 +1610,7 @@ public class OverlayService extends Service {
             countTv.setText(seen+" \u2212");
             countTv.setTextColor(0xFF000000);
             countTv.setTypeface(null, android.graphics.Typeface.BOLD);
-            countTv.setTextSize(15);
+            countTv.setTextSize(ts(15));
             countTv.setGravity(Gravity.CENTER);
             countTv.setPadding(8,22,10,22);
             countTv.setBackground(box(0x33000000,0,0,0)); // subtle darken to show it's a separate tap zone
@@ -2019,7 +2042,7 @@ public class OverlayService extends Service {
         LinearLayout goldRow=new LinearLayout(this); goldRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView gMinus=makeAdjBtn("−", 0xFF1A0C0E, BLOODL);
         econGoldTv=new TextView(this); econGoldTv.setText(gold+"g");
-        econGoldTv.setTextColor(GOLD); econGoldTv.setTextSize(28); econGoldTv.setTypeface(null, android.graphics.Typeface.BOLD);
+        econGoldTv.setTextColor(GOLD); econGoldTv.setTextSize(ts(28)); econGoldTv.setTypeface(null, android.graphics.Typeface.BOLD);
         econGoldTv.setGravity(Gravity.CENTER); econGoldTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView gPlus=makeAdjBtn("+", 0xFF1A0C0E, BLOODL);
 
@@ -2115,7 +2138,7 @@ public class OverlayService extends Service {
         String sText = streak==0?"—":Math.abs(streak)+(streak>0?"W":"L");
         int sColor = streak>0?GREEN:(streak<0?BLOODL:ASH);
         econStreakTv.setText(sText); econStreakTv.setTextColor(sColor);
-        econStreakTv.setTextSize(24); econStreakTv.setTypeface(null, android.graphics.Typeface.BOLD);
+        econStreakTv.setTextSize(ts(24)); econStreakTv.setTypeface(null, android.graphics.Typeface.BOLD);
         econStreakTv.setGravity(Gravity.CENTER); econStreakTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         // tap the number to flip the streak sign (W↔L) — one-tap fix for a misclick
         econStreakTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
@@ -2144,7 +2167,7 @@ public class OverlayService extends Service {
         TextView icH=new TextView(this); icH.setText("EXPECTED NEXT ROUND");
         icH.setTextColor(ASH); icH.setTextSize(10); icH.setLetterSpacing(0.08f); incCard.addView(icH);
         econIncomeTv=new TextView(this); econIncomeTv.setText(income+"g");
-        econIncomeTv.setTextColor(GOLD); econIncomeTv.setTextSize(28); econIncomeTv.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(econIncomeTv);
+        econIncomeTv.setTextColor(GOLD); econIncomeTv.setTextSize(ts(28)); econIncomeTv.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(econIncomeTv);
         econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak"+(streak>0?"  +  1g win":""));
         econBreakTv.setTextColor(ASH); econBreakTv.setTextSize(11); incCard.addView(econBreakTv);
         root.addView(incCard);
@@ -3077,6 +3100,63 @@ public class OverlayService extends Service {
             stRow.addView(btn);
         }
         root.addView(stRow);
+
+        // ---- AUTO-CLOSE PANEL ----
+        addSecHdr(root, "AUTO-CLOSE PANEL", GOLD);
+        TextView acHint=new TextView(this); acHint.setText("closes the panel automatically after this many seconds — matches the planning phase so you never leave it open mid-fight");
+        acHint.setTextColor(DIM); acHint.setTextSize(10); acHint.setPadding(2,0,2,8); root.addView(acHint);
+        int curTo=pool.getPanelTimeout();
+        int[] toVals={15,30,0}; String[] toLabels={"15s","30s","off"};
+        LinearLayout toRow=new LinearLayout(this); toRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<3;i++){
+            final int sv=toVals[i]; boolean sel=(curTo==sv);
+            TextView btn=new TextView(this); btn.setText(toLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(0,-2,1f); tlp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(tlp);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setPanelTimeout(sv); showPanel(); }});
+            pressFeedback(btn); toRow.addView(btn);
+        }
+        root.addView(toRow);
+
+        // ---- DISPLAY ----
+        addSecHdr(root, "DISPLAY", GOLD);
+
+        // compact tab row
+        boolean compact=pool.getCompactTabs();
+        LinearLayout ctRow=new LinearLayout(this); ctRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams ctrl=new LinearLayout.LayoutParams(-1,-2); ctrl.setMargins(0,0,0,6); ctRow.setLayoutParams(ctrl);
+        TextView ctOn=new TextView(this); ctOn.setText("compact tabs");
+        ctOn.setTextColor(BONE); ctOn.setTextSize(12); ctOn.setGravity(Gravity.CENTER); ctOn.setPadding(0,10,0,10);
+        ctOn.setBackground(box(compact?BLOOD:CARD,6,compact?BLOODL:EDGE,compact?2:1));
+        ctOn.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        ctOn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setCompactTabs(!pool.getCompactTabs()); showPanel(); }});
+        pressFeedback(ctOn); ctRow.addView(ctOn);
+        TextView ltOn=new TextView(this); ltOn.setText("large text");
+        boolean large=pool.getLargeText();
+        ltOn.setTextColor(BONE); ltOn.setTextSize(12); ltOn.setGravity(Gravity.CENTER); ltOn.setPadding(0,10,0,10);
+        ltOn.setBackground(box(large?BLOOD:CARD,6,large?BLOODL:EDGE,large?2:1));
+        LinearLayout.LayoutParams ltlp=new LinearLayout.LayoutParams(0,-2,1f); ltlp.setMargins(6,0,0,0); ltOn.setLayoutParams(ltlp);
+        ltOn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setLargeText(!pool.getLargeText()); showPanel(); }});
+        pressFeedback(ltOn); ctRow.addView(ltOn);
+        root.addView(ctRow);
+
+        // panel width
+        int curW=pool.getPanelWidthPct();
+        int[] wVals={60,78,96}; String[] wLabels={"slim","medium","full"};
+        LinearLayout wRow=new LinearLayout(this); wRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<3;i++){
+            final int sv=wVals[i]; boolean sel=(curW==sv);
+            TextView btn=new TextView(this); btn.setText(wLabels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams wlp=new LinearLayout.LayoutParams(0,-2,1f); wlp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(wlp);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setPanelWidthPct(sv); showPanel(); }});
+            pressFeedback(btn); wRow.addView(btn);
+        }
+        root.addView(wRow);
+        TextView wHint=new TextView(this); wHint.setText("slim = less game obstruction  ·  full = default");
+        wHint.setTextColor(DIM); wHint.setTextSize(10); wHint.setPadding(2,4,2,0); root.addView(wHint);
 
         addSecHdr(root, "POSITION", GOLD);
 
@@ -6924,6 +7004,7 @@ public class OverlayService extends Service {
         plannerHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         dimHandler.removeCallbacksAndMessages(null); dimRunnable=null;
+        panelDismissHandler.removeCallbacksAndMessages(null); panelDismissRunnable=null;
         scanAllMode=false;
         hideCalCaptureView();
         hidePlnCalView();
