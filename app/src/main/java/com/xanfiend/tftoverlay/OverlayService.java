@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.9";
+    private static final String APP_VERSION = "v1.99.10";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -543,6 +543,16 @@ public class OverlayService extends Service {
         BLOODL = THEMES[t][1];
     }
 
+    // Apply a theme change live across every persistent surface — the floating
+    // sigil, the in-game HUD, and the open panel — so recolor is instant with no
+    // service restart.
+    private void repaintTheme(){
+        applyTheme();
+        rebuildButton();
+        if(hudGoldView!=null){ removeHud(); addHud(); } // rebuild only if it's showing
+        showPanel();
+    }
+
     // Recreate the floating sigil (e.g. after a size change) without moving it.
     private void rebuildButton(){
         int x = btnLp!=null?btnLp.x:20, y = btnLp!=null?btnLp.y:300;
@@ -572,7 +582,7 @@ public class OverlayService extends Service {
         glowD.setShape(GradientDrawable.OVAL);
         glowD.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         glowD.setGradientRadius(85f*sig);
-        glowD.setColors(new int[]{0x66C1121F, 0x00C1121F});
+        glowD.setColors(new int[]{(BLOODL&0x00FFFFFF)|0x66000000, BLOODL&0x00FFFFFF}); // accent glow
         glowView.setBackground(glowD);
         FrameLayout.LayoutParams glp=new FrameLayout.LayoutParams((int)(170*sig),(int)(170*sig)); glp.gravity=Gravity.CENTER;
         fc.addView(glowView, glp);
@@ -680,11 +690,11 @@ public class OverlayService extends Service {
         hudGoldLp=makeHudLp("hud_gx","hud_gy", dm.widthPixels*84/100, dm.heightPixels*85/100);
         hudXpLp  =makeHudLp("hud_xx","hud_xy", dm.widthPixels*4/100,  dm.heightPixels*85/100);
         hudGoldView=makeHudMini(GOLD, hudGoldLp, "hud_gx","hud_gy");
-        hudXpView  =makeHudMini(BONE, hudXpLp,   "hud_xx","hud_xy");
+        hudXpView  =makeHudMini(BLOODL, hudXpLp,  "hud_xx","hud_xy"); // accent — follows the theme
         try{ wm.addView(hudGoldView, hudGoldLp); }catch(Exception e){}
         try{ wm.addView(hudXpView, hudXpLp); }catch(Exception e){}
         hudGoldGlowAnim=pulseGlow(hudGoldView, GOLD);
-        hudXpGlowAnim=pulseGlow(hudXpView, BONE);
+        hudXpGlowAnim=pulseGlow(hudXpView, BLOODL);
         refreshHud();
 
         hudTick=new Runnable(){ public void run(){
@@ -3255,7 +3265,7 @@ public class OverlayService extends Service {
             btn.setBackground(box(sel?bright:CARD,6,bright,sel?2:2));
             LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(0,-2,1f); blp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(blp);
             btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setAccentTheme(tv); applyTheme(); rebuildButton(); showPanel();
+                pool.setAccentTheme(tv); repaintTheme();
             }});
             pressFeedback(btn); thRow.addView(btn);
         }
@@ -3841,7 +3851,7 @@ public class OverlayService extends Service {
                 bgP.setColor(0xF00B0709);
                 canvas.drawRect(0,cancelTop,W,H,bgP);
                 txtP.setTextSize(13*spx);
-                txtP.setColor(0xFFC1121F);
+                txtP.setColor(BLOODL);
                 canvas.drawText(calStep==5?"SKIP BENCH":"CANCEL", W/2f, (cancelTop+H)/2f+5*spx, txtP);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
@@ -4087,7 +4097,7 @@ public class OverlayService extends Service {
                 canvas.drawRect(0,btnTop,W,H,p);
                 p.setColor(0xFF39FF14); p.setTextSize(14*spx);
                 canvas.drawText("SAVE", W*0.25f, (btnTop+H)/2f+5*spx, p);
-                p.setColor(0xFFC1121F);
+                p.setColor(BLOODL);
                 canvas.drawText("CANCEL", W*0.75f, (btnTop+H)/2f+5*spx, p);
                 p.setColor(0xFF3A2024);
                 canvas.drawRect(W/2f-1,btnTop+10,W/2f+1,H-10,p);
@@ -6234,7 +6244,7 @@ public class OverlayService extends Service {
                 android.graphics.RectF cr=cancelRect();
                 txtP.setColor(0xFF1A0E10); canvas.drawRoundRect(cr,10,10,txtP);
                 txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
-                txtP.setColor(0xFFC1121F); canvas.drawRoundRect(cr,10,10,txtP);
+                txtP.setColor(BLOODL); canvas.drawRoundRect(cr,10,10,txtP);
                 txtP.setStyle(android.graphics.Paint.Style.FILL);
                 txtP.setTextSize(11*spx);
                 canvas.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, txtP);
@@ -6971,7 +6981,7 @@ public class OverlayService extends Service {
                 // recorded points
                 for(int i=1;i<=oppCalCount;i++){
                     int[] pt=pool.getOppPortrait(i); if(pt==null) continue;
-                    p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC1121F);
+                    p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(BLOODL);
                     c.drawCircle(pt[0],pt[1],14,p);
                     p.setColor(0xFFE0D5C0); p.setTextSize(11*spx); c.drawText(""+i, pt[0], pt[1]+4*spx, p);
                 }
@@ -6981,8 +6991,8 @@ public class OverlayService extends Service {
                 p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC9A227); p.setTextSize(12*spx);
                 c.drawText("✓ DONE", dr.centerX(), dr.centerY()+4*spx, p);
                 p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A0E10); c.drawRoundRect(cr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(0xFFC1121F); c.drawRoundRect(cr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC1121F); p.setTextSize(12*spx);
+                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(BLOODL); c.drawRoundRect(cr,12,12,p);
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(BLOODL); p.setTextSize(12*spx);
                 c.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, p);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
