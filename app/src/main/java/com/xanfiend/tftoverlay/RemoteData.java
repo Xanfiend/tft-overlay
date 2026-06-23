@@ -82,7 +82,7 @@ public final class RemoteData {
     // A payload is only trusted if it has the full champ table (index 0 + 5 tiers,
     // each non-empty) and a pool-size row — so a truncated/garbled fetch can never
     // wipe out the bundled set.
-    private static boolean validate(JSONObject o){
+    static boolean validate(JSONObject o){
         if(!o.has("setName")) return false;
         JSONArray champs = o.optJSONArray("champs");
         JSONArray size = o.optJSONArray("size");
