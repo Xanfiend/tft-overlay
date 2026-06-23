@@ -37,9 +37,13 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.2";
+    private static final String APP_VERSION = "v1.99.3";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
+    // one-step undo for the pool grid: the inverse of the last mark + a label.
+    // null when there's nothing to undo. Cleared on reset and panel-close.
+    private Runnable undoAction = null;
+    private String undoLabel = null;
     // guide tab sub-selection: 0 = augments, 1 = items
     private int guideTab = 0;
     // god tracker: which slot (1/2) is currently showing the god picker, 0 = none
@@ -67,6 +71,7 @@ public class OverlayService extends Service {
     private String buildSel=null; // BUILDS tab: champion whose meta items are shown
 
     // economy tab: held so refreshEcon() can update without rebuilding the panel
+    private TextView undoBar;   // pool-grid undo control, shown only when undoAction != null
     private TextView econGoldTv, econInterestTv, econBracketTv;
     private TextView[] econLadderTvs;
     private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
@@ -781,7 +786,7 @@ public class OverlayService extends Service {
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
-        buildSel=null;
+        buildSel=null; undoBar=null;
     }
 
     @SuppressWarnings("deprecation")
@@ -1016,6 +1021,7 @@ public class OverlayService extends Service {
             pressFeedback(ngYes);
             ngYes.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 pool.reset(); autoScanResults.clear(); oppScanResults.clear();
+                undoAction=null; undoLabel=null;
                 newGameHint=false; lastOppSlot=0; buzz(); refreshHud(); showPanel();
             }});
             ng.addView(ngYes);
@@ -1027,6 +1033,18 @@ public class OverlayService extends Service {
             ng.addView(ngNo);
             root.addView(ng);
         }
+
+        // ↶ one-step undo for an accidental mark. Lives in-place (no panel rebuild
+        // on each mark) and hides itself when there's nothing to undo.
+        undoBar=new TextView(this);
+        undoBar.setTextColor(ASH); undoBar.setTextSize(11); undoBar.setGravity(Gravity.CENTER);
+        undoBar.setPadding(0,9,0,9); undoBar.setBackground(box(CARD,6,EDGE,1));
+        LinearLayout.LayoutParams ubl=new LinearLayout.LayoutParams(-1,-2); ubl.setMargins(0,0,0,8); undoBar.setLayoutParams(ubl);
+        undoBar.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(undoAction!=null){ undoAction.run(); undoAction=null; undoLabel=null; buzz(); showPanel(); }
+        }});
+        root.addView(undoBar);
+        refreshUndoBar();
 
         // \u26e7 THE RITE \u2014 automatic scrying is the heart of the overlay. One press
         // reads gold, level and every unit; the chips further down exist only to
@@ -1452,6 +1470,28 @@ public class OverlayService extends Service {
 
     // Builds one champ cell: [ chip: name(+1) | count(-1) ][ opp badge ]
     // Used by both the RECENT row and the cost grid.
+    // Record the inverse of a "copies seen" change as the pending undo, but only
+    // if the count actually moved (pool.add floors at 0, so a -1 at 0 is a no-op
+    // and must NOT arm an undo that would wrongly add a copy back).
+    // Toggle the in-place undo bar to match the pending undo (no panel rebuild).
+    private void refreshUndoBar(){
+        if(undoBar==null) return;
+        if(undoAction!=null){
+            undoBar.setText("↶ undo  "+undoLabel);
+            undoBar.setVisibility(View.VISIBLE);
+        } else {
+            undoBar.setVisibility(View.GONE);
+        }
+    }
+
+    private void recordSeenUndo(final String name, int before){
+        int applied = pool.seenCount(name) - before;
+        if(applied == 0) return;
+        final int inv = -applied;
+        undoAction = new Runnable(){ public void run(){ pool.add(name, inv); }};
+        undoLabel = (inv>0?"+":"") + inv + " " + name;
+    }
+
     private LinearLayout buildChipCell(final String name, final int fc){
         LinearLayout cell=new LinearLayout(this);
         cell.setOrientation(LinearLayout.HORIZONTAL);
@@ -1468,7 +1508,7 @@ public class OverlayService extends Service {
         final TextView countTv=new TextView(this);
 
         nameTv.setOnClickListener(new View.OnClickListener(){
-            public void onClick(View v){ pool.add(name,1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+            public void onClick(View v){ int b=pool.seenCount(name); pool.add(name,1); recordSeenUndo(name,b); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); refreshUndoBar(); }
         });
         // hold a name to mark/unmark it as prey for THE HUNT (auto-buy)
         nameTv.setOnLongClickListener(new View.OnLongClickListener(){
@@ -1486,7 +1526,7 @@ public class OverlayService extends Service {
             }
         });
         countTv.setOnClickListener(new View.OnClickListener(){
-            public void onClick(View v){ pool.add(name,-1); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); }
+            public void onClick(View v){ int b=pool.seenCount(name); pool.add(name,-1); recordSeenUndo(name,b); buzz(); paintChipPair(chip,nameTv,countTv,name,fc); refreshUndoBar(); }
         });
 
         chip.addView(nameTv);
@@ -1916,7 +1956,7 @@ public class OverlayService extends Service {
             wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL);
         }};
         wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(armed[0]){ wipe.removeCallbacks(disarm); pool.reset(); refreshHud(); showPanel(); return; }
+            if(armed[0]){ wipe.removeCallbacks(disarm); pool.reset(); undoAction=null; undoLabel=null; refreshHud(); showPanel(); return; }
             armed[0]=true; wipe.setText("TAP AGAIN TO WIPE");
             wipe.setBackground(box(BLOOD,6,BLOODL,2)); wipe.setTextColor(BONE); buzz();
             wipe.postDelayed(disarm, 3000);
@@ -1997,6 +2037,23 @@ public class OverlayService extends Service {
         TextView goldHint=new TextView(this); goldHint.setText("manual correction  ·  tap ±1  ·  hold to repeat");
         goldHint.setTextColor(DIM); goldHint.setTextSize(9); goldHint.setPadding(2,2,2,0); root.addView(goldHint);
 
+        // quick-set presets: snap straight to a common gold value (the interest
+        // brackets + 0 for all-in) instead of holding ± across a big gap
+        LinearLayout gqRow=new LinearLayout(this); gqRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams gqrl=new LinearLayout.LayoutParams(-1,-2); gqrl.setMargins(0,8,0,0); gqRow.setLayoutParams(gqrl);
+        int[] presets={0,10,20,30,50};
+        for(int i=0;i<presets.length;i++){
+            final int pv=presets[i];
+            TextView b=new TextView(this); b.setText(pv+"g");
+            b.setTextColor(BONE); b.setTextSize(12); b.setGravity(Gravity.CENTER); b.setPadding(0,9,0,9);
+            b.setBackground(box(CARD,6,EDGE,1));
+            LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(0,-2,1f); bl.setMargins(i==0?0:4,0,0,0); b.setLayoutParams(bl);
+            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setGold(pv); buzz(); refreshEcon(); }});
+            pressFeedback(b);
+            gqRow.addView(b);
+        }
+        root.addView(gqRow);
+
         // interest info
         LinearLayout iRow=new LinearLayout(this); iRow.setOrientation(LinearLayout.VERTICAL);
         iRow.setBackground(box(CARD,6,EDGE,1)); iRow.setPadding(12,10,12,10);
@@ -2040,6 +2097,10 @@ public class OverlayService extends Service {
         econStreakTv.setText(sText); econStreakTv.setTextColor(sColor);
         econStreakTv.setTextSize(24); econStreakTv.setTypeface(null, android.graphics.Typeface.BOLD);
         econStreakTv.setGravity(Gravity.CENTER); econStreakTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        // tap the number to flip the streak sign (W↔L) — one-tap fix for a misclick
+        econStreakTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int s=pool.getStreak(); if(s!=0){ pool.setStreak(-s); buzz(); refreshEcon(); }
+        }});
         TextView sW=makeAdjBtn("W", 0xFF0D2210, GREEN);
         sW.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             int s=pool.getStreak(); pool.setStreak(s<0?1:s+1); buzz(); refreshEcon();
@@ -2053,7 +2114,7 @@ public class OverlayService extends Service {
         root.addView(econBonusTv);
         TextView streakScale=new TextView(this); streakScale.setText("2+ streak = +1g  ·  4+ = +2g  ·  6+ = +3g");
         streakScale.setTextColor(DIM); streakScale.setTextSize(10); streakScale.setPadding(2,2,2,0); root.addView(streakScale);
-        TextView streakWhy=new TextView(this); streakWhy.setText("streak has no on-screen number to scry — set it by hand");
+        TextView streakWhy=new TextView(this); streakWhy.setText("no on-screen number to scry — set by hand  ·  tap the number to flip W↔L");
         streakWhy.setTextColor(DIM); streakWhy.setTextSize(9); streakWhy.setPadding(2,2,2,0); root.addView(streakWhy);
 
         // expected income card
