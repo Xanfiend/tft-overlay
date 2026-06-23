@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.12";
+    private static final String APP_VERSION = "v1.99.13";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -472,6 +472,23 @@ public class OverlayService extends Service {
             }
         });
     }
+    // Rows of equal-width option buttons used throughout SETUP. The selected
+    // button is highlighted (BLOOD/BLOODL); others are idle (CARD/EDGE).
+    private interface PickSetter { void pick(int v); }
+    private void pickRow(LinearLayout root, String[] labels, int[] vals, int cur, int btmDp, PickSetter cb){
+        LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(-1,-2); rlp.setMargins(0,0,0,btmDp); row.setLayoutParams(rlp);
+        for(int i=0;i<labels.length;i++){
+            final int v=vals[i]; boolean sel=(cur==v);
+            TextView btn=new TextView(this); btn.setText(labels[i]);
+            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
+            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1f); lp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(lp);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View vw){ cb.pick(v); }});
+            pressFeedback(btn); row.addView(btn);
+        }
+        root.addView(row);
+    }
     // One-shot diagnostics dump for dev mode: build/device/screen/integrity/state/
     // calibration in a copyable block. Pure reads — useful when debugging a scan
     // issue on a specific device (or on the laptop) without attaching a debugger.
@@ -652,7 +669,7 @@ public class OverlayService extends Service {
                         // don't fire a competing scan while the hunt is tapping the shop.
                         if(huntMode){
                             mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel();
-                        } else if(held>1500){ triggerScan(); }
+                        } else if(held>1500){ itemA=-1; itemB=-1; triggerScan(); }
                         else if(held<=450 && pool.getAutoScanOnOpen()
                                 && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
                             // quick tap = scan + open on the result (auto-scan on open)
@@ -3026,24 +3043,8 @@ public class OverlayService extends Service {
         root.addView(alphaBar);
 
         addSecHdr(root, "HAPTIC", GOLD);
-
-        boolean curHaptic=pool.getHaptic();
-        LinearLayout hRow=new LinearLayout(this); hRow.setGravity(Gravity.CENTER_VERTICAL);
-        String[] hLabels={"ON","OFF"}; boolean[] hVals={true,false};
-        for(int i=0;i<2;i++){
-            final boolean hv=hVals[i];
-            TextView btn=new TextView(this); btn.setText(hLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curHaptic==hv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setHaptic(hv); showPanel();
-            }});
-            hRow.addView(btn);
-        }
-        root.addView(hRow);
+        pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getHaptic()?1:0, 0,
+            new PickSetter(){ public void pick(int v){ pool.setHaptic(v==1); showPanel(); }});
 
         addSecHdr(root, "IN-GAME HUD", GOLD);
 
@@ -3051,26 +3052,8 @@ public class OverlayService extends Service {
         hudHint.setText("Two tiny numbers to park over the game's own counters. The GOLD pill shows your tracked gold and projected income (Ng +N) — drag it so it sits just ABOVE the game's gold counter. The other shows gold to next level (Ng→L) — drag it above the XP button. IMPORTANT: with AUTO GOLD & XP on, the reader reads the strip directly BELOW the gold pill, so placing the gold pill right above your gold counter is what makes the reading accurate.");
         hudHint.setTextColor(DIM); hudHint.setTextSize(10); hudHint.setPadding(2,0,0,8); root.addView(hudHint);
 
-        boolean curHud=pool.getHudEnabled();
-        LinearLayout hudRow=new LinearLayout(this); hudRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams hudRowLp=new LinearLayout.LayoutParams(-1,-2); hudRowLp.setMargins(0,0,0,14); hudRow.setLayoutParams(hudRowLp);
-        String[] hudLabels={"ON","OFF"}; boolean[] hudVals={true,false};
-        for(int i=0;i<2;i++){
-            final boolean hv=hudVals[i];
-            TextView btn=new TextView(this); btn.setText(hudLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curHud==hv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setHudEnabled(hv);
-                if(hv) addHud(); else removeHud();
-                showPanel();
-            }});
-            hudRow.addView(btn);
-        }
-        root.addView(hudRow);
+        pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getHudEnabled()?1:0, 14,
+            new PickSetter(){ public void pick(int v){ pool.setHudEnabled(v==1); if(v==1) addHud(); else removeHud(); showPanel(); }});
 
         addSecHdr(root, "AUTO GOLD & XP", GOLD);
 
@@ -3109,44 +3092,13 @@ public class OverlayService extends Service {
         spHint.setText("Where THE HUNT looks for the shop. Auto reads the top in landscape and the bottom in portrait — switch it if auto-buy isn't seeing your shop.");
         spHint.setTextColor(DIM); spHint.setTextSize(10); spHint.setPadding(2,0,0,8); root.addView(spHint);
 
-        int curSp=pool.getShopPos();
-        LinearLayout spRow=new LinearLayout(this); spRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams spRowLp=new LinearLayout.LayoutParams(-1,-2); spRowLp.setMargins(0,0,0,14); spRow.setLayoutParams(spRowLp);
-        String[] spLabels={"Auto","Top","Bottom"}; int[] spVals={0,1,2};
-        for(int i=0;i<3;i++){
-            final int sv=spVals[i];
-            TextView btn=new TextView(this); btn.setText(spLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curSp==sv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setShopPos(sv); showPanel();
-            }});
-            spRow.addView(btn);
-        }
-        root.addView(spRow);
+        pickRow(root, new String[]{"Auto","Top","Bottom"}, new int[]{0,1,2}, pool.getShopPos(), 14,
+            new PickSetter(){ public void pick(int v){ pool.setShopPos(v); showPanel(); }});
 
         addSecHdr(root, "OPEN TAB", GOLD);
 
-        int curStart=pool.getStartTab();
-        String[] stLabels={"smart","always pool","last tab"}; int[] stVals={0,1,2};
-        LinearLayout stRow=new LinearLayout(this); stRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<3;i++){
-            final int sv=stVals[i];
-            TextView btn=new TextView(this); btn.setText(stLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curStart==sv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setStartTab(sv); showPanel();
-            }});
-            stRow.addView(btn);
-        }
-        root.addView(stRow);
+        pickRow(root, new String[]{"smart","always pool","last tab"}, new int[]{0,1,2}, pool.getStartTab(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setStartTab(v); showPanel(); }});
 
         // ---- AUTOMATION ----
         addSecHdr(root, "AUTOMATION", GOLD);
@@ -3176,19 +3128,8 @@ public class OverlayService extends Service {
         addSecHdr(root, "AUTO-CLOSE PANEL", GOLD);
         TextView acHint=new TextView(this); acHint.setText("closes the panel automatically after this many seconds — matches the planning phase so you never leave it open mid-fight");
         acHint.setTextColor(DIM); acHint.setTextSize(10); acHint.setPadding(2,0,2,8); root.addView(acHint);
-        int curTo=pool.getPanelTimeout();
-        int[] toVals={15,30,0}; String[] toLabels={"15s","30s","off"};
-        LinearLayout toRow=new LinearLayout(this); toRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<3;i++){
-            final int sv=toVals[i]; boolean sel=(curTo==sv);
-            TextView btn=new TextView(this); btn.setText(toLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(0,-2,1f); tlp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(tlp);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setPanelTimeout(sv); showPanel(); }});
-            pressFeedback(btn); toRow.addView(btn);
-        }
-        root.addView(toRow);
+        pickRow(root, new String[]{"15s","30s","off"}, new int[]{15,30,0}, pool.getPanelTimeout(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setPanelTimeout(v); showPanel(); }});
 
         // ---- DISPLAY ----
         addSecHdr(root, "DISPLAY", GOLD);
@@ -3213,40 +3154,17 @@ public class OverlayService extends Service {
         root.addView(ctRow);
 
         // panel width
-        int curW=pool.getPanelWidthPct();
-        int[] wVals={60,78,96}; String[] wLabels={"slim","medium","full"};
-        LinearLayout wRow=new LinearLayout(this); wRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<3;i++){
-            final int sv=wVals[i]; boolean sel=(curW==sv);
-            TextView btn=new TextView(this); btn.setText(wLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams wlp=new LinearLayout.LayoutParams(0,-2,1f); wlp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(wlp);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setPanelWidthPct(sv); showPanel(); }});
-            pressFeedback(btn); wRow.addView(btn);
-        }
-        root.addView(wRow);
+        pickRow(root, new String[]{"slim","medium","full"}, new int[]{60,78,96}, pool.getPanelWidthPct(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setPanelWidthPct(v); showPanel(); }});
         TextView wHint=new TextView(this); wHint.setText("slim = less game obstruction  ·  full = default");
         wHint.setTextColor(DIM); wHint.setTextSize(10); wHint.setPadding(2,4,2,0); root.addView(wHint);
 
         // sigil size
-        int curSig=pool.getSigilScalePct();
-        int[] sigVals={80,100,125}; String[] sigLabels={"small","normal","large"};
-        LinearLayout sigRow=new LinearLayout(this); sigRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams sigrl=new LinearLayout.LayoutParams(-1,-2); sigrl.setMargins(0,10,0,0); sigRow.setLayoutParams(sigrl);
-        for(int i=0;i<3;i++){
-            final int sv=sigVals[i]; boolean sel=(curSig==sv);
-            TextView btn=new TextView(this); btn.setText(sigLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(0,-2,1f); slp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(slp);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setSigilScalePct(sv); rebuildButton(); showPanel(); }});
-            pressFeedback(btn); sigRow.addView(btn);
-        }
         TextView sigLbl=new TextView(this); sigLbl.setText("SIGIL SIZE");
         sigLbl.setTextColor(ASH); sigLbl.setTextSize(10); sigLbl.setLetterSpacing(0.08f); sigLbl.setPadding(2,12,0,2);
         root.addView(sigLbl);
-        root.addView(sigRow);
+        pickRow(root, new String[]{"small","normal","large"}, new int[]{80,100,125}, pool.getSigilScalePct(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setSigilScalePct(v); rebuildButton(); showPanel(); }});
 
         // accent theme — recolors buttons / highlights / the sigil; each swatch
         // previews its own bright accent so the choice is visible before tapping
@@ -3290,23 +3208,8 @@ public class OverlayService extends Service {
         ssInfo.setText("Auto Scan finds units by their health bar and taps the exact spot, so calibration barely matters. Turn off to tap the calibrated grid instead.");
         ssInfo.setTextColor(ASH); ssInfo.setTextSize(10); ssInfo.setPadding(2,0,0,6); root.addView(ssInfo);
 
-        boolean curSmart=pool.getSmartScan();
-        LinearLayout ssRow=new LinearLayout(this); ssRow.setGravity(Gravity.CENTER_VERTICAL);
-        String[] ssLabels={"ON","OFF"}; boolean[] ssVals={true,false};
-        for(int i=0;i<2;i++){
-            final boolean sv=ssVals[i];
-            TextView btn=new TextView(this); btn.setText(ssLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curSmart==sv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setSmartScan(sv); showPanel();
-            }});
-            ssRow.addView(btn);
-        }
-        root.addView(ssRow);
+        pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getSmartScan()?1:0, 0,
+            new PickSetter(){ public void pick(int v){ pool.setSmartScan(v==1); showPanel(); }});
 
         addSecHdr(root, "FAST SCAN", GOLD);
 
@@ -3435,22 +3338,8 @@ public class OverlayService extends Service {
                 +"is tapped and read as usual. Learned sprites so far: "+sprites+".");
         vidInfo.setTextColor(ASH); vidInfo.setTextSize(10); vidInfo.setPadding(2,0,0,6); root.addView(vidInfo);
 
-        boolean curVid=pool.getVisualId();
-        LinearLayout vidRow=new LinearLayout(this); vidRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<2;i++){
-            final boolean sv=ssVals[i];
-            TextView btn=new TextView(this); btn.setText(ssLabels[i]);
-            btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
-            btn.setPadding(0,10,0,10);
-            boolean sel=(curVid==sv);
-            btn.setBackground(box(sel?BLOOD:CARD,6,sel?BLOODL:EDGE,sel?2:1));
-            LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1f); lp2.setMargins(0,0,4,0); btn.setLayoutParams(lp2);
-            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.setVisualId(sv); showPanel();
-            }});
-            vidRow.addView(btn);
-        }
-        root.addView(vidRow);
+        pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getVisualId()?1:0, 0,
+            new PickSetter(){ public void pick(int v){ pool.setVisualId(v==1); showPanel(); }});
 
         // ◇ CALIBRATE SCAN
         TextView calDiv=new TextView(this); calDiv.setText("────────────────────");
