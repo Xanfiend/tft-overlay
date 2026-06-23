@@ -195,4 +195,17 @@ public class PoolTest {
         pool.setPanelTimeout(0);
         assertEquals(0, pool.getPanelTimeout());
     }
+
+    @Test public void automationPrefsDefaultsAndRoundTrip(){
+        // auto-scan-on-open is opt-in (changes what a tap does); smart-landing is
+        // the better default so it's on out of the box
+        assertFalse("auto-scan off by default", pool.getAutoScanOnOpen());
+        assertTrue("smart landing on by default", pool.getSmartLanding());
+
+        pool.setAutoScanOnOpen(true);
+        pool.setSmartLanding(false);
+        Pool re = new Pool(ApplicationProvider.getApplicationContext());
+        assertTrue(re.getAutoScanOnOpen());
+        assertFalse(re.getSmartLanding());
+    }
 }
