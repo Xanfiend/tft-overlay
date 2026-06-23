@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.8";
+    private static final String APP_VERSION = "v1.99.9";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -60,9 +60,20 @@ public class OverlayService extends Service {
 
     // Shop odds live in SetData so set updates stay one-file
     private static final int[][] ODDS = SetData.ODDS;
-    private static final int VOID=0xF20B0709, BLOOD=0xFF8B1A1A, BLOODL=0xFFC1121F,
+    private static final int VOID=0xF20B0709,
         BONE=0xFFE0D5C0, ASH=0xFF7A6B60, CARD=0xFF16100F, EDGE=0xFF3A2024,
         GOLD=0xFFC9A227, GREEN=0xFF5FA046, DIM=0xFF564044;
+    // primary accent (button bg + bright highlight/sigil) — themeable, set from
+    // the saved preset in onCreate before anything is drawn. Default = blood.
+    private static int BLOOD=0xFF8B1A1A, BLOODL=0xFFC1121F;
+    // accent presets: {dark button bg, bright highlight}. Index 0 = blood (default).
+    static final int[][] THEMES = {
+        {0xFF8B1A1A, 0xFFC1121F},  // 0 Blood   (default)
+        {0xFF4A1A6B, 0xFF9B4DE0},  // 1 Void    (violet)
+        {0xFF0E4D4A, 0xFF1FB8A8},  // 2 Abyss   (teal)
+        {0xFF8B4A0A, 0xFFE0851F},  // 3 Ember   (amber)
+    };
+    static final String[] THEME_NAMES = {"blood","void","abyss","ember"};
     private static final int[] COSTC={0,0xFF9AA4B0,0xFF4E9E5A,0xFF3B82C4,0xFFB565D8,0xFFE0A93A};
 
     // chip references so we can update the count badge in place without rebuilding
@@ -317,6 +328,7 @@ public class OverlayService extends Service {
         goForeground(); // keep the process alive so the accessibility service isn't killed with it
         RemoteData.loadCachedOrBundled(this); // overlay synced set data before anything reads it
         pool = new Pool(this);
+        applyTheme();   // set the accent colors before the button/panel are built
         level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         vib = (Vibrator) getSystemService(VIBRATOR_SERVICE);
@@ -520,6 +532,15 @@ public class OverlayService extends Service {
     }
     private void cancelPanelDismiss(){
         if(panelDismissRunnable!=null){ panelDismissHandler.removeCallbacks(panelDismissRunnable); panelDismissRunnable=null; }
+    }
+
+    // Load the saved accent preset into BLOOD/BLOODL. Called once in onCreate and
+    // again when the user picks a theme (followed by a button + panel rebuild).
+    private void applyTheme(){
+        int t = pool.getAccentTheme();
+        if(t < 0 || t >= THEMES.length) t = 0;
+        BLOOD  = THEMES[t][0];
+        BLOODL = THEMES[t][1];
     }
 
     // Recreate the floating sigil (e.g. after a size change) without moving it.
@@ -3216,6 +3237,29 @@ public class OverlayService extends Service {
         sigLbl.setTextColor(ASH); sigLbl.setTextSize(10); sigLbl.setLetterSpacing(0.08f); sigLbl.setPadding(2,12,0,2);
         root.addView(sigLbl);
         root.addView(sigRow);
+
+        // accent theme — recolors buttons / highlights / the sigil; each swatch
+        // previews its own bright accent so the choice is visible before tapping
+        TextView thLbl=new TextView(this); thLbl.setText("ACCENT");
+        thLbl.setTextColor(ASH); thLbl.setTextSize(10); thLbl.setLetterSpacing(0.08f); thLbl.setPadding(2,12,0,2);
+        root.addView(thLbl);
+        int curTheme=pool.getAccentTheme();
+        LinearLayout thRow=new LinearLayout(this); thRow.setGravity(Gravity.CENTER_VERTICAL);
+        for(int i=0;i<THEMES.length;i++){
+            final int tv=i; boolean sel=(curTheme==i);
+            int bright=THEMES[i][1];
+            TextView btn=new TextView(this); btn.setText(THEME_NAMES[i]);
+            btn.setTextColor(sel?BONE:ASH); btn.setTextSize(11); btn.setGravity(Gravity.CENTER); btn.setPadding(0,10,0,10);
+            // selected = filled with the theme's bright accent; otherwise the
+            // accent is just the border so every option still shows its color
+            btn.setBackground(box(sel?bright:CARD,6,bright,sel?2:2));
+            LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(0,-2,1f); blp.setMargins(i>0?4:0,0,0,0); btn.setLayoutParams(blp);
+            btn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                pool.setAccentTheme(tv); applyTheme(); rebuildButton(); showPanel();
+            }});
+            pressFeedback(btn); thRow.addView(btn);
+        }
+        root.addView(thRow);
 
         addSecHdr(root, "POSITION", GOLD);
 

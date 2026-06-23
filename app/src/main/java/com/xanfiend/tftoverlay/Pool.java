@@ -171,6 +171,10 @@ public class Pool {
     // Smaller obstructs less of the board; larger is easier to hit on a tablet.
     public int  getSigilScalePct()      { return p.getInt("cfg_sigilscale", 100); }
     public void setSigilScalePct(int s) { p.edit().putInt("cfg_sigilscale", s).apply(); }
+    // accent theme index into OverlayService.THEMES (0=blood default). Recolors
+    // the primary accent (buttons, highlights, the sigil); base + gold stay put.
+    public int  getAccentTheme()      { return p.getInt("cfg_accent", 0); }
+    public void setAccentTheme(int t) { p.edit().putInt("cfg_accent", t).apply(); }
 
     // ---- planner scan calibration ----
     // Screen-percent positions of the Team Planner controls, recorded by the
