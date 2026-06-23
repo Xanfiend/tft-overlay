@@ -80,6 +80,12 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cfg_haptic` | true | vibration on |
 | `cfg_start` | 0 | 0=smart tab, 1=always grid, 2=last tab used |
 | `cfg_lasttab` | 0 | last viewed tab (mode index); used when `cfg_start`=2 |
+| `cfg_paneltimeout` | 30 | panel auto-close after N seconds idle (0=never) |
+| `cfg_compacttabs` | false | tab row shows glyphs only, no labels |
+| `cfg_panelwidth` | 96 | panel width as % of screen width |
+| `cfg_largetext` | false | +2sp on core panel text |
+| `cfg_autoscanopen` | false | quick sigil tap fires a scan instead of opening |
+| `cfg_smartland` | true | after a scan, land on GOLD tab (else SETUP) |
 | `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
 | `cfg_privacy_seen` | false | first-launch privacy notice acknowledged (MainActivity) |
 
