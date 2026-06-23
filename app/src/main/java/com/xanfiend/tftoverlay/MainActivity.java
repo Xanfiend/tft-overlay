@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.15");
+        ver.setText("v1.99.16");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.16  ·  2026-06-23","GOLD tab gains HP tracking (tap -5/-10/-20 after each loss) and a Stage/Round display that shows what's coming up — augment rounds, carousels. POOL tab now surfaces your tracked champions at the top so you can update them without scrolling."},
             {"v1.99.15  ·  2026-06-23","POOL tab now has a cost-tier filter (tap to show only 1-cost through 5-cost). GOLD tab has a one-tap Next Round button that advances gold by your expected income."},
             {"v1.99.14  ·  2026-06-23","UI text trimmed for clarity. No feature change."},
             {"v1.99.13  ·  2026-06-23","Minor reliability fix and SETUP polish. No feature change."},

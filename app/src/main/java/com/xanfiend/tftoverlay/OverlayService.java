@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.15";
+    private static final String APP_VERSION = "v1.99.16";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -86,6 +86,9 @@ public class OverlayService extends Service {
     private TextView econGoldTv, econInterestTv, econBracketTv;
     private TextView[] econLadderTvs;
     private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
+    private TextView econNextRoundBtn;
+    private TextView econHpTv, econStageTv, econEventTv;
+    private int poolFilter = 0; // 0=all, 1-5=cost tier
 
     // hold-to-repeat gold buttons
     private final android.os.Handler goldHandler = new android.os.Handler();
@@ -888,8 +891,9 @@ public class OverlayService extends Service {
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
-        econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
-        buildSel=null; undoBar=null;
+        econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
+        econHpTv=null; econStageTv=null; econEventTv=null;
+        scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
     @SuppressWarnings("deprecation")
@@ -901,7 +905,9 @@ public class OverlayService extends Service {
         // null per-tab TV refs (they'll be reassigned by the build methods below)
         econGoldTv=null; econInterestTv=null; econBracketTv=null;
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
-        econIncomeTv=null; econBreakTv=null; scanStatusTv=null;
+        econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
+        econHpTv=null; econStageTv=null; econEventTv=null;
+        scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
         boolean reuse=panel!=null;
@@ -1152,6 +1158,27 @@ public class OverlayService extends Service {
         }});
         root.addView(undoBar);
         refreshUndoBar();
+
+        // quick-access row: show tracked champs (those with seen or opp count > 0) at the
+        // top so the player doesn't hunt through the grid every round
+        java.util.List<String> tracked = pool.seenSorted();
+        if(!tracked.isEmpty()){
+            addSecHdr(root, "TRACKING", ASH);
+            LinearLayout tRow=null;
+            for(int ti=0;ti<tracked.size();ti++){
+                if(ti%4==0){
+                    tRow=new LinearLayout(this);
+                    LinearLayout.LayoutParams trl=new LinearLayout.LayoutParams(-1,-2); trl.setMargins(0,ti==0?2:4,0,0); tRow.setLayoutParams(trl);
+                    root.addView(tRow);
+                }
+                final String tn=tracked.get(ti); int fc=Pool.costOf(tn);
+                LinearLayout tcell=buildChipCell(tn, fc);
+                LinearLayout.LayoutParams tcl=new LinearLayout.LayoutParams(0,-2,1f); tcl.setMargins(ti%4>0?4:0,0,0,0); tcell.setLayoutParams(tcl);
+                tRow.addView(tcell);
+            }
+            // fill last row if not full
+            if(tRow!=null){ int rem=tracked.size()%4; if(rem>0) for(int k=rem;k<4;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); tRow.addView(sp); } }
+        }
 
         // \u26e7 THE RITE \u2014 automatic scrying is the heart of the overlay. One press
         // reads gold, level and every unit; the chips further down exist only to
@@ -2253,6 +2280,54 @@ public class OverlayService extends Service {
         }});
         root.addView(econNextRoundBtn);
 
+        // ◇ STAGE / ROUND — upcoming augments and carousels
+        int stgNow=pool.getStageNum(), rndNow=pool.getRoundNum();
+        addSecHdr(root, "STAGE", ASH);
+        LinearLayout stgRow=new LinearLayout(this); stgRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams strl=new LinearLayout.LayoutParams(-1,-2); strl.setMargins(0,4,0,0); stgRow.setLayoutParams(strl);
+        TextView sPrev=makeAdjBtn("◀",CARD,ASH); sPrev.setLayoutParams(new LinearLayout.LayoutParams(80,-2));
+        econStageTv=new TextView(this); econStageTv.setText(stgNow>0?stgNow+"-"+rndNow:"?");
+        econStageTv.setTextColor(BONE); econStageTv.setTextSize(ts(22)); econStageTv.setTypeface(null,android.graphics.Typeface.BOLD);
+        econStageTv.setGravity(Gravity.CENTER); econStageTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        TextView sNext=makeAdjBtn("▶",CARD,ASH); sNext.setLayoutParams(new LinearLayout.LayoutParams(80,-2));
+        sPrev.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ advanceRound(-1); buzz(); refreshEcon(); }});
+        sNext.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ advanceRound(1); buzz(); refreshEcon(); }});
+        stgRow.addView(sPrev); stgRow.addView(econStageTv); stgRow.addView(sNext);
+        root.addView(stgRow);
+        econEventTv=new TextView(this);
+        econEventTv.setText(stgNow>0?nextTFTEvent(stgNow,rndNow):"tap ▶ to set stage");
+        econEventTv.setTextColor(GOLD); econEventTv.setTextSize(12); econEventTv.setGravity(Gravity.CENTER); econEventTv.setPadding(0,4,0,8);
+        root.addView(econEventTv);
+
+        // ◇ HEALTH — HP remaining this game
+        int hpNow=pool.getHp();
+        addSecHdr(root, "HEALTH", hpNow>50?GREEN:hpNow>20?GOLD:BLOODL);
+        econHpTv=new TextView(this); econHpTv.setText(hpNow+" HP");
+        econHpTv.setTextColor(hpNow>50?GREEN:hpNow>20?GOLD:BLOODL);
+        econHpTv.setTextSize(ts(24)); econHpTv.setTypeface(null,android.graphics.Typeface.BOLD);
+        econHpTv.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams hptl=new LinearLayout.LayoutParams(-1,-2); hptl.setMargins(0,4,0,0); econHpTv.setLayoutParams(hptl);
+        root.addView(econHpTv);
+        LinearLayout dmgRow=new LinearLayout(this);
+        LinearLayout.LayoutParams drl=new LinearLayout.LayoutParams(-1,-2); drl.setMargins(0,6,0,0); dmgRow.setLayoutParams(drl);
+        int[] dmgs={-5,-10,-20,5}; String[] dmgLbls={"-5","-10","-20","+5"};
+        for(int i=0;i<4;i++){
+            final int delta=dmgs[i];
+            TextView db=new TextView(this); db.setText(dmgLbls[i]);
+            db.setTextColor(delta<0?BLOODL:GREEN); db.setTextSize(12); db.setGravity(Gravity.CENTER); db.setPadding(0,9,0,9);
+            db.setBackground(box(CARD,6,delta<0?BLOODL:GREEN,1));
+            LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(0,-2,1f); dl.setMargins(i>0?4:0,0,0,0); db.setLayoutParams(dl);
+            db.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setHp(pool.getHp()+delta); buzz(); refreshEcon(); }});
+            pressFeedback(db); dmgRow.addView(db);
+        }
+        TextView fullBtn=new TextView(this); fullBtn.setText("FULL");
+        fullBtn.setTextColor(GREEN); fullBtn.setTextSize(12); fullBtn.setGravity(Gravity.CENTER); fullBtn.setPadding(0,9,0,9);
+        fullBtn.setBackground(box(CARD,6,GREEN,1));
+        LinearLayout.LayoutParams fbl=new LinearLayout.LayoutParams(0,-2,1f); fbl.setMargins(4,0,0,0); fullBtn.setLayoutParams(fbl);
+        fullBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setHp(100); buzz(); refreshEcon(); }});
+        pressFeedback(fullBtn); dmgRow.addView(fullBtn);
+        root.addView(dmgRow);
+
         // ✦ LEVELING — gold to the next level, from the XP the scry read off the
         // level button (worst case if XP progress is unknown). 4g buys 4 XP.
         addSecHdr(root, "LEVELING", GOLD);
@@ -2344,6 +2419,45 @@ public class OverlayService extends Service {
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
         if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
+        if(econHpTv!=null){
+            int hp=pool.getHp();
+            econHpTv.setText(hp+" HP");
+            econHpTv.setTextColor(hp>50?GREEN:hp>20?GOLD:BLOODL);
+        }
+        if(econStageTv!=null){
+            int stg=pool.getStageNum(), rnd=pool.getRoundNum();
+            econStageTv.setText(stg>0?stg+"-"+rnd:"?");
+            if(econEventTv!=null) econEventTv.setText(stg>0?nextTFTEvent(stg,rnd):"tap ▶ to set stage");
+        }
+    }
+
+    private void advanceRound(int delta){
+        int stg=pool.getStageNum(), rnd=pool.getRoundNum();
+        if(stg==0){ pool.setStageRoundNums(1,1); return; }
+        int[] maxR={0,4,7,7,7,5,3};
+        rnd+=delta;
+        int max=maxR[Math.min(stg,maxR.length-1)];
+        if(rnd>max){ stg=Math.min(stg+1,maxR.length-1); rnd=1; }
+        else if(rnd<1){ stg=Math.max(stg-1,1); rnd=maxR[Math.min(stg,maxR.length-1)]; }
+        pool.setStageRoundNums(stg, rnd);
+    }
+
+    private static String nextTFTEvent(int stage, int round){
+        int[][] augs={{2,1},{3,2},{4,2}};
+        for(int i=0;i<augs.length;i++){
+            int as=augs[i][0], ar=augs[i][1];
+            if(stage<as||(stage==as&&round<=ar)){
+                if(stage==as&&round==ar) return "★ AUGMENT OFFER NOW ("+(i+1)+"/3)";
+                int diff=(as-stage)*7+(ar-round);
+                return "★ "+(i+1)+". augment in ~"+diff+" rounds  ("+as+"-"+ar+")";
+            }
+        }
+        int[] maxR={0,4,7,7,7,5,3};
+        if(stage>0&&stage<maxR.length){
+            int max=maxR[stage];
+            if(round>=max) return "◉ Carousel next";
+        }
+        return "all augments past · late game";
     }
 
     private TextView makeAdjBtn(String label, int bg, int fg){
