@@ -214,4 +214,10 @@ public class PoolTest {
         pool.setSigilScalePct(80);
         assertEquals(80, new Pool(ApplicationProvider.getApplicationContext()).getSigilScalePct());
     }
+
+    @Test public void accentThemeDefaultsToBloodAndRoundTrips(){
+        assertEquals("blood (index 0) by default", 0, pool.getAccentTheme());
+        pool.setAccentTheme(2);
+        assertEquals(2, new Pool(ApplicationProvider.getApplicationContext()).getAccentTheme());
+    }
 }

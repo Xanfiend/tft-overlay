@@ -87,6 +87,7 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cfg_autoscanopen` | false | quick sigil tap fires a scan instead of opening |
 | `cfg_smartland` | true | after a scan, land on GOLD tab (else SETUP) |
 | `cfg_sigilscale` | 100 | floating sigil size % (80/100/125) |
+| `cfg_accent` | 0 | accent theme index (OverlayService.THEMES: 0=blood/1=void/2=abyss/3=ember) |
 | `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
 | `cfg_privacy_seen` | false | first-launch privacy notice acknowledged (MainActivity) |
 
@@ -152,8 +153,8 @@ injecting boolean guard:
 VOID    = 0xFF0B0709   // darkest background
 CARD    = 0xFF16100F   // card/panel bg
 EDGE    = 0xFF3A2024   // borders
-BLOOD   = 0xFF8B1A1A   // primary button bg
-BLOODL  = 0xFFC1121F   // primary button border / danger text
+BLOOD   = 0xFF8B1A1A   // primary button bg (THEMEABLE — non-final, set by applyTheme from cfg_accent)
+BLOODL  = 0xFFC1121F   // primary button border / danger text (THEMEABLE, pairs with BLOOD)
 BONE    = 0xFFD9C9C0   // main text
 ASH     = 0xFF8A7A75   // secondary text
 DIM     = 0xFF4A3A38   // hint / footer text
