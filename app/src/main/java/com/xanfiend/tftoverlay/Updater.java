@@ -195,7 +195,7 @@ public final class Updater {
         }catch(Exception e){ return "0"; }
     }
 
-    private static String parseLatestVersion(String json) throws Exception {
+    static String parseLatestVersion(String json) throws Exception {
         JSONObject root = new JSONObject(json);
         // The release TITLE is authoritative: the build always sets it to the
         // current versionName ("TFT Scryer v1.99.1"). Trust it first. The rolling
