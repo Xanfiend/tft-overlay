@@ -137,9 +137,13 @@ public class Pool {
     // source of truth and is what teaches the sprites. On by default.
     public boolean getVisualId()         { return p.getBoolean("cfg_visualid", true); }
     public void    setVisualId(boolean s){ p.edit().putBoolean("cfg_visualid", s).apply(); }
-    // 0 = smart (board if pool non-empty, else grid), 1 = always grid
+    // 0 = smart (board if pool non-empty, else grid), 1 = always grid, 2 = last tab used
     public int  getStartTab()      { return p.getInt("cfg_start", 0); }
     public void setStartTab(int t) { p.edit().putInt("cfg_start", t).apply(); }
+    // last tab the user viewed (a mode index); used when getStartTab()==2 so the
+    // overlay reopens where you left off instead of jumping to smart/grid
+    public int  getLastTab()       { return p.getInt("cfg_lasttab", 0); }
+    public void setLastTab(int m)  { p.edit().putInt("cfg_lasttab", m).apply(); }
 
     // ---- planner scan calibration ----
     // Screen-percent positions of the Team Planner controls, recorded by the

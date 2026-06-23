@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.1";
+    private static final String APP_VERSION = "v1.99.2";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // guide tab sub-selection: 0 = augments, 1 = items
@@ -572,6 +572,7 @@ public class OverlayService extends Service {
                         else {
                             if(held>450) mode=0;
                             else if(pool.getStartTab()==1) mode=0;
+                            else if(pool.getStartTab()==2) mode=pool.getLastTab();
                             else mode=pool.isEmpty()?0:1;
                             itemA=-1; itemB=-1; showPanel();
                         }
@@ -898,7 +899,7 @@ public class OverlayService extends Service {
             tab.setLineSpacing(2,1f);
             tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,11,0,11);
-            tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; showPanel(); } });
+            tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; pool.setLastTab(tm); showPanel(); } });
             pressFeedback(tab);
             tabWrap.addView(tab);
             // active tab gets a gold underbar that glows from the center and fades at
@@ -1905,9 +1906,21 @@ public class OverlayService extends Service {
         deathTip.setText("\u2620 when a player dies, their units return to the pool. tap a count down to free those copies");
         deathTip.setTextColor(GOLD); deathTip.setTextSize(10); deathTip.setPadding(2,6,2,0); root.addView(deathTip);
 
-        Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
+        final Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
         wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL); wipe.setTextSize(13);
-        wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.reset(); refreshHud(); showPanel(); } });
+        // two-tap confirm so a stray tap can't wipe the game mid-match: first tap
+        // arms the button (label changes, auto-disarms after 3s); second tap wipes.
+        final boolean[] armed={false};
+        final Runnable disarm=new Runnable(){ public void run(){
+            armed[0]=false; wipe.setText("RESET ALL");
+            wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL);
+        }};
+        wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(armed[0]){ wipe.removeCallbacks(disarm); pool.reset(); refreshHud(); showPanel(); return; }
+            armed[0]=true; wipe.setText("TAP AGAIN TO WIPE");
+            wipe.setBackground(box(BLOOD,6,BLOODL,2)); wipe.setTextColor(BONE); buzz();
+            wipe.postDelayed(disarm, 3000);
+        } });
         LinearLayout.LayoutParams wl=new LinearLayout.LayoutParams(-1,-2); wl.setMargins(0,12,0,0); wipe.setLayoutParams(wl);
         root.addView(wipe);
         TextView credit=new TextView(this); credit.setText("@xanfiend"); credit.setTextColor(DIM); credit.setTextSize(10); credit.setGravity(Gravity.CENTER);
@@ -2966,9 +2979,9 @@ public class OverlayService extends Service {
         addSecHdr(root, "OPEN TAB", GOLD);
 
         int curStart=pool.getStartTab();
-        String[] stLabels={"smart","always pool"}; int[] stVals={0,1};
+        String[] stLabels={"smart","always pool","last tab"}; int[] stVals={0,1,2};
         LinearLayout stRow=new LinearLayout(this); stRow.setGravity(Gravity.CENTER_VERTICAL);
-        for(int i=0;i<2;i++){
+        for(int i=0;i<3;i++){
             final int sv=stVals[i];
             TextView btn=new TextView(this); btn.setText(stLabels[i]);
             btn.setTextColor(BONE); btn.setTextSize(12); btn.setGravity(Gravity.CENTER);
