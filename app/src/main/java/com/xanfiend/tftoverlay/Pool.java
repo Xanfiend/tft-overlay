@@ -95,7 +95,7 @@ public class Pool {
     public void reset(){
         seen.clear(); opp.clear(); recent.clear(); clearJunk();
         SharedPreferences.Editor e = p.edit()
-                .remove("econ_gold").remove("econ_streak")
+                .remove("econ_gold").remove("econ_streak").remove("econ_hp")
                 .remove("xp_cur").remove("xp_need")
                 .remove("stage_round").remove("my_augs").remove("hunt_list")
                 .remove("god_1").remove("god_2")
@@ -267,9 +267,23 @@ public class Pool {
     public int getXpNeed(){ return p.getInt("xp_need", -1); }
     public void setXp(int cur, int need){ p.edit().putInt("xp_cur", cur).putInt("xp_need", need).apply(); }
 
+    // ---- HP tracker ----
+    public int getHp()       { return p.getInt("econ_hp", 100); }
+    public void setHp(int h) { p.edit().putInt("econ_hp", Math.max(0, Math.min(100, h))).apply(); }
+
     // ---- stage/round, as last scanned ("3-2", "" = unknown) ----
     public String getStageRound(){ return p.getString("stage_round", ""); }
     public void setStageRound(String s){ p.edit().putString("stage_round", s==null?"":s).apply(); }
+    public int getStageNum(){
+        String sr=getStageRound(); if(sr.isEmpty()) return 0;
+        try{ return Integer.parseInt(sr.split("-")[0]); }catch(Exception e){ return 0; }
+    }
+    public int getRoundNum(){
+        String sr=getStageRound(); if(sr.isEmpty()) return 0;
+        String[] parts=sr.split("-"); if(parts.length<2) return 0;
+        try{ return Integer.parseInt(parts[1]); }catch(Exception e){ return 0; }
+    }
+    public void setStageRoundNums(int stage, int round){ setStageRound(stage+"-"+round); }
 
     // ---- my augments, as scanned ----
     public List<String> getMyAugments(){
