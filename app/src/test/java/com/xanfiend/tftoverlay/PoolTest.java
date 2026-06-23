@@ -107,4 +107,63 @@ public class PoolTest {
         assertEquals(0, pool.oppPortraitCount());
         assertNull(pool.getOppPortrait(1));
     }
+
+    @Test public void resetClearsEconAndOppBoards(){
+        pool.setGold(50);
+        pool.setStreak(4);
+        pool.setStageRound("4-2");
+        pool.setOppUnits(1, Arrays.asList(new Pool.OppUnit("Jinx", 2, null)));
+        pool.setOppUnits(3, Arrays.asList(new Pool.OppUnit("Aatrox", 1, null)));
+
+        pool.reset();
+
+        assertEquals("gold cleared", 0, pool.getGold());
+        assertEquals("streak cleared", 0, pool.getStreak());
+        assertEquals("stageRound cleared", "", pool.getStageRound());
+        assertEquals("opp boards cleared", 0, pool.getAllOppUnits().size());
+    }
+
+    @Test public void resetPreservesLevelAndPrivacyFlag(){
+        pool.setLevel(6);
+        pool.setPrivacySeen(true);
+
+        pool.reset();
+
+        assertEquals("level survives reset", 6, pool.getLevel());
+        assertTrue("privacy flag survives reset", pool.getPrivacySeen());
+    }
+
+    @Test public void addAndSeenCountAndIsEmpty(){
+        assertTrue(pool.isEmpty());
+        pool.add("Jinx", 1);
+        assertFalse(pool.isEmpty());
+        assertEquals(1, pool.seenCount("Jinx"));
+        pool.add("Jinx", 2);
+        assertEquals(3, pool.seenCount("Jinx"));
+        // subtract back to zero removes the entry
+        pool.add("Jinx", -3);
+        assertEquals(0, pool.seenCount("Jinx"));
+        assertTrue(pool.isEmpty());
+    }
+
+    @Test public void addNeverGoesNegative(){
+        pool.add("Corki", 1);
+        pool.add("Corki", -99);
+        assertEquals(0, pool.seenCount("Corki"));
+    }
+
+    @Test public void recentListCapsAtSix(){
+        // Pool.RECENT_MAX = 6: only the 6 most-recently-touched champs are kept
+        String[] champs = {"A","B","C","D","E","F","G"};
+        for (String c : champs) pool.add(c, 1);
+        List<String> recent = pool.recentList();
+        assertEquals("capped at 6", 6, recent.size());
+        assertEquals("most recent first", "G", recent.get(0));
+        assertFalse("oldest evicted", recent.contains("A"));
+    }
+
+    @Test public void addOppCapsAtSeven(){
+        for (int i = 0; i < 10; i++) pool.addOpp("Jinx", 1);
+        assertEquals("opp count capped at 7", 7, pool.oppCount("Jinx"));
+    }
 }
