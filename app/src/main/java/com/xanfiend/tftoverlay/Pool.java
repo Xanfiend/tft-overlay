@@ -158,6 +158,15 @@ public class Pool {
     // large text: bump core panel text by +2sp for easier reading mid-game
     public boolean getLargeText()         { return p.getBoolean("cfg_largetext", false); }
     public void    setLargeText(boolean v){ p.edit().putBoolean("cfg_largetext", v).apply(); }
+    // auto-scan on open: a quick sigil tap fires a gold/level scan instead of
+    // just opening the panel — one tap to read the screen, no SCRY tap needed.
+    // Off by default (it changes what a tap does); needs accessibility capture.
+    public boolean getAutoScanOnOpen()         { return p.getBoolean("cfg_autoscanopen", false); }
+    public void    setAutoScanOnOpen(boolean v){ p.edit().putBoolean("cfg_autoscanopen", v).apply(); }
+    // smart landing: after a scan, open the tab that shows the result (GOLD)
+    // instead of SETUP. On by default — it's strictly the more useful landing.
+    public boolean getSmartLanding()         { return p.getBoolean("cfg_smartland", true); }
+    public void    setSmartLanding(boolean v){ p.edit().putBoolean("cfg_smartland", v).apply(); }
 
     // ---- planner scan calibration ----
     // Screen-percent positions of the Team Planner controls, recorded by the

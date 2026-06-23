@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.5";
+    private static final String APP_VERSION = "v1.99.6";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -611,6 +611,11 @@ public class OverlayService extends Service {
                         if(huntMode){
                             mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel();
                         } else if(held>1500){ triggerScan(); }
+                        else if(held<=450 && pool.getAutoScanOnOpen()
+                                && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
+                            // quick tap = scan + open on the result (auto-scan on open)
+                            itemA=-1; itemB=-1; triggerScan();
+                        }
                         else {
                             if(held>450) mode=0;
                             else if(pool.getStartTab()==1) mode=0;
@@ -3101,6 +3106,30 @@ public class OverlayService extends Service {
         }
         root.addView(stRow);
 
+        // ---- AUTOMATION ----
+        addSecHdr(root, "AUTOMATION", GOLD);
+        boolean aso=pool.getAutoScanOnOpen();
+        TextView asoBtn=new TextView(this);
+        asoBtn.setText((aso?"✓ ":"")+"auto-scan on open");
+        asoBtn.setTextColor(BONE); asoBtn.setTextSize(12); asoBtn.setGravity(Gravity.CENTER); asoBtn.setPadding(0,11,0,11);
+        asoBtn.setBackground(box(aso?BLOOD:CARD,6,aso?BLOODL:EDGE,aso?2:1));
+        LinearLayout.LayoutParams asol=new LinearLayout.LayoutParams(-1,-2); asol.setMargins(0,0,0,4); asoBtn.setLayoutParams(asol);
+        asoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setAutoScanOnOpen(!pool.getAutoScanOnOpen()); showPanel(); }});
+        pressFeedback(asoBtn); root.addView(asoBtn);
+        TextView asoHint=new TextView(this); asoHint.setText("a quick tap on the sigil reads gold & level straight away — no SCRY tap (needs the accessibility screenshot)");
+        asoHint.setTextColor(DIM); asoHint.setTextSize(10); asoHint.setPadding(2,0,2,8); root.addView(asoHint);
+
+        boolean sl=pool.getSmartLanding();
+        TextView slBtn=new TextView(this);
+        slBtn.setText((sl?"✓ ":"")+"open results after a scan");
+        slBtn.setTextColor(BONE); slBtn.setTextSize(12); slBtn.setGravity(Gravity.CENTER); slBtn.setPadding(0,11,0,11);
+        slBtn.setBackground(box(sl?BLOOD:CARD,6,sl?BLOODL:EDGE,sl?2:1));
+        LinearLayout.LayoutParams sll=new LinearLayout.LayoutParams(-1,-2); sll.setMargins(0,0,0,4); slBtn.setLayoutParams(sll);
+        slBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setSmartLanding(!pool.getSmartLanding()); showPanel(); }});
+        pressFeedback(slBtn); root.addView(slBtn);
+        TextView slHint=new TextView(this); slHint.setText("after a scan, jump to the GOLD tab to see what was read instead of staying on SETUP");
+        slHint.setTextColor(DIM); slHint.setTextSize(10); slHint.setPadding(2,0,2,8); root.addView(slHint);
+
         // ---- AUTO-CLOSE PANEL ----
         addSecHdr(root, "AUTO-CLOSE PANEL", GOLD);
         TextView acHint=new TextView(this); acHint.setText("closes the panel automatically after this many seconds — matches the planning phase so you never leave it open mid-fight");
@@ -4504,7 +4533,10 @@ public class OverlayService extends Service {
         lastScanStatus="✓ "+r.status;
         Toast.makeText(this,"✓ "+r.status,Toast.LENGTH_SHORT).show();
         refreshHud();
-        mode=4; showPanel();
+        // smart landing: drop the user on GOLD (mode 3) where the freshly-scanned
+        // gold/level/income is shown, instead of SETUP. Off → keep SETUP (mode 4).
+        mode = pool.getSmartLanding() ? 3 : 4;
+        showPanel();
     }
 
     // ---- board scan mode ----
