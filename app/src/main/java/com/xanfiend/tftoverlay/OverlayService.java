@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.13";
+    private static final String APP_VERSION = "v1.99.14";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -2045,12 +2045,12 @@ public class OverlayService extends Service {
         }
         // legend
         TextView legend=new TextView(this);
-        legend.setText("% = your odds to hit on a roll at this level \u00b7 you call it");
+        legend.setText("% = roll hit odds at this level");
         legend.setTextColor(DIM); legend.setTextSize(10); legend.setPadding(2,8,2,0); root.addView(legend);
 
         // death-return reminder: eliminated players' units go back to the pool
         TextView deathTip=new TextView(this);
-        deathTip.setText("\u2620 when a player dies, their units return to the pool. tap a count down to free those copies");
+        deathTip.setText("\u2620 tap a count down when a player dies to release their units");
         deathTip.setTextColor(GOLD); deathTip.setTextSize(10); deathTip.setPadding(2,6,2,0); root.addView(deathTip);
 
         final Button wipe=new Button(this); wipe.setText("RESET ALL"); wipe.setAllCaps(false);
@@ -2221,7 +2221,7 @@ public class OverlayService extends Service {
         root.addView(econBonusTv);
         TextView streakScale=new TextView(this); streakScale.setText("2+ streak = +1g  ·  4+ = +2g  ·  6+ = +3g");
         streakScale.setTextColor(DIM); streakScale.setTextSize(10); streakScale.setPadding(2,2,2,0); root.addView(streakScale);
-        TextView streakWhy=new TextView(this); streakWhy.setText("no on-screen number to scry — set by hand  ·  tap the number to flip W↔L");
+        TextView streakWhy=new TextView(this); streakWhy.setText("streak isn't readable as text — set by hand  ·  tap to flip W↔L");
         streakWhy.setTextColor(DIM); streakWhy.setTextSize(9); streakWhy.setPadding(2,2,2,0); root.addView(streakWhy);
 
         // expected income card
@@ -2258,8 +2258,8 @@ public class OverlayService extends Service {
             lvCard.addView(lt);
             TextView ld=new TextView(this);
             ld.setText(into>0
-                ? ("xp "+into+"/"+xpTable+" (scryed)  ·  4g = 4 xp  ·  +2 xp passive each round")
-                : ("xp 0/"+xpTable+" assumed — scry to read your real xp  ·  4g = 4 xp"));
+                ? ("xp "+into+"/"+xpTable+" (scryed)")
+                : ("xp 0/"+xpTable+" assumed — scry to read your real xp"));
             ld.setTextColor(ASH); ld.setTextSize(10); lvCard.addView(ld);
             // roll-vs-level nudge using current gold
             TextView lr=new TextView(this);
@@ -3049,7 +3049,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "IN-GAME HUD", GOLD);
 
         TextView hudHint=new TextView(this);
-        hudHint.setText("Two tiny numbers to park over the game's own counters. The GOLD pill shows your tracked gold and projected income (Ng +N) — drag it so it sits just ABOVE the game's gold counter. The other shows gold to next level (Ng→L) — drag it above the XP button. IMPORTANT: with AUTO GOLD & XP on, the reader reads the strip directly BELOW the gold pill, so placing the gold pill right above your gold counter is what makes the reading accurate.");
+        hudHint.setText("Drag the GOLD pill (tracked gold + projected income) above your gold counter; drag the XP pill above the level button. With AUTO GOLD & XP on, accuracy depends on the GOLD pill position — place it directly above your counter.");
         hudHint.setTextColor(DIM); hudHint.setTextSize(10); hudHint.setPadding(2,0,0,8); root.addView(hudHint);
 
         pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getHudEnabled()?1:0, 14,
@@ -3058,7 +3058,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "AUTO GOLD & XP", GOLD);
 
         TextView gwHint=new TextView(this);
-        gwHint.setText("Keeps the HUD numbers live by quietly reading gold and level/XP every few seconds. If the IN-GAME HUD is on, it reads gold from the strip just below your gold pill — so park that pill right above your gold counter for an accurate read. With the HUD off it falls back to the bottom-right corner. Pauses during a hunt or scan. Needs the accessibility service.");
+        gwHint.setText("Reads gold and XP in the background every few seconds. Position the GOLD pill right above your counter for an accurate read. Pauses during scans and hunts. Needs the accessibility service.");
         gwHint.setTextColor(DIM); gwHint.setTextSize(10); gwHint.setPadding(2,0,0,8); root.addView(gwHint);
 
         boolean curGw=pool.getGoldWatch();
@@ -3332,10 +3332,7 @@ public class OverlayService extends Service {
 
         TextView vidInfo=new TextView(this);
         int sprites=ChampionTemplates.boardTemplateCount();
-        vidInfo.setText("Every unit read by popup teaches the app how that champion looks on your board. "
-                +"Next scan, learned units are recognized straight from the screenshot with no tapping, "
-                +"so the scan gets faster every game. Only sure matches skip the tap. Anything uncertain "
-                +"is tapped and read as usual. Learned sprites so far: "+sprites+".");
+        vidInfo.setText("Learns champions from popup reads; future scans skip the tap for known units. Uncertain matches still tap. Sprites learned: "+sprites+".");
         vidInfo.setTextColor(ASH); vidInfo.setTextSize(10); vidInfo.setPadding(2,0,0,6); root.addView(vidInfo);
 
         pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getVisualId()?1:0, 0,
