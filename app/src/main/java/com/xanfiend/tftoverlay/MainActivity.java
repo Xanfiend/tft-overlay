@@ -763,23 +763,13 @@ public class MainActivity extends Activity {
         if(circle) c.drawCircle(cx, cy, r, p);
     }
 
-    // Big blood-red pentacle for the launch-screen hero — inverted pentagram in a circle,
-    // drawn so it's always our color (the ⛧ glyph renders as a color emoji on some fonts).
+    // Big blood-red pentacle for the launch-screen hero — inverted pentagram in a
+    // circle, drawn so it's always our color (the ⛧ glyph renders as a color emoji
+    // on some fonts), with a slow pulsing glow (GlowPentacleView).
     private View heroPentacle(){
         final float density = getResources().getDisplayMetrics().density;
-        final int size = Math.round(116 * density);
-        View v = new View(this){
-            @Override protected void onDraw(android.graphics.Canvas c){
-                android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                p.setStyle(android.graphics.Paint.Style.STROKE);
-                p.setStrokeJoin(android.graphics.Paint.Join.ROUND);
-                p.setStrokeWidth(Math.max(3f, size * 0.035f));
-                p.setColor(BLOODL);
-                float cx = getWidth() / 2f, cy = getHeight() / 2f;
-                float r = Math.min(getWidth(), getHeight()) * 0.44f;
-                drawPentagram(c, p, cx, cy, r, true);
-            }
-        };
+        final int size = Math.round(128 * density); // a touch bigger to give the glow room
+        View v = new GlowPentacleView(this, size);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
         lp.gravity = Gravity.CENTER_HORIZONTAL;
         v.setLayoutParams(lp);
@@ -854,6 +844,62 @@ public class MainActivity extends Activity {
             super.onWindowVisibilityChanged(v);
             if(v==VISIBLE && !running){ running=true; lastMs=0; post(tick); }
             else if(v!=VISIBLE && running){ running=false; removeCallbacks(tick); }
+        }
+    }
+
+    // Launch-screen hero pentacle with a slow pulsing blood-red glow. A blurred,
+    // thicker stroke breathes behind a crisp pentagram on top. The frame loop runs
+    // only while attached and visible (same lifecycle guard as EmberView), so the
+    // glow costs nothing once the screen closes or the app backgrounds.
+    private static class GlowPentacleView extends View {
+        private final int size;
+        private final android.graphics.Paint glow =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Paint line =
+                new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private boolean running=false;
+        private final Runnable tick=new Runnable(){ public void run(){
+            if(!running) return; invalidate(); postDelayed(this, 33);
+        }};
+        GlowPentacleView(android.content.Context c, int size){
+            super(c);
+            this.size=size;
+            // BlurMaskFilter is unsupported on a hardware-accelerated canvas
+            setLayerType(LAYER_TYPE_SOFTWARE, null);
+            glow.setStyle(android.graphics.Paint.Style.STROKE);
+            glow.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+            glow.setColor(BLOODL);
+            line.setStyle(android.graphics.Paint.Style.STROKE);
+            line.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+            line.setStrokeWidth(Math.max(3f, size*0.035f));
+            line.setColor(BLOODL);
+        }
+        @Override protected void onDraw(android.graphics.Canvas c){
+            long now=android.os.SystemClock.uptimeMillis();
+            float pulse=(float)(0.5+0.5*Math.sin(now/1500.0)); // 0..1, ~3s breath
+            float cx=getWidth()/2f, cy=getHeight()/2f;
+            float r=Math.min(getWidth(), getHeight())*0.40f;
+            // halo: a blurred, thicker stroke whose blur, width and alpha all breathe
+            float blur=size*(0.020f+0.035f*pulse);
+            glow.setStrokeWidth(size*(0.05f+0.03f*pulse));
+            glow.setAlpha((int)(70+150*pulse));
+            glow.setMaskFilter(new android.graphics.BlurMaskFilter(Math.max(1f, blur),
+                    android.graphics.BlurMaskFilter.Blur.NORMAL));
+            drawPentagram(c, glow, cx, cy, r, true);
+            // crisp pentagram on top, brightening slightly at the pulse peak
+            line.setAlpha((int)(200+55*pulse));
+            drawPentagram(c, line, cx, cy, r, true);
+        }
+        @Override protected void onAttachedToWindow(){
+            super.onAttachedToWindow(); running=true; post(tick);
+        }
+        @Override protected void onDetachedFromWindow(){
+            running=false; removeCallbacks(tick); super.onDetachedFromWindow();
+        }
+        @Override protected void onWindowVisibilityChanged(int vis){
+            super.onWindowVisibilityChanged(vis);
+            if(vis==VISIBLE && !running){ running=true; post(tick); }
+            else if(vis!=VISIBLE && running){ running=false; removeCallbacks(tick); }
         }
     }
 }
