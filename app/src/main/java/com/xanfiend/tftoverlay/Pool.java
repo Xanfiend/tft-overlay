@@ -167,6 +167,10 @@ public class Pool {
     // instead of SETUP. On by default — it's strictly the more useful landing.
     public boolean getSmartLanding()         { return p.getBoolean("cfg_smartland", true); }
     public void    setSmartLanding(boolean v){ p.edit().putBoolean("cfg_smartland", v).apply(); }
+    // floating sigil size, as a percent (80 small / 100 normal / 125 large).
+    // Smaller obstructs less of the board; larger is easier to hit on a tablet.
+    public int  getSigilScalePct()      { return p.getInt("cfg_sigilscale", 100); }
+    public void setSigilScalePct(int s) { p.edit().putInt("cfg_sigilscale", s).apply(); }
 
     // ---- planner scan calibration ----
     // Screen-percent positions of the Team Planner controls, recorded by the

@@ -86,6 +86,7 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `cfg_largetext` | false | +2sp on core panel text |
 | `cfg_autoscanopen` | false | quick sigil tap fires a scan instead of opening |
 | `cfg_smartland` | true | after a scan, land on GOLD tab (else SETUP) |
+| `cfg_sigilscale` | 100 | floating sigil size % (80/100/125) |
 | `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
 | `cfg_privacy_seen` | false | first-launch privacy notice acknowledged (MainActivity) |
 
