@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.3";
+    private static final String APP_VERSION = "v1.99.4";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -78,6 +78,11 @@ public class OverlayService extends Service {
 
     // hold-to-repeat gold buttons
     private final android.os.Handler goldHandler = new android.os.Handler();
+    // auto-dim: fade the sigil to near-invisible after this many ms of no touch
+    private static final int  DIM_DELAY_MS = 8000;
+    private static final float DIM_ALPHA   = 0.18f;
+    private final android.os.Handler dimHandler = new android.os.Handler();
+    private Runnable dimRunnable = null;
     private Runnable goldRepeat;
 
     // floating button layout params promoted to field so buildSettings() can update alpha/position
@@ -487,6 +492,18 @@ public class OverlayService extends Service {
         }catch(Exception e){}
     }
 
+    private void scheduleDim(){
+        if(dimRunnable!=null) dimHandler.removeCallbacks(dimRunnable);
+        dimRunnable=new Runnable(){ public void run(){
+            if(button!=null) button.animate().alpha(DIM_ALPHA).setDuration(700).start();
+        }};
+        dimHandler.postDelayed(dimRunnable, DIM_DELAY_MS);
+    }
+    private void cancelDim(){
+        if(dimRunnable!=null){ dimHandler.removeCallbacks(dimRunnable); dimRunnable=null; }
+        if(button!=null) button.animate().alpha(pool.getAlpha()).setDuration(150).start();
+    }
+
     private void addButton(){
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL); c.setGravity(Gravity.CENTER);
@@ -541,6 +558,7 @@ public class OverlayService extends Service {
                 int a=e.getAction();
                 if(a==MotionEvent.ACTION_DOWN){
                     ix=btnLp.x;iy=btnLp.y;tx=e.getRawX();ty=e.getRawY();down=System.currentTimeMillis();moved=false;
+                    cancelDim();
                     button.animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).start();
                     return true;
                 }
@@ -551,6 +569,7 @@ public class OverlayService extends Service {
                     if(moved) highlightClose(e.getRawX(), e.getRawY());
                     return true;
                 } else if(a==MotionEvent.ACTION_UP){
+                    scheduleDim();
                     button.animate().scaleX(1f).scaleY(1f).setDuration(120)
                         .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
                     if(moved && overClose(e.getRawX(), e.getRawY())){
@@ -590,6 +609,7 @@ public class OverlayService extends Service {
         wm.addView(button, btnLp);
         button.animate().scaleX(1f).scaleY(1f).setDuration(280)
             .setInterpolator(new android.view.animation.OvershootInterpolator()).start();
+        scheduleDim();  // start the idle countdown from the moment the button appears
     }
 
     // In-game HUD: two tiny independent numbers, each draggable, meant to be
@@ -2924,6 +2944,7 @@ public class OverlayService extends Service {
                 float av=(progress+20)/100f;
                 pool.setAlpha(av);
                 button.setAlpha(av);
+                scheduleDim(); // restart the countdown so next idle uses the new alpha
                 if(panel!=null) panel.setAlpha(av);
                 if(hudGoldView!=null) hudGoldView.setAlpha(av);
                 if(hudXpView!=null) hudXpView.setAlpha(av);
@@ -6902,6 +6923,7 @@ public class OverlayService extends Service {
         autoTapHandler.removeCallbacksAndMessages(null);
         plannerHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
+        dimHandler.removeCallbacksAndMessages(null); dimRunnable=null;
         scanAllMode=false;
         hideCalCaptureView();
         hidePlnCalView();
