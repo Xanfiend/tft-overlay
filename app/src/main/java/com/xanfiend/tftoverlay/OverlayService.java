@@ -37,7 +37,7 @@ public class OverlayService extends Service {
     private int mode = 0; // 0 = scout grid, 1 = summary
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.14";
+    private static final String APP_VERSION = "v1.99.15";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     // one-step undo for the pool grid: the inverse of the last mark + a label.
@@ -1403,7 +1403,14 @@ public class OverlayService extends Service {
             root.addView(rdiv);
         }
 
+        pickRow(root,
+            new String[]{"ALL","1◈","2◈","3◈","4◈","5◈"},
+            new int[]{0,1,2,3,4,5},
+            poolFilter, 10,
+            new PickSetter(){ public void pick(int v){ poolFilter=v; showPanel(); }});
+
         for(int cost=1;cost<=5;cost++){
+        if(poolFilter!=0 && poolFilter!=cost) continue;
         addSecHdr(root, cost+"-COST", COSTC[cost]);
 
             LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
@@ -2235,6 +2242,16 @@ public class OverlayService extends Service {
         econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak"+(streak>0?"  +  1g win":""));
         econBreakTv.setTextColor(ASH); econBreakTv.setTextSize(11); incCard.addView(econBreakTv);
         root.addView(incCard);
+        econNextRoundBtn=new TextView(this);
+        econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
+        econNextRoundBtn.setTextColor(GOLD); econNextRoundBtn.setTextSize(14); econNextRoundBtn.setGravity(Gravity.CENTER);
+        econNextRoundBtn.setBackground(box(CARD,6,GOLD,2)); econNextRoundBtn.setPadding(0,14,0,14);
+        LinearLayout.LayoutParams nrl=new LinearLayout.LayoutParams(-1,-2); nrl.setMargins(0,8,0,0); econNextRoundBtn.setLayoutParams(nrl);
+        econNextRoundBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int g=pool.getGold(), s=pool.getStreak();
+            pool.setGold(g+Pool.expectedIncome(g,s)); buzz(); refreshEcon();
+        }});
+        root.addView(econNextRoundBtn);
 
         // ✦ LEVELING — gold to the next level, from the XP the scry read off the
         // level button (worst case if XP progress is unknown). 4g buys 4 XP.
@@ -2326,6 +2343,7 @@ public class OverlayService extends Service {
         else { econBonusTv.setVisibility(View.GONE); }
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
+        if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
     }
 
     private TextView makeAdjBtn(String label, int bg, int fg){
