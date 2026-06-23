@@ -78,7 +78,8 @@ Since v1.86 a new set does **not** require an APK. Edit `data/setdata.json`, pus
 | `econ_streak` | 0 | win/loss streak (positive=wins, negative=losses) |
 | `cfg_alpha` | 1.0 | overlay opacity |
 | `cfg_haptic` | true | vibration on |
-| `cfg_start` | 0 | 0=smart tab, 1=always grid |
+| `cfg_start` | 0 | 0=smart tab, 1=always grid, 2=last tab used |
+| `cfg_lasttab` | 0 | last viewed tab (mode index); used when `cfg_start`=2 |
 | `cfg_devmode` | false | hidden dev tools (Scan From Image); unlock by tapping version label 7x |
 | `cfg_privacy_seen` | false | first-launch privacy notice acknowledged (MainActivity) |
 
