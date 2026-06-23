@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.12");
+        ver.setText("v1.99.13");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.13  ·  2026-06-23","Minor reliability fix and SETUP polish. No feature change."},
             {"v1.99.1  ·  2026-06-22","Update-check reliability fix. The in-app updater identifies the latest version more robustly; it still downloads the same single latest build. No other change."},
             {"v1.99  ·  2026-06-22","One-time privacy and permissions notice on first launch. It plainly states what each permission is for and confirms there are no accounts, no analytics and no tracking, and that nothing is ever sent anywhere. Re-readable any time from SETUP. Disclosure only; no data collection was added."},
             {"v1.98  ·  2026-06-22","Passive device-integrity heads-up on SETUP: on a rooted device or an emulator it suggests installing only from the official GitHub releases. Informational only — nothing is blocked and nothing is reported; a normal phone shows nothing."},
