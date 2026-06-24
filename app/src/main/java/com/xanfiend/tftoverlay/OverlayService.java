@@ -88,7 +88,7 @@ public class OverlayService extends Service {
     private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
     private TextView econNextRoundBtn;
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
-    private TextView econRoundsLeftTv, econStreakRoiTv;
+    private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
 
     // hold-to-repeat gold buttons
@@ -894,7 +894,7 @@ public class OverlayService extends Service {
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
-        econRoundsLeftTv=null; econStreakRoiTv=null;
+        econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -909,7 +909,7 @@ public class OverlayService extends Service {
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
-        econRoundsLeftTv=null; econStreakRoiTv=null;
+        econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1472,7 +1472,8 @@ public class OverlayService extends Service {
 
         for(int cost=1;cost<=5;cost++){
         if(poolFilter!=0 && poolFilter!=cost) continue;
-        addSecHdr(root, cost+"-COST", COSTC[cost]);
+        int tierLeft=0; for(String n:SetData.CHAMPS[cost]) tierLeft+=pool.remaining(n);
+        addSecHdr(root, cost+"-COST  ·  "+tierLeft+" left", COSTC[cost]);
 
             LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
@@ -2257,7 +2258,7 @@ public class OverlayService extends Service {
         econInterestTv=new TextView(this); econInterestTv.setText("+"+intr+"g per round");
         econInterestTv.setTextColor(BONE); econInterestTv.setTextSize(17); econInterestTv.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(econInterestTv);
         econBracketTv=new TextView(this); econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
-        econBracketTv.setTextColor(gold>=50?GOLD:ASH); econBracketTv.setTextSize(11); iRow.addView(econBracketTv);
+        econBracketTv.setTextColor(gold>=50?GOLD:toNext<=2?GOLD:ASH); econBracketTv.setTextSize(11); iRow.addView(econBracketTv);
         TextView intrExplain=new TextView(this); intrExplain.setText("1g interest per 10g saved  ·  max 5g per round");
         intrExplain.setTextColor(DIM); intrExplain.setTextSize(10); intrExplain.setPadding(0,4,0,0); iRow.addView(intrExplain);
         // interest ladder dots: 10 / 20 / 30 / 40 / 50
@@ -2335,7 +2336,7 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams nrl=new LinearLayout.LayoutParams(-1,-2); nrl.setMargins(0,8,0,0); econNextRoundBtn.setLayoutParams(nrl);
         econNextRoundBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
             int g=pool.getGold(), s=pool.getStreak();
-            pool.setGold(g+Pool.expectedIncome(g,s)); buzz(); refreshEcon();
+            pool.setGold(g+Pool.expectedIncome(g,s)); advanceRound(1); buzz(); refreshEcon();
         }});
         root.addView(econNextRoundBtn);
 
@@ -2399,6 +2400,22 @@ public class OverlayService extends Service {
             econRoundsLeftTv.setVisibility(View.VISIBLE);
         } else { econRoundsLeftTv.setVisibility(View.GONE); }
         root.addView(econRoundsLeftTv);
+        econLossBtnTv=new TextView(this);
+        econLossBtnTv.setGravity(Gravity.CENTER); econLossBtnTv.setPadding(0,9,0,9); econLossBtnTv.setTextSize(12);
+        LinearLayout.LayoutParams lbpl=new LinearLayout.LayoutParams(-1,-2); lbpl.setMargins(0,6,0,0); econLossBtnTv.setLayoutParams(lbpl);
+        if(stgForHp>0 && hpDmg>0){
+            econLossBtnTv.setText("LOSS  −"+hpDmg+" HP  (stage "+stgForHp+" base)");
+            econLossBtnTv.setTextColor(BLOODL); econLossBtnTv.setBackground(box(0xFF1A0806,6,BLOODL,2));
+            econLossBtnTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                int st=pool.getStageNum(); int[] sd=SetData.STAGE_BASE_DMG;
+                pool.setHp(pool.getHp()-sd[Math.min(st,sd.length-1)]); buzz(); refreshEcon();
+            }});
+            pressFeedback(econLossBtnTv);
+        } else {
+            econLossBtnTv.setText("LOSS  (set stage first)");
+            econLossBtnTv.setTextColor(DIM); econLossBtnTv.setBackground(box(CARD,6,EDGE,1));
+        }
+        root.addView(econLossBtnTv);
 
         // ✦ LEVELING — gold to the next level, from the XP the scry read off the
         // level button (worst case if XP progress is unknown). 4g buys 4 XP.
@@ -2476,7 +2493,7 @@ public class OverlayService extends Service {
         econGoldTv.setText(gold+"g");
         econInterestTv.setText("+"+intr+"g per round");
         econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
-        econBracketTv.setTextColor(gold>=50?GOLD:ASH);
+        econBracketTv.setTextColor(gold>=50?GOLD:toNext<=2?GOLD:ASH);
         int[] brackets={10,20,30,40,50};
         for(int i=0;i<5;i++){
             int b=brackets[i]; boolean reached=gold>=b; boolean cur=(gold/10)*10==b||(b==50&&gold>=50);
@@ -2512,6 +2529,17 @@ public class OverlayService extends Service {
                     econRoundsLeftTv.setTextColor(losses<=2?BLOODL:losses<=5?GOLD:ASH);
                     econRoundsLeftTv.setVisibility(View.VISIBLE);
                 } else { econRoundsLeftTv.setVisibility(View.GONE); }
+            }
+            if(econLossBtnTv!=null){
+                int stgL=pool.getStageNum(); int[] sdL=SetData.STAGE_BASE_DMG;
+                int dmgL=stgL>0?sdL[Math.min(stgL,sdL.length-1)]:0;
+                if(stgL>0 && dmgL>0){
+                    econLossBtnTv.setText("LOSS  −"+dmgL+" HP  (stage "+stgL+" base)");
+                    econLossBtnTv.setTextColor(BLOODL); econLossBtnTv.setBackground(box(0xFF1A0806,6,BLOODL,2));
+                } else {
+                    econLossBtnTv.setText("LOSS  (set stage first)");
+                    econLossBtnTv.setTextColor(DIM); econLossBtnTv.setBackground(box(CARD,6,EDGE,1));
+                }
             }
         }
         if(econStageTv!=null){

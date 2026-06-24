@@ -41,6 +41,21 @@ public class PoolMathTest {
         assertEquals(5 + Pool.interest(20) + Pool.streakBonus(-4), Pool.expectedIncome(20, -4));
     }
 
+    @Test public void totalStreakGoldAccumulates(){
+        // no streak -> 0
+        assertEquals(0, Pool.totalStreakGold(0));
+        // 1-win streak: bonus @1=0 -> 0g total
+        assertEquals(0, Pool.totalStreakGold(1));
+        // 3-win: round1=0, round2=0, round3=1 -> 1g total
+        assertEquals(1, Pool.totalStreakGold(3));
+        // 6-win: 0+0+1+1+2+3 = 7
+        assertEquals(7, Pool.totalStreakGold(6));
+        // loss streak is symmetric: 2-loss +1@2 -> 1g
+        assertEquals(1, Pool.totalStreakGold(-2));
+        // 5-loss: round1=0, round2=1, round3=1, round4=2, round5=3 -> 7
+        assertEquals(7, Pool.totalStreakGold(-5));
+    }
+
     @Test public void costOfKnownAndUnknown(){
         // unknown name -> 0
         assertEquals(0, Pool.costOf("NotAChampion__"));
