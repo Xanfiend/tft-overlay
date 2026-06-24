@@ -90,6 +90,7 @@ public class OverlayService extends Service {
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
     private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
+    private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
 
     // hold-to-repeat gold buttons
     private final android.os.Handler goldHandler = new android.os.Handler();
@@ -1162,6 +1163,19 @@ public class OverlayService extends Service {
         root.addView(undoBar);
         refreshUndoBar();
 
+        // economy glance: gold / stage / HP without switching to GOLD tab
+        int glGold=pool.getGold(), glHp=pool.getHp();
+        String glStage=pool.getStageRound();
+        StringBuilder glSb=new StringBuilder(glGold+"g");
+        if(!glStage.isEmpty()) glSb.append("  ·  ").append(glStage);
+        glSb.append("  ·  ").append(glHp).append(" HP");
+        int intr2=Pool.interest(glGold);
+        if(intr2>0) glSb.append("  ·  +").append(intr2).append("g/round");
+        TextView glance=new TextView(this); glance.setText(glSb.toString());
+        glance.setTextColor(ASH); glance.setTextSize(10); glance.setGravity(Gravity.CENTER);
+        glance.setPadding(0,4,0,6);
+        root.addView(glance);
+
         // contest alert: flag any tracked champ with ≥2 opponents and ≤3 copies left
         java.util.List<String> hotList = new java.util.ArrayList<>();
         for(String ch : pool.seenSorted()){
@@ -1880,10 +1894,14 @@ public class OverlayService extends Service {
 
         // ---- tier-grouped augment list ----
         addSecHdr(root, "AUGMENTS", GOLD);
+        int augFIdx=augFilter.isEmpty()?0:augFilter.equals("S")?1:augFilter.equals("A")?2:augFilter.equals("B")?3:4;
+        pickRow(root, new String[]{"ALL","S","A","B","C"}, new int[]{0,1,2,3,4}, augFIdx, 8,
+            new PickSetter(){ public void pick(int v){ String[] ts={"","S","A","B","C"}; augFilter=ts[v]; showPanel(); }});
 
         String[] tiers   = {"S",   "A",    "B",  "C"};
         int[]    tierClr = {GOLD, GREEN,   ASH,  DIM};
         for(int t=0;t<tiers.length;t++){
+            if(!augFilter.isEmpty() && !augFilter.equals(tiers[t])) continue;
             boolean headerAdded=false;
             for(AugmentData.AugmentEntry aug : AugmentData.AUGMENTS){
                 if(!aug.tier.equals(tiers[t])) continue;
@@ -2339,6 +2357,42 @@ public class OverlayService extends Service {
             pool.setGold(g+Pool.expectedIncome(g,s)); advanceRound(1); buzz(); refreshEcon();
         }});
         root.addView(econNextRoundBtn);
+
+        // ✦ ROUND RESULT — one tap handles income + streak + stage + HP (loss only)
+        addSecHdr(root, "ROUND RESULT", ASH);
+        LinearLayout resultRow=new LinearLayout(this);
+        LinearLayout.LayoutParams rrl=new LinearLayout.LayoutParams(-1,-2); rrl.setMargins(0,4,0,0); resultRow.setLayoutParams(rrl);
+        TextView wonBtn=new TextView(this); wonBtn.setText("✓  WON");
+        wonBtn.setTextColor(0xFF0A1A0A); wonBtn.setTextSize(14); wonBtn.setGravity(Gravity.CENTER);
+        wonBtn.setTypeface(null,android.graphics.Typeface.BOLD);
+        wonBtn.setBackground(box(GREEN,8,0xFF3DCC47,2)); wonBtn.setPadding(0,16,0,16);
+        LinearLayout.LayoutParams wl=new LinearLayout.LayoutParams(0,-2,1f); wonBtn.setLayoutParams(wl);
+        wonBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int g=pool.getGold(), s=pool.getStreak();
+            pool.setGold(g+Pool.expectedIncome(g,s));
+            pool.setStreak(s<0?1:s+1);
+            advanceRound(1); buzz(); refreshEcon();
+        }});
+        pressFeedback(wonBtn);
+        TextView lostBtn=new TextView(this); lostBtn.setText("✗  LOST");
+        lostBtn.setTextColor(BLOODL); lostBtn.setTextSize(14); lostBtn.setGravity(Gravity.CENTER);
+        lostBtn.setTypeface(null,android.graphics.Typeface.BOLD);
+        lostBtn.setBackground(box(0xFF1A0806,8,BLOODL,2)); lostBtn.setPadding(0,16,0,16);
+        LinearLayout.LayoutParams ll=new LinearLayout.LayoutParams(0,-2,1f); ll.setMargins(8,0,0,0); lostBtn.setLayoutParams(ll);
+        lostBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            int g=pool.getGold(), s=pool.getStreak();
+            pool.setGold(g+Pool.expectedIncome(g,s));
+            int stg=pool.getStageNum(); int[] sd=SetData.STAGE_BASE_DMG;
+            pool.setHp(pool.getHp()-sd[Math.min(stg,sd.length-1)]);
+            pool.setStreak(s>0?-1:s-1);
+            advanceRound(1); buzz(); refreshEcon();
+        }});
+        pressFeedback(lostBtn);
+        resultRow.addView(wonBtn); resultRow.addView(lostBtn);
+        root.addView(resultRow);
+        TextView resultHint=new TextView(this);
+        resultHint.setText("gold + streak + stage in one tap  ·  LOST also deducts HP");
+        resultHint.setTextColor(DIM); resultHint.setTextSize(9); resultHint.setPadding(2,3,2,0); root.addView(resultHint);
 
         // ◇ STAGE / ROUND — upcoming augments and carousels
         int stgNow=pool.getStageNum(), rndNow=pool.getRoundNum();
