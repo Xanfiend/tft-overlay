@@ -243,6 +243,12 @@ public class Pool {
     public static int expectedIncome(int gold, int streak) {
         return 5 + interest(gold) + streakBonus(streak) + (streak > 0 ? 1 : 0);
     }
+    // Total bonus gold earned across the whole streak (cumulative, not just this round).
+    public static int totalStreakGold(int streak){
+        int abs=Math.abs(streak); int total=0;
+        for(int r=1;r<=abs;r++) total+=streakBonus(streak>0?r:-r);
+        return total;
+    }
 
     // ---- dev mode (hidden): unlocks testing tools like Scan From Image.
     // Off by default; toggled by tapping the version label 7x. Not for end users.

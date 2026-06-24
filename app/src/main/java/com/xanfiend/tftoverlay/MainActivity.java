@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.17");
+        ver.setText("v1.99.18");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.18  ·  2026-06-24","GOLD tab shows how many more losses you can take before elimination, how much gold your streak has paid out in total, and a hint on what to take from carousel based on your HP. POOL tab flags when your pinned carry is getting scarce so you know when to bail. COACH sub-tab shows the recommended roll level for slow-roll comps."},
             {"v1.99.17  ·  2026-06-23","POOL tab shows a contest alert when any tracked champion is almost gone from the shared pool. GOLD tab shows your roll budget at a glance. AUGMENTS tab highlights when you're in an augment round."},
             {"v1.99.16  ·  2026-06-23","GOLD tab gains HP tracking (tap -5/-10/-20 after each loss) and a Stage/Round display that shows what's coming up — augment rounds, carousels. POOL tab now surfaces your tracked champions at the top so you can update them without scrolling."},
             {"v1.99.15  ·  2026-06-23","POOL tab now has a cost-tier filter (tap to show only 1-cost through 5-cost). GOLD tab has a one-tap Next Round button that advances gold by your expected income."},
