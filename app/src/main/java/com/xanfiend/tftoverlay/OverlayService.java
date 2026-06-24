@@ -88,6 +88,7 @@ public class OverlayService extends Service {
     private TextView econStreakTv, econBonusTv, econIncomeTv, econBreakTv;
     private TextView econNextRoundBtn;
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
+    private TextView econRoundsLeftTv, econStreakRoiTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
 
     // hold-to-repeat gold buttons
@@ -893,6 +894,7 @@ public class OverlayService extends Service {
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
+        econRoundsLeftTv=null; econStreakRoiTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -907,6 +909,7 @@ public class OverlayService extends Service {
         econLadderTvs=null; econStreakTv=null; econBonusTv=null;
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
+        econRoundsLeftTv=null; econStreakRoiTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1176,6 +1179,18 @@ public class OverlayService extends Service {
             alertTv.setBackground(box(0xFF1A0806,6,BLOODL,2)); alertTv.setPadding(10,8,10,8);
             LinearLayout.LayoutParams al=new LinearLayout.LayoutParams(-1,-2); al.setMargins(0,0,0,6); alertTv.setLayoutParams(al);
             root.addView(alertTv);
+        }
+
+        // bail alert: pinned carry has shallow pool and you're not 2-starred yet
+        String pinnedName=pool.getPinned();
+        if(!pinnedName.isEmpty() && pool.remaining(pinnedName)<=6 && pool.seenCount(pinnedName)<9){
+            int remLeft=pool.remaining(pinnedName);
+            TextView bailTv=new TextView(this);
+            bailTv.setText("BAIL?  ·  "+pinnedName+": only "+remLeft+" left in pool  ·  not 2-starred yet");
+            bailTv.setTextColor(GOLD); bailTv.setTextSize(11); bailTv.setGravity(Gravity.CENTER);
+            bailTv.setBackground(box(0xFF1A1400,6,GOLD,2)); bailTv.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-1,-2); bl.setMargins(0,0,0,6); bailTv.setLayoutParams(bl);
+            root.addView(bailTv);
         }
 
         // quick-access row: show tracked champs (those with seen or opp count > 0) at the
@@ -2291,6 +2306,12 @@ public class OverlayService extends Service {
         if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
         else { econBonusTv.setVisibility(View.GONE); }
         root.addView(econBonusTv);
+        econStreakRoiTv=new TextView(this);
+        econStreakRoiTv.setTextColor(DIM); econStreakRoiTv.setTextSize(10); econStreakRoiTv.setPadding(2,2,2,0);
+        int streakRoi=Pool.totalStreakGold(streak);
+        if(streakRoi>0){ econStreakRoiTv.setText("earned "+streakRoi+"g this streak"); econStreakRoiTv.setVisibility(View.VISIBLE); }
+        else { econStreakRoiTv.setVisibility(View.GONE); }
+        root.addView(econStreakRoiTv);
         TextView streakScale=new TextView(this); streakScale.setText("2+ streak = +1g  ·  4+ = +2g  ·  6+ = +3g");
         streakScale.setTextColor(DIM); streakScale.setTextSize(10); streakScale.setPadding(2,2,2,0); root.addView(streakScale);
         TextView streakWhy=new TextView(this); streakWhy.setText("streak isn't readable as text — set by hand  ·  tap to flip W↔L");
@@ -2365,6 +2386,19 @@ public class OverlayService extends Service {
         fullBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ pool.setHp(100); buzz(); refreshEcon(); }});
         pressFeedback(fullBtn); dmgRow.addView(fullBtn);
         root.addView(dmgRow);
+        econRoundsLeftTv=new TextView(this);
+        econRoundsLeftTv.setTextSize(10); econRoundsLeftTv.setPadding(2,3,2,0);
+        int stgForHp=pool.getStageNum();
+        int[] stageDmg=SetData.STAGE_BASE_DMG;
+        int hpDmg=stageDmg[Math.min(stgForHp,stageDmg.length-1)];
+        if(hpNow>0 && hpDmg>0){
+            int losses=hpNow/hpDmg;
+            String lossText=losses<=2?"~"+losses+" losses left before elim":"~"+losses+" losses left";
+            econRoundsLeftTv.setText(lossText);
+            econRoundsLeftTv.setTextColor(losses<=2?BLOODL:losses<=5?GOLD:ASH);
+            econRoundsLeftTv.setVisibility(View.VISIBLE);
+        } else { econRoundsLeftTv.setVisibility(View.GONE); }
+        root.addView(econRoundsLeftTv);
 
         // ✦ LEVELING — gold to the next level, from the XP the scry read off the
         // level button (worst case if XP progress is unknown). 4g buys 4 XP.
@@ -2454,6 +2488,11 @@ public class OverlayService extends Service {
         econStreakTv.setTextColor(streak>0?GREEN:(streak<0?BLOODL:ASH));
         if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
         else { econBonusTv.setVisibility(View.GONE); }
+        if(econStreakRoiTv!=null){
+            int roi=Pool.totalStreakGold(streak);
+            if(roi>0){ econStreakRoiTv.setText("earned "+roi+"g this streak"); econStreakRoiTv.setVisibility(View.VISIBLE); }
+            else { econStreakRoiTv.setVisibility(View.GONE); }
+        }
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
         if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
@@ -2462,11 +2501,30 @@ public class OverlayService extends Service {
             int hp=pool.getHp();
             econHpTv.setText(hp+" HP");
             econHpTv.setTextColor(hp>50?GREEN:hp>20?GOLD:BLOODL);
+            if(econRoundsLeftTv!=null){
+                int stgForDmg=pool.getStageNum();
+                int[] sdmg=SetData.STAGE_BASE_DMG;
+                int dmgPer=sdmg[Math.min(stgForDmg,sdmg.length-1)];
+                if(hp>0 && dmgPer>0){
+                    int losses=hp/dmgPer;
+                    String lt=losses<=2?"~"+losses+" losses before elim":"~"+losses+" losses left";
+                    econRoundsLeftTv.setText(lt);
+                    econRoundsLeftTv.setTextColor(losses<=2?BLOODL:losses<=5?GOLD:ASH);
+                    econRoundsLeftTv.setVisibility(View.VISIBLE);
+                } else { econRoundsLeftTv.setVisibility(View.GONE); }
+            }
         }
         if(econStageTv!=null){
             int stg=pool.getStageNum(), rnd=pool.getRoundNum();
             econStageTv.setText(stg>0?stg+"-"+rnd:"?");
-            if(econEventTv!=null) econEventTv.setText(stg>0?nextTFTEvent(stg,rnd):"tap ▶ to set stage");
+            if(econEventTv!=null){
+                String evtTxt=stg>0?nextTFTEvent(stg,rnd):"tap ▶ to set stage";
+                if(evtTxt.contains("Carousel")){
+                    int hp=pool.getHp();
+                    evtTxt+=(hp<50?"  ·  take a unit to stabilize":hp>=70?"  ·  take a component":"");
+                }
+                econEventTv.setText(evtTxt);
+            }
         }
     }
 
@@ -2711,6 +2769,14 @@ public class OverlayService extends Service {
 
             TextView carry=new TextView(this); carry.setText("Carry: "+rec.carry);
             carry.setTextColor(GOLD); carry.setTextSize(13); carry.setPadding(0,6,0,0); card.addView(carry);
+
+            int carryCost=Pool.costOf(rec.carry);
+            if(carryCost==2||carryCost==3){
+                int rollLv=carryCost==2?6:7;
+                TextView rlv=new TextView(this);
+                rlv.setText("Roll at Lv "+rollLv+" ("+carryCost+"-cost slow roll)");
+                rlv.setTextColor(ASH); rlv.setTextSize(11); rlv.setPadding(0,3,0,0); card.addView(rlv);
+            }
 
             TextView items=new TextView(this);
             items.setText("Items: "+android.text.TextUtils.join("  ·  ", rec.items));
