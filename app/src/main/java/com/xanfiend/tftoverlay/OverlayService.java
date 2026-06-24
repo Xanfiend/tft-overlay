@@ -89,6 +89,7 @@ public class OverlayService extends Service {
     private TextView econNextRoundBtn;
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
     private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv, econRecordTv;
+    private TextView econTimelineTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
 
@@ -896,6 +897,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
+        econTimelineTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -911,6 +913,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
+        econTimelineTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1178,6 +1181,25 @@ public class OverlayService extends Service {
         glance.setPadding(0,4,0,6);
         root.addView(glance);
 
+        // lobby snapshot: 1-liner from any scouted opponent boards
+        OppScout.Profile oppSnap=OppScout.analyzeUnits(pool.getAllOppUnits());
+        if(oppSnap.hasData()){
+            StringBuilder lb=new StringBuilder();
+            lb.append(oppSnap.boards).append(oppSnap.boards==1?" board":" boards").append(" scouted");
+            if(!oppSnap.topCarries.isEmpty()){
+                lb.append("  ·  ").append(oppSnap.topCarries.get(0));
+                if(oppSnap.topCarries.size()>1) lb.append("/").append(oppSnap.topCarries.get(1));
+            }
+            if(oppSnap.apCarries>oppSnap.adCarries*2) lb.append("  ·  AP-heavy");
+            else if(oppSnap.adCarries>oppSnap.apCarries*2) lb.append("  ·  AD-heavy");
+            if(oppSnap.flankHeavy) lb.append("  ·  divers");
+            TextView lobbyTv=new TextView(this);
+            lobbyTv.setText(lb.toString());
+            lobbyTv.setTextColor(ASH); lobbyTv.setTextSize(10); lobbyTv.setGravity(Gravity.CENTER);
+            lobbyTv.setPadding(0,0,0,4);
+            root.addView(lobbyTv);
+        }
+
         // contest alert: flag any tracked champ with ≥2 opponents and ≤3 copies left
         java.util.List<String> hotList = new java.util.ArrayList<>();
         for(String ch : pool.seenSorted()){
@@ -1222,9 +1244,19 @@ public class OverlayService extends Service {
                     root.addView(tRow);
                 }
                 final String tn=tracked.get(ti); int fc=Pool.costOf(tn);
+                LinearLayout wrapper=new LinearLayout(this);
+                wrapper.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams wlp=new LinearLayout.LayoutParams(0,-2,1f); wlp.setMargins(ti%4>0?4:0,0,0,0); wrapper.setLayoutParams(wlp);
                 LinearLayout tcell=buildChipCell(tn, fc);
-                LinearLayout.LayoutParams tcl=new LinearLayout.LayoutParams(0,-2,1f); tcl.setMargins(ti%4>0?4:0,0,0,0); tcell.setLayoutParams(tcl);
-                tRow.addView(tcell);
+                tcell.setLayoutParams(new LinearLayout.LayoutParams(-1,-2));
+                wrapper.addView(tcell);
+                int remLeft=pool.remaining(tn);
+                TextView remTv=new TextView(this);
+                remTv.setText(remLeft==0?"none left":remLeft+" left");
+                remTv.setTextColor(remLeft==0?BLOODL:remLeft<=3?BLOODL:remLeft<=6?GOLD:DIM);
+                remTv.setTextSize(9); remTv.setGravity(Gravity.CENTER); remTv.setPadding(0,1,0,3);
+                wrapper.addView(remTv);
+                tRow.addView(wrapper);
             }
             // fill last row if not full
             if(tRow!=null){ int rem=tracked.size()%4; if(rem>0) for(int k=rem;k<4;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); tRow.addView(sp); } }
@@ -2442,8 +2474,15 @@ public class OverlayService extends Service {
         root.addView(stgRow);
         econEventTv=new TextView(this);
         econEventTv.setText(stgNow>0?nextTFTEvent(stgNow,rndNow):"tap ▶ to set stage");
-        econEventTv.setTextColor(GOLD); econEventTv.setTextSize(12); econEventTv.setGravity(Gravity.CENTER); econEventTv.setPadding(0,4,0,8);
+        econEventTv.setTextColor(GOLD); econEventTv.setTextSize(12); econEventTv.setGravity(Gravity.CENTER); econEventTv.setPadding(0,4,0,4);
         root.addView(econEventTv);
+        econTimelineTv=new TextView(this);
+        String timelineStr=stgNow>0?buildStageSummary(stgNow,rndNow):"";
+        econTimelineTv.setText(timelineStr);
+        econTimelineTv.setTextColor(DIM); econTimelineTv.setTextSize(9); econTimelineTv.setGravity(Gravity.CENTER);
+        econTimelineTv.setPadding(0,0,0,8);
+        econTimelineTv.setVisibility(timelineStr.isEmpty()?View.GONE:View.VISIBLE);
+        root.addView(econTimelineTv);
 
         // ◇ HEALTH — HP remaining this game
         int hpNow=pool.getHp();
@@ -2644,6 +2683,11 @@ public class OverlayService extends Service {
                 }
                 econEventTv.setText(evtTxt);
             }
+            if(econTimelineTv!=null){
+                String tl=stg>0?buildStageSummary(stg,rnd):"";
+                econTimelineTv.setText(tl);
+                econTimelineTv.setVisibility(tl.isEmpty()?View.GONE:View.VISIBLE);
+            }
         }
     }
 
@@ -2680,6 +2724,24 @@ public class OverlayService extends Service {
             if(round>=max) return "◉ Carousel next";
         }
         return "all augments past · late game";
+    }
+
+    // forward timeline of upcoming events from (stage,round) exclusive — up to 5 entries
+    private static String buildStageSummary(int stage, int round){
+        if(stage<=0) return "";
+        // all game events in chronological order: {stage, round, 0=aug/1=carousel}
+        int[][] events={{1,4,1},{2,1,0},{2,7,1},{3,2,0},{3,7,1},{4,2,0},{4,7,1},{5,5,1},{6,3,1}};
+        StringBuilder sb=new StringBuilder();
+        int count=0;
+        for(int[] ev : events){
+            int es=ev[0], er=ev[1], et=ev[2];
+            if(es<stage||(es==stage&&er<=round)) continue;
+            if(count>0) sb.append("  ·  ");
+            sb.append(es).append("-").append(er).append(et==0?" ★":" ◉");
+            count++;
+            if(count>=5) break;
+        }
+        return sb.toString();
     }
 
     private TextView makeAdjBtn(String label, int bg, int fg){
