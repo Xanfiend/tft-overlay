@@ -96,6 +96,7 @@ public class Pool {
         seen.clear(); opp.clear(); recent.clear(); clearJunk();
         SharedPreferences.Editor e = p.edit()
                 .remove("econ_gold").remove("econ_streak").remove("econ_hp")
+                .remove("econ_wins").remove("econ_losses")
                 .remove("xp_cur").remove("xp_need")
                 .remove("stage_round").remove("my_augs").remove("hunt_list")
                 .remove("god_1").remove("god_2")
@@ -105,6 +106,17 @@ public class Pool {
         e.apply();
         save();
     }
+    // Clear pool tracking (seen/opp/recent) only — keeps gold, HP, streak, and stage.
+    public void resetPool(){
+        seen.clear(); opp.clear(); recent.clear();
+        save();
+    }
+    // ---- per-game W/L record (incremented by WON/LOST buttons, cleared by RESET ALL) ----
+    public int getWins()         { return p.getInt("econ_wins", 0); }
+    public void setWins(int w)   { p.edit().putInt("econ_wins", Math.max(0,w)).apply(); }
+    public int getLosses()       { return p.getInt("econ_losses", 0); }
+    public void setLosses(int l) { p.edit().putInt("econ_losses", Math.max(0,l)).apply(); }
+
     public boolean isEmpty(){ return seen.isEmpty() && opp.isEmpty(); }
 
     // ---- remembered level (persists between opens) ----
