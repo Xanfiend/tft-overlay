@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.20");
+        ver.setText("v1.99.21");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.21  ·  2026-06-24","GOLD tab tracks your win-loss record and winrate for the game, shown next to the WON/LOST buttons. COACH tab shows a warning card at the top when your HP is low, so stabilization is never buried under comp advice. POOL tab has a RESET POOL button that clears your tracking data without touching gold, HP, streak, or stage. Critical HP is now flagged red in the POOL tab economy line."},
             {"v1.99.20  ·  2026-06-24","GOLD tab has WON and LOST buttons that handle a full round result in one tap: gold income, streak update, stage advance, and HP loss (on LOST) all at once. POOL tab shows your current gold, stage, and HP at a glance without switching tabs. AUGMENTS tab has a tier filter so you can view only S, A, B, or C tier augments."},
             {"v1.99.19  ·  2026-06-24","GOLD tab: tapping Next Round now also advances the stage counter, so gold and stage stay in sync automatically. A one-tap LOSS button deducts the right HP for your current stage. Interest bracket indicator highlights gold when you are one or two coins from the next bracket. POOL tab shows how many copies remain in each cost tier at a glance."},
             {"v1.99.18  ·  2026-06-24","GOLD tab shows how many more losses you can take before elimination, how much gold your streak has paid out in total, and a hint on what to take from carousel based on your HP. POOL tab flags when your pinned carry is getting scarce so you know when to bail. COACH sub-tab shows the recommended roll level for slow-roll comps."},
