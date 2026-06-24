@@ -89,7 +89,7 @@ public class OverlayService extends Service {
     private TextView econNextRoundBtn;
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
     private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv, econRecordTv;
-    private TextView econTimelineTv;
+    private TextView econTimelineTv, econProjectedTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
 
@@ -897,7 +897,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econTimelineTv=null;
+        econTimelineTv=null; econProjectedTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -913,7 +913,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econTimelineTv=null;
+        econTimelineTv=null; econProjectedTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1219,6 +1219,26 @@ public class OverlayService extends Service {
             root.addView(alertTv);
         }
 
+        // near-2★ alert: any tracked champ 1-2 copies from 2-starring with pool copies available
+        java.util.List<String> nearStar=new java.util.ArrayList<>();
+        for(String ch : pool.seenSorted()){
+            int sc=pool.seenCount(ch); int need=Math.max(0,3-sc);
+            if(need>0 && need<=2 && pool.remaining(ch)>=need) nearStar.add(ch);
+        }
+        if(!nearStar.isEmpty()){
+            StringBuilder nsb=new StringBuilder("★★ close:");
+            for(int i=0;i<nearStar.size();i++){
+                String ch=nearStar.get(i); int need=3-pool.seenCount(ch);
+                if(i>0) nsb.append("  ·");
+                nsb.append(" ").append(ch).append(" (").append(need).append(" more)");
+            }
+            TextView nearTv=new TextView(this); nearTv.setText(nsb.toString());
+            nearTv.setTextColor(GOLD); nearTv.setTextSize(11); nearTv.setGravity(Gravity.CENTER);
+            nearTv.setBackground(box(0xFF1A1400,6,GOLD,2)); nearTv.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams ntl=new LinearLayout.LayoutParams(-1,-2); ntl.setMargins(0,0,0,6); nearTv.setLayoutParams(ntl);
+            root.addView(nearTv);
+        }
+
         // bail alert: pinned carry has shallow pool and you're not 2-starred yet
         String pinnedName=pool.getPinned();
         if(!pinnedName.isEmpty() && pool.remaining(pinnedName)<=6 && pool.seenCount(pinnedName)<9){
@@ -1254,8 +1274,16 @@ public class OverlayService extends Service {
                 TextView remTv=new TextView(this);
                 remTv.setText(remLeft==0?"none left":remLeft+" left");
                 remTv.setTextColor(remLeft==0?BLOODL:remLeft<=3?BLOODL:remLeft<=6?GOLD:DIM);
-                remTv.setTextSize(9); remTv.setGravity(Gravity.CENTER); remTv.setPadding(0,1,0,3);
+                remTv.setTextSize(9); remTv.setGravity(Gravity.CENTER); remTv.setPadding(0,1,0,1);
                 wrapper.addView(remTv);
+                int seen2=pool.seenCount(tn); int need2=Math.max(0,3-seen2);
+                if(need2>0 && need2<=2 && remLeft>=need2){
+                    TextView starTv=new TextView(this);
+                    starTv.setText(need2+" more → ★★");
+                    starTv.setTextColor(need2==1?GOLD:ASH);
+                    starTv.setTextSize(9); starTv.setGravity(Gravity.CENTER); starTv.setPadding(0,0,0,3);
+                    wrapper.addView(starTv);
+                }
                 tRow.addView(wrapper);
             }
             // fill last row if not full
@@ -2399,6 +2427,9 @@ public class OverlayService extends Service {
         econIncomeTv.setTextColor(GOLD); econIncomeTv.setTextSize(ts(28)); econIncomeTv.setTypeface(null, android.graphics.Typeface.BOLD); incCard.addView(econIncomeTv);
         econBreakTv=new TextView(this); econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak"+(streak>0?"  +  1g win":""));
         econBreakTv.setTextColor(ASH); econBreakTv.setTextSize(11); incCard.addView(econBreakTv);
+        econProjectedTv=new TextView(this);
+        econProjectedTv.setText("~"+(gold+income*2)+"g in 2r  ·  ~"+(gold+income*4)+"g in 4r");
+        econProjectedTv.setTextColor(DIM); econProjectedTv.setTextSize(10); incCard.addView(econProjectedTv);
         root.addView(incCard);
         econNextRoundBtn=new TextView(this);
         econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
@@ -2642,6 +2673,7 @@ public class OverlayService extends Service {
         }
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
+        if(econProjectedTv!=null) econProjectedTv.setText("~"+(gold+income*2)+"g in 2r  ·  ~"+(gold+income*4)+"g in 4r");
         if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
         if(econRollBudgetTv!=null) econRollBudgetTv.setText(rollBudgetHint(gold));
         if(econHpTv!=null){
