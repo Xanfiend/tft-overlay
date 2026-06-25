@@ -16,6 +16,10 @@ Use the best available model: `claude-fable-5` if available, otherwise `claude-o
 - Never `--no-verify` or force-push without explicit instruction.
 - Build validation goes through CI (GitHub Actions); do not attempt `./gradlew` locally — the sandbox cannot reach Maven Central.
 
+### CI verification is MANDATORY after every push (never let the build go red unnoticed)
+
+The sandbox can't compile (no Maven), so CI is the *only* build signal. A push succeeding ≠ the build passing. **After every push to `main`, poll the `build.yml` run for that commit to completion (`mcp__github__actions_*`) and confirm `conclusion == success` before reporting the work done.** If it's red: read the failed job log, fix the cause, push the fix, and re-verify — before any new feature work. Do NOT stack new commits on an unverified/red build (that's how v1.99.22–32 silently piled onto one broken compile). Catching red on the very next push is what prevents a streak. CI green = code compiles + unit tests pass; that bar always holds. (Producing/releasing an installable APK is a *separate* goal — only pursue it when the user asks.)
+
 ## Coding style
 
 Terse, but explain. Code first, then 1-2 plain lines: what it does and why. Flag non-obvious syntax inline. Assume self-taught gaps. No boilerplate or comments unless asked. Do not restate the task. One change at a time. If an error is pasted, fix the cause — do not guess broadly.
