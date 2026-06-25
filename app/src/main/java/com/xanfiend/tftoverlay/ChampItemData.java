@@ -26,14 +26,14 @@ import java.util.Map;
  *  match ItemData's component matrix (this is a reference list,
  *  not the builder).
  *
- *  Data verified against the patch 17.5b meta snapshot
- *  (tactics.tools / mobalytics / metatft, June 2026).
+ *  Data verified against the patch 17.6 meta snapshot
+ *  (Riot 17.5 + 17.6 patch notes, June 2026).
  * ============================================================
  */
 public final class ChampItemData {
 
     // Live patch this build data reflects. Shown in the BUILDS tab.
-    public static final String PATCH = "17.5b";
+    public static final String PATCH = "17.6";
 
     /** One champion's meta build. */
     public static final class Build {
@@ -81,7 +81,7 @@ public final class ChampItemData {
         put("MissFortune", "AP/AD Reroll Carry",
             new String[]{"Blue Buff","Jeweled Gauntlet","Rabadon's Deathcap"},
             "Miss Fortune Reroll",
-            "B-tier this patch — strong board but out-capped by the top comps.");
+            "B-tier — strong board but out-capped by the top comps.");
 
         // ---------- AP carries ----------
         put("AurelionSol", "AP Carry",
@@ -90,25 +90,49 @@ public final class ChampItemData {
             "Non-Mech wants Searing Shortbow for mana; crit + amp is the core.");
         put("Karma", "AP Carry",
             new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
-            "Dark Star (Kai'Sa duo)",
-            "Adaptive Helm is the top utility slot if you need to flex AP backline.");
+            "Dark Star / AP Shepherd",
+            "17.6: Split Damage 570/855 => 630/945 — now a real AP Shepherd flex carry.");
         put("Vex", "AP Carry",
             new String[]{"Guinsoo's Rageblade","Jeweled Gauntlet","Striker's Flail"},
             "Shepherd Vex Fast 9",
             "Void Staff over Striker's into heavy armor stacking.");
+        put("Bard", "AP Shepherd Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
+            "Shepherd Bard Fast 9",
+            "17.5: spell damage buffed 220/330 => 240/360 to function as primary carry.");
+        put("TwistedFate", "AP Psionic Carry",
+            new String[]{"Blue Buff","Jeweled Gauntlet","Rabadon's Deathcap"},
+            "Psionic TF",
+            "17.6: major buff (Min Dmg 190/285 => 205/305 AP); pair with Veigar and Viktor.");
+        put("Viktor", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Morellonomicon"},
+            "Dark Star Viktor",
+            "17.6: Ability Damage 190/290/500 => 200/300/530; viable in Dark Star flex lines.");
+        put("Leblanc", "AP Challenger Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Blue Buff"},
+            "Stargazer LeBlanc Fast 9",
+            "17.6: Sigil 85/130 => 95/145 + Passive 62/93 => 66/99; AP Shepherd flex option.");
 
         // ---------- Tanks / frontline item holders ----------
         put("Rammus", "Tank",
             new String[]{"Warmog's Armor","Bramble Vest","Gargoyle Stoneplate"},
             "Meeple Fateweavers",
-            "Primary tank — slam defensives early alongside Corki.");
+            "Primary tank — slam defensives early. 17.5 nerf: Mana 20/90 => 20/80.");
         put("TahmKench", "Tank",
             new String[]{"Warmog's Armor","Gargoyle Stoneplate","Dragon's Claw"},
             "Dark Star frontline",
             "Dragon's Claw vs heavy AP, Bramble vs crit/AD boards.");
+        put("Shen", "Frontline",
+            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Redemption"},
+            "Arbiter Shen",
+            "17.6: own AS buff no longer decays after cast — more consistent shredding.");
+        put("Morgana", "AP Tank",
+            new String[]{"Warmog's Armor","Dragon's Claw","Jeweled Gauntlet"},
+            "Dark Star frontline",
+            "17.6: Health Gain 525 => 600 AP, Ally Heal 100 => 125 AP; Threat-like tank.");
     }
 
-    // ---- unit tier list (patch 17.5b) ----
+    // ---- unit tier list (patch 17.6) ----
     // S = meta-defining (anchors an S-tier comp or tops the unit win-rate list),
     // A = strong / reliable secondary, B = playable / situational, C = weak.
     // Only units with real evidence are ranked; the rest stay unranked (no badge).
@@ -122,19 +146,23 @@ public final class ChampItemData {
         tier("Vex","S");          // Vanguard / Shepherd Vex
         tier("AurelionSol","S");  // Dark Star A.Sol
         tier("Jhin","S");         // highest-cap 5-cost
-        tier("Shen","S");         // top-stat 5-cost frontline
-        tier("Bard","S");         // top-stat 5-cost
-        tier("Blitzcrank","S");   // top-stat 5-cost
+        tier("Shen","S");         // top-stat 5-cost frontline (17.6 AS buff)
+        tier("Bard","S");         // Shepherd primary carry (17.5 buffed)
+        tier("Blitzcrank","S");   // top-stat 5-cost engage
         // A — strong carries / key support+tank of S comps
         tier("Kaisa","A");        // Shepherd / Rogues Kai'Sa
-        tier("Karma","A");        // Dark Star duo carry
+        tier("Karma","A");        // Dark Star + AP Shepherd (17.6 buffed)
         tier("Riven","A");        // Fateweavers secondary carry
         tier("Rammus","A");       // Fateweavers primary tank
         tier("Sona","A");         // key support 5-cost in multiple S comps
+        tier("TwistedFate","A");  // Psionic TF (17.6 major buff)
+        tier("Viktor","A");       // Dark Star AP (17.6 buffed)
+        tier("Leblanc","A");      // Stargazer AP Shepherd (17.6 buffed)
         tier("Ornn","A");         // Samira reroll second tank
         // B — playable but out-capped
         tier("MissFortune","B");  // MF reroll, B-tier this patch
         tier("TahmKench","B");    // Dark Star frontline filler
+        tier("Morgana","B");      // Dark Star AP tank (17.6 improved utility)
     }
 
     /** Tier letter ("S"/"A"/"B"/"C") for a champion, or "" if unranked this patch. */

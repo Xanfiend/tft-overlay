@@ -1301,6 +1301,13 @@ public class OverlayService extends Service {
                     starTv.setTextColor(need2==1?GOLD:ASH);
                     starTv.setTextSize(9); starTv.setGravity(Gravity.CENTER); starTv.setPadding(0,0,0,3);
                     wrapper.addView(starTv);
+                } else if(seen2>=3 && seen2<9 && fc<5){
+                    int need3=9-seen2;
+                    TextView star3Tv=new TextView(this);
+                    star3Tv.setText(need3+" more → ★★★");
+                    star3Tv.setTextColor(need3<=2?GOLD:need3<=4?ASH:DIM);
+                    star3Tv.setTextSize(9); star3Tv.setGravity(Gravity.CENTER); star3Tv.setPadding(0,0,0,3);
+                    wrapper.addView(star3Tv);
                 }
                 tRow.addView(wrapper);
             }
@@ -2659,6 +2666,12 @@ public class OverlayService extends Service {
             else                                 coming="new stage next round — base damage rises";
             TextView nx=new TextView(this); nx.setText(coming);
             nx.setTextColor(rnd==3&&stg<=4?GOLD:ASH); nx.setTextSize(11); nx.setPadding(0,4,0,0); stCard.addView(nx);
+            if(rnd==5||rnd==6){
+                TextView slamTv=new TextView(this);
+                slamTv.setText("Slam items — "+(7-rnd)+"r before PvE");
+                slamTv.setTextColor(GOLD); slamTv.setTextSize(11); slamTv.setTypeface(null,android.graphics.Typeface.BOLD);
+                slamTv.setPadding(0,4,0,0); stCard.addView(slamTv);
+            }
             root.addView(stCard);
         }
 
@@ -3054,6 +3067,32 @@ public class OverlayService extends Service {
                 TextView also=new TextView(this);
                 also.setText("Other carries on your board: "+android.text.TextUtils.join(", ", rec.alsoCarries));
                 also.setTextColor(DIM); also.setTextSize(11); also.setPadding(2,0,2,8); root.addView(also);
+            }
+            // LOOK FOR: meta carries for this comp not yet on your board
+            java.util.List<String> lookFor=new java.util.ArrayList<>();
+            java.util.Set<String> boardSet=new java.util.HashSet<>(board);
+            for(int lci=1;lci<SetData.CHAMPS.length;lci++){
+                for(String lname:SetData.CHAMPS[lci]){
+                    ChampItemData.Build lb=ChampItemData.get(lname);
+                    if(lb==null||!rec.comp.equals(lb.comp)) continue;
+                    if(!boardSet.contains(lname)) lookFor.add(lname);
+                }
+            }
+            if(!lookFor.isEmpty()){
+                TextView lfHdr=new TextView(this); lfHdr.setText("look for:");
+                lfHdr.setTextColor(ASH); lfHdr.setTextSize(10); lfHdr.setTypeface(null,android.graphics.Typeface.BOLD);
+                lfHdr.setPadding(2,0,0,4); root.addView(lfHdr);
+                LinearLayout lfRow=new LinearLayout(this); lfRow.setOrientation(LinearLayout.HORIZONTAL);
+                lfRow.setPadding(0,0,0,8);
+                for(String lname:lookFor){
+                    int lco=Pool.costOf(lname);
+                    TextView lchip=new TextView(this); lchip.setText(lname);
+                    lchip.setTextColor(lco>0?COSTC[lco]:BONE); lchip.setTextSize(11); lchip.setGravity(Gravity.CENTER);
+                    lchip.setBackground(box(CARD,6,lco>0?COSTC[lco]:EDGE,1)); lchip.setPadding(10,6,10,6);
+                    LinearLayout.LayoutParams lcl=new LinearLayout.LayoutParams(-2,-2); lcl.setMargins(0,0,6,0); lchip.setLayoutParams(lcl);
+                    lfRow.addView(lchip);
+                }
+                root.addView(lfRow);
             }
         } else {
             TextView t=new TextView(this);
