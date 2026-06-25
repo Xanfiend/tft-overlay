@@ -1,25 +1,17 @@
-# TFT Scryer — CLAUDE.md
+# TFT Scryer — DEVNOTES
 
-## Memory
-
-At session start, read `MEMORY.md` (running cross-session log: current state, decisions, open threads). Append to it as decisions land or work ships. Keep it terse. Compact it (rewrite to durable state, drop detail recoverable from git/changelog) whenever it bloats — standing authorization, don't wait to be asked.
-
-## Model
-
-Use the best available model: `claude-fable-5` if available, otherwise `claude-opus-4-8`. Never use Sonnet.
+Developer notes: architecture, conventions, known bugs, and direction. Working scratch state lives in `NOTES.md` — keep it current as decisions land, and compact it when it bloats.
 
 ## Git workflow
 
-- Always push to `main`. This is standing authorization — never ask for confirmation.
-- Branch `claude/test-coverage-analysis-PAGmD` is the active dev branch; push there too when CI verification is needed.
-- Commit format: `v{N}: one-line description` (no em dashes).
-- Commit as the repo owner (`Xanfiend <raivoharkovs@gmail.com>`); do NOT add `Co-Authored-By`, `Generated with`, session links, or any AI-tooling attribution to commits, PRs, releases, or tracked files. This is a public personal project — keep tooling out of its public footprint (same spirit as the changelog "secret sauce" rule). Not a license to fabricate authorship claims; just omit the attribution.
-- Never `--no-verify` or force-push without explicit instruction.
-- Build validation goes through CI (GitHub Actions); do not attempt `./gradlew` locally — the sandbox cannot reach Maven Central.
+- Push to `main`.
+- Commit format: `v{N}: one-line description` (no em dashes). Commit as the repo owner; keep third-party tooling out of commit/PR/release metadata.
+- Never `--no-verify` or force-push without a deliberate reason.
+- Build validation runs in CI (GitHub Actions); local Gradle builds aren't reliable here, so lean on CI for the compile signal.
 
-### Never let CI go red and stay red (catch it within a commit or two)
+### Keep CI green (catch a red build within a commit or two)
 
-The sandbox can't compile (no Maven), so CI is the only build signal — a push succeeding ≠ the build passing. The goal is simply: **a red build never streaks.** Practically that means check the `build.yml` conclusion (`mcp__github__actions_*`) after a batch of code changes — not obsessively after every push, and don't bother polling docs-only commits (no `.java` change can't break the Java compile). Don't keep stacking feature commits without ever having seen green; once you've confirmed a recent code push is green, you can keep shipping and spot-check again after the next batch. If you do find red: read the failed job log, fix the cause, push, confirm green — before more feature work. (That's the gap that let one compile error ride from v1.99.22–32.) CI green = compiles + unit tests pass; producing/releasing an installable APK is a separate goal, only when asked.
+CI is the build signal — a push succeeding is not the same as the build passing. The goal: a red build never streaks. Check the `build.yml` run status after a batch of code changes (skip docs-only commits — they can't break the Java compile). Don't stack feature commits without having seen green; once a recent code push is green, keep shipping and spot-check after the next batch. On red: read the failed job log, fix the cause, push, confirm green before more feature work. (A single compile error once rode unnoticed from v1.99.22–32 because nobody checked.) CI green = compiles + unit tests pass; releasing an installable APK is a separate goal.
 
 ## Coding style
 
