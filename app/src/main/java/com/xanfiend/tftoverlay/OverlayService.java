@@ -1344,8 +1344,13 @@ public class OverlayService extends Service {
                     TextView starTv=new TextView(this);
                     starTv.setText(need2+" more → ★★");
                     starTv.setTextColor(need2==1?GOLD:ASH);
-                    starTv.setTextSize(9); starTv.setGravity(Gravity.CENTER); starTv.setPadding(0,0,0,3);
+                    starTv.setTextSize(9); starTv.setGravity(Gravity.CENTER); starTv.setPadding(0,0,0,1);
                     wrapper.addView(starTv);
+                    if(need2==1 && fc>0 && pool.getGold()>=fc){
+                        TextView buyTv=new TextView(this); buyTv.setText("✓ buy now!");
+                        buyTv.setTextColor(GREEN); buyTv.setTextSize(9); buyTv.setGravity(Gravity.CENTER); buyTv.setPadding(0,0,0,3);
+                        wrapper.addView(buyTv);
+                    }
                 } else if(seen2>=9){
                     TextView star3dTv=new TextView(this);
                     star3dTv.setText("★★★ 3-starred");
@@ -2098,6 +2103,9 @@ public class OverlayService extends Service {
                     if(augCompare.contains(augName)){ augCompare.remove(augName); }
                     else { if(augCompare.size()>=3) augCompare.remove(0); augCompare.add(augName); }
                     showPanel();
+                }});
+                card.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
+                    pool.addMyAugment(augName); buzz(); showPanel(); return true;
                 }});
 
                 LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -3262,6 +3270,28 @@ public class OverlayService extends Service {
             TextView t=new TextView(this);
             t.setText("No marked meta carry on your board yet. Itemize your strongest, least-contested unit and look for a carry to commit to.");
             t.setTextColor(ASH); t.setTextSize(12); t.setPadding(2,2,2,8); root.addView(t);
+        }
+
+        // ---- board items reference: all scanned board champs with known item builds ----
+        java.util.List<String> boardWithItems=new java.util.ArrayList<>();
+        for(String bn : new java.util.LinkedHashSet<>(board)){
+            if(ChampItemData.get(bn)!=null) boardWithItems.add(bn);
+        }
+        if(!boardWithItems.isEmpty()){
+            addSecHdr(root, "BOARD ITEMS", GOLD);
+            for(String bn : boardWithItems){
+                ChampItemData.Build bb=ChampItemData.get(bn);
+                int bco=Pool.costOf(bn);
+                LinearLayout biRow=new LinearLayout(this); biRow.setOrientation(LinearLayout.HORIZONTAL); biRow.setGravity(Gravity.CENTER_VERTICAL);
+                biRow.setBackground(box(CARD,6,EDGE,1)); biRow.setPadding(10,7,10,7);
+                LinearLayout.LayoutParams bil=new LinearLayout.LayoutParams(-1,-2); bil.setMargins(0,0,0,4); biRow.setLayoutParams(bil);
+                TextView bnTv=new TextView(this); bnTv.setText(bn);
+                bnTv.setTextColor(bco>0?COSTC[bco]:BONE); bnTv.setTextSize(12); bnTv.setTypeface(null,android.graphics.Typeface.BOLD);
+                LinearLayout.LayoutParams bnl=new LinearLayout.LayoutParams(-2,-2); bnl.setMargins(0,0,8,0); bnTv.setLayoutParams(bnl);
+                TextView biTv=new TextView(this); biTv.setText(android.text.TextUtils.join("  ·  ", bb.items));
+                biTv.setTextColor(ASH); biTv.setTextSize(11); biTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                biRow.addView(bnTv); biRow.addView(biTv); root.addView(biRow);
+            }
         }
 
         // ---- your units (ranked + contested) ----
