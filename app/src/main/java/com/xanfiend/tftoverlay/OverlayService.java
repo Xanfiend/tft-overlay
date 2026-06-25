@@ -40,6 +40,7 @@ public class OverlayService extends Service {
     private static final String APP_VERSION = "v1.99.17";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
+    private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
     // one-step undo for the pool grid: the inverse of the last mark + a label.
     // null when there's nothing to undo. Cleared on reset and panel-close.
     private Runnable undoAction = null;
@@ -1274,6 +1275,28 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-1,-2); bl.setMargins(0,0,0,6); bailTv.setLayoutParams(bl);
             root.addView(bailTv);
         }
+        // pinned carry roll-check: hit % at current gold (same math as COACH roll check)
+        if(!pinnedName.isEmpty()){
+            int pco=Pool.costOf(pinnedName);
+            if(pco>=1 && pco<=5){
+                int prem=pool.remaining(pinnedName);
+                int ptier=0; for(String nt:SetData.CHAMPS[pco]) ptier+=pool.remaining(nt);
+                ptier=Math.max(0, ptier-pool.getJunk(pco));
+                int plv=pool.getLevel(); int pgold=Math.min(60,pool.getGold());
+                if(prem>0 && ptier>0 && pgold>=2 && plv>=1 && plv<=10){
+                    double phit=RollMath.hitChances(plv,pco,Math.min(prem,ptier),ptier,pgold,1)[0];
+                    int ppct=(int)Math.round(phit*100);
+                    TextView rollTv=new TextView(this);
+                    rollTv.setText("★ "+pinnedName+": ~"+ppct+"% to hit with "+pgold+"g at Lv "+plv);
+                    rollTv.setTextColor(ppct>=70?GREEN:ppct>=40?GOLD:ASH);
+                    rollTv.setTextSize(11); rollTv.setGravity(Gravity.CENTER);
+                    rollTv.setBackground(box(CARD,6,ppct>=70?GREEN:ppct>=40?GOLD:EDGE,ppct>=70?2:1));
+                    rollTv.setPadding(10,8,10,8);
+                    LinearLayout.LayoutParams rtl=new LinearLayout.LayoutParams(-1,-2); rtl.setMargins(0,0,0,6); rollTv.setLayoutParams(rtl);
+                    root.addView(rollTv);
+                }
+            }
+        }
 
         // quick-access row: show tracked champs (those with seen or opp count > 0) at the
         // top so the player doesn't hunt through the grid every round
@@ -2507,9 +2530,8 @@ public class OverlayService extends Service {
         streakRow.addView(sL); streakRow.addView(econStreakTv); streakRow.addView(sW);
         root.addView(streakRow);
         econBonusTv=new TextView(this);
-        econBonusTv.setTextColor(ASH); econBonusTv.setTextSize(11); econBonusTv.setPadding(2,4,2,0);
-        if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
-        else { econBonusTv.setVisibility(View.GONE); }
+        econBonusTv.setTextColor(sBonus>0?ASH:DIM); econBonusTv.setTextSize(11); econBonusTv.setPadding(2,4,2,0);
+        econBonusTv.setText(streakHint(streak,sBonus)); econBonusTv.setVisibility(View.VISIBLE);
         root.addView(econBonusTv);
         econStreakRoiTv=new TextView(this);
         econStreakRoiTv.setTextColor(DIM); econStreakRoiTv.setTextSize(10); econStreakRoiTv.setPadding(2,2,2,0);
@@ -2776,8 +2798,8 @@ public class OverlayService extends Service {
         }
         econStreakTv.setText(streak==0?"—":Math.abs(streak)+(streak>0?"W":"L"));
         econStreakTv.setTextColor(streak>0?GREEN:(streak<0?BLOODL:ASH));
-        if(sBonus>0){ econBonusTv.setText("+"+sBonus+"g streak bonus"); econBonusTv.setVisibility(View.VISIBLE); }
-        else { econBonusTv.setVisibility(View.GONE); }
+        econBonusTv.setText(streakHint(streak,sBonus));
+        econBonusTv.setTextColor(sBonus>0?ASH:DIM); econBonusTv.setVisibility(View.VISIBLE);
         if(econRecordTv!=null){
             int rW=pool.getWins(), rL=pool.getLosses(), rT=rW+rL;
             if(rT>0){ econRecordTv.setText(rW+"W  "+rL+"L  this game  ("+Math.round(100f*rW/rT)+"% winrate)"); econRecordTv.setVisibility(View.VISIBLE); }
@@ -2839,6 +2861,18 @@ public class OverlayService extends Service {
                 econTimelineTv.setVisibility(tl.isEmpty()?View.GONE:View.VISIBLE);
             }
         }
+    }
+
+    private static String streakHint(int streak, int sBonus){
+        int abs=Math.abs(streak); boolean win=streak>0;
+        if(sBonus>0){
+            String dir=win?"win":"loss";
+            if(abs>=6) return "+3g "+dir+" streak  —  MAX bonus, protect it";
+            if(abs>=4) return "+2g "+dir+" streak  —  strong, maintain";
+            return "+1g "+dir+" streak bonus  —  maintain";
+        }
+        if(abs==0) return "no streak  —  2W or 2L activates +1g/round bonus";
+        return (win?"one more win":"one more loss")+"  →  +1g streak bonus";
     }
 
     private static String rollBudgetHint(int gold){
@@ -2965,6 +2999,58 @@ public class OverlayService extends Service {
             clear.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; showPanel(); } });
             LinearLayout.LayoutParams brl=new LinearLayout.LayoutParams(-2,-2); brl.setMargins(0,6,0,0); clear.setLayoutParams(brl);
             root.addView(clear);
+        }
+
+        // ── MY COMPONENTS — multi-select: tap all components you're holding, see every craftable item ──
+        addSecHdr(root, "MY COMPONENTS", ASH);
+        int[][] hRows={{1,2,3,4,5},{6,7,8,9,10}};
+        for(int[] hRow : hRows){
+            LinearLayout hr=new LinearLayout(this); hr.setPadding(0,0,0,4);
+            for(int i : hRow){
+                final int ci=i; boolean held=itemsHeld[ci];
+                TextView hchip=new TextView(this); hchip.setText(ItemData.COMPONENT_SHORT[ci]);
+                hchip.setGravity(Gravity.CENTER); hchip.setTextSize(11);
+                hchip.setTextColor(held?0xFF000000:BONE);
+                hchip.setTypeface(null, held?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+                hchip.setBackground(box(held?GOLD:CARD,6,held?0xFFFFFFFF:EDGE,held?2:1));
+                hchip.setPadding(4,10,4,10);
+                LinearLayout.LayoutParams chl=new LinearLayout.LayoutParams(0,-2,1f); chl.setMargins(3,0,3,0); hchip.setLayoutParams(chl);
+                hchip.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemsHeld[ci]=!itemsHeld[ci]; showPanel(); }});
+                hr.addView(hchip);
+            }
+            root.addView(hr);
+        }
+        java.util.List<Integer> heldList=new java.util.ArrayList<>();
+        for(int i=1;i<=10;i++) if(itemsHeld[i]) heldList.add(i);
+        if(!heldList.isEmpty()){
+            TextView hClr=new TextView(this); hClr.setText("clear all");
+            hClr.setTextColor(DIM); hClr.setTextSize(10); hClr.setPadding(2,4,2,0);
+            hClr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ java.util.Arrays.fill(itemsHeld,false); showPanel(); }});
+            root.addView(hClr);
+            addSecHdr(root, "CRAFTABLE", GOLD);
+            boolean anyCraft=false;
+            for(int ai : heldList){
+                for(int bi : heldList){
+                    if(bi<ai) continue; // each pair once (allow same component: BF+BF=IE)
+                    String res=ItemData.COMBOS[ai][bi];
+                    if(res==null||res.isEmpty()) continue;
+                    anyCraft=true;
+                    LinearLayout rc=new LinearLayout(this); rc.setOrientation(LinearLayout.HORIZONTAL); rc.setGravity(Gravity.CENTER_VERTICAL);
+                    rc.setBackground(box(CARD,6,EDGE,1)); rc.setPadding(12,8,12,8);
+                    LinearLayout.LayoutParams rcl=new LinearLayout.LayoutParams(-1,-2); rcl.setMargins(0,0,0,4); rc.setLayoutParams(rcl);
+                    TextView parts=new TextView(this); parts.setText(ItemData.COMPONENT_SHORT[ai]+" + "+ItemData.COMPONENT_SHORT[bi]);
+                    parts.setTextColor(ASH); parts.setTextSize(10);
+                    TextView arr=new TextView(this); arr.setText("  →  "); arr.setTextColor(DIM); arr.setTextSize(12);
+                    TextView nm=new TextView(this); nm.setText(res);
+                    nm.setTextColor(GOLD); nm.setTextSize(13); nm.setTypeface(null,android.graphics.Typeface.BOLD);
+                    nm.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+                    rc.addView(parts); rc.addView(arr); rc.addView(nm); root.addView(rc);
+                }
+            }
+            if(!anyCraft){
+                TextView noItems=new TextView(this); noItems.setText("no items from these components");
+                noItems.setTextColor(DIM); noItems.setTextSize(11); noItems.setPadding(2,4,2,0); root.addView(noItems);
+            }
         }
 
         // traits section
