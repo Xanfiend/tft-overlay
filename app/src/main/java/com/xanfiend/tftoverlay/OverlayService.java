@@ -1323,6 +1323,12 @@ public class OverlayService extends Service {
                     starTv.setTextColor(need2==1?GOLD:ASH);
                     starTv.setTextSize(9); starTv.setGravity(Gravity.CENTER); starTv.setPadding(0,0,0,3);
                     wrapper.addView(starTv);
+                } else if(seen2>=9){
+                    TextView star3dTv=new TextView(this);
+                    star3dTv.setText("★★★ 3-starred");
+                    star3dTv.setTextColor(GOLD);
+                    star3dTv.setTextSize(9); star3dTv.setGravity(Gravity.CENTER); star3dTv.setPadding(0,0,0,3);
+                    wrapper.addView(star3dTv);
                 } else if(seen2>=3 && seen2<9 && fc<5){
                     int need3=9-seen2;
                     TextView star3Tv=new TextView(this);
@@ -2412,6 +2418,13 @@ public class OverlayService extends Service {
         root.addView(goldRow);
         TextView goldHint=new TextView(this); goldHint.setText("manual correction  ·  tap ±1  ·  hold to repeat");
         goldHint.setTextColor(DIM); goldHint.setTextSize(9); goldHint.setPadding(2,2,2,0); root.addView(goldHint);
+        int curLv=pool.getLevel();
+        int[] lvCosts={0,0,0,0,4,8,20,32,48,80};
+        if(curLv>=4 && curLv<=9){
+            TextView lvHint=new TextView(this);
+            lvHint.setText("level up costs "+lvCosts[curLv]+"g  (Lv "+curLv+"→"+(curLv+1)+")");
+            lvHint.setTextColor(DIM); lvHint.setTextSize(9); lvHint.setPadding(2,1,2,0); root.addView(lvHint);
+        }
 
         // quick-set presets: snap straight to a common gold value (the interest
         // brackets + 0 for all-in) instead of holding ± across a big gap
@@ -3103,6 +3116,12 @@ public class OverlayService extends Service {
 
             TextView carry=new TextView(this); carry.setText("Carry: "+rec.carry);
             carry.setTextColor(GOLD); carry.setTextSize(13); carry.setPadding(0,6,0,0); card.addView(carry);
+            int carryContest=pool.oppCount(rec.carry);
+            if(carryContest>=2){
+                TextView contWarn=new TextView(this);
+                contWarn.setText("⚠ "+carryContest+" opponents on "+rec.carry+" — 3-star fast or consider pivoting.");
+                contWarn.setTextColor(BLOODL); contWarn.setTextSize(11); contWarn.setPadding(0,4,0,0); card.addView(contWarn);
+            }
 
             int carryCost=Pool.costOf(rec.carry);
             if(carryCost==2||carryCost==3){
