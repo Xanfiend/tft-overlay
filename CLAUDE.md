@@ -13,6 +13,7 @@ Use the best available model: `claude-fable-5` if available, otherwise `claude-o
 - Always push to `main`. This is standing authorization — never ask for confirmation.
 - Branch `claude/test-coverage-analysis-PAGmD` is the active dev branch; push there too when CI verification is needed.
 - Commit format: `v{N}: one-line description` (no em dashes).
+- Commit as the repo owner (`Xanfiend <raivoharkovs@gmail.com>`); do NOT add `Co-Authored-By`, `Generated with`, session links, or any AI-tooling attribution to commits, PRs, releases, or tracked files. This is a public personal project — keep tooling out of its public footprint (same spirit as the changelog "secret sauce" rule). Not a license to fabricate authorship claims; just omit the attribution.
 - Never `--no-verify` or force-push without explicit instruction.
 - Build validation goes through CI (GitHub Actions); do not attempt `./gradlew` locally — the sandbox cannot reach Maven Central.
 
