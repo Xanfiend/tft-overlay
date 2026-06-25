@@ -89,9 +89,11 @@ public class OverlayService extends Service {
     private TextView econNextRoundBtn;
     private TextView econHpTv, econStageTv, econEventTv, econRollBudgetTv;
     private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv, econRecordTv;
+    private TextView econWonBtnTv;
     private TextView econTimelineTv, econProjectedTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
+    private boolean trackingByScarcity = false;
 
     // hold-to-repeat gold buttons
     private final android.os.Handler goldHandler = new android.os.Handler();
@@ -897,7 +899,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econTimelineTv=null; econProjectedTv=null;
+        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -913,7 +915,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econTimelineTv=null; econProjectedTv=null;
+        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1254,8 +1256,24 @@ public class OverlayService extends Service {
         // quick-access row: show tracked champs (those with seen or opp count > 0) at the
         // top so the player doesn't hunt through the grid every round
         java.util.List<String> tracked = pool.seenSorted();
+        if(trackingByScarcity){
+            java.util.Collections.sort(tracked, new java.util.Comparator<String>(){
+                public int compare(String a, String b){ return pool.remaining(a)-pool.remaining(b); }
+            });
+        }
         if(!tracked.isEmpty()){
-            addSecHdr(root, "TRACKING", ASH);
+            // inline header with sort toggle
+            LinearLayout thdr=new LinearLayout(this); thdr.setOrientation(LinearLayout.HORIZONTAL); thdr.setGravity(android.view.Gravity.CENTER_VERTICAL); thdr.setPadding(2,12,0,7);
+            TextView thdrTxt=new TextView(this); thdrTxt.setText("◇ TRACKING");
+            thdrTxt.setTextColor(ASH); thdrTxt.setTextSize(10); thdrTxt.setLetterSpacing(0.08f); thdrTxt.setTypeface(null,android.graphics.Typeface.BOLD);
+            thdrTxt.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+            TextView tSortBtn=new TextView(this);
+            tSortBtn.setText(trackingByScarcity?"↕ scarce":"↕ contest");
+            tSortBtn.setTextColor(trackingByScarcity?GOLD:DIM); tSortBtn.setTextSize(10);
+            tSortBtn.setPadding(8,4,8,4); tSortBtn.setBackground(box(CARD,4,trackingByScarcity?GOLD:EDGE,1));
+            tSortBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ trackingByScarcity=!trackingByScarcity; showPanel(); }});
+            thdr.addView(thdrTxt); thdr.addView(tSortBtn);
+            root.addView(thdr);
             LinearLayout tRow=null;
             for(int ti=0;ti<tracked.size();ti++){
                 if(ti%4==0){
@@ -2131,6 +2149,19 @@ public class OverlayService extends Service {
                     TextView synTv=new TextView(this); synTv.setText(syn.toString());
                     synTv.setTextColor(BONE); synTv.setTextSize(12); synTv.setLineSpacing(4,1f);
                     synTv.setPadding(2,0,2,2); root.addView(synTv);
+                    // 1-more gap: traits where adding 1 unit hits the next breakpoint
+                    java.util.List<String> gapList=new java.util.ArrayList<>();
+                    for(java.util.Map.Entry<String,Integer> ge:traitCounts.entrySet()){
+                        int nb=nextBreakpoint(ge.getKey(),ge.getValue());
+                        if(nb>0 && nb==ge.getValue()+1) gapList.add(ge.getKey()+" →"+nb);
+                    }
+                    if(!gapList.isEmpty()){
+                        TextView gapTv=new TextView(this);
+                        gapTv.setText("1 more: "+android.text.TextUtils.join("  ·  ",gapList));
+                        gapTv.setTextColor(GOLD); gapTv.setTextSize(12);
+                        gapTv.setTypeface(null,android.graphics.Typeface.BOLD);
+                        gapTv.setPadding(2,3,2,4); root.addView(gapTv);
+                    }
                 }
                 if(!unlearned.isEmpty()){
                     TextView un=new TextView(this);
@@ -2446,7 +2477,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "ROUND RESULT", ASH);
         LinearLayout resultRow=new LinearLayout(this);
         LinearLayout.LayoutParams rrl=new LinearLayout.LayoutParams(-1,-2); rrl.setMargins(0,4,0,0); resultRow.setLayoutParams(rrl);
-        TextView wonBtn=new TextView(this); wonBtn.setText("✓  WON");
+        TextView wonBtn=new TextView(this); wonBtn.setText("✓  WON  +"+income+"g");
         wonBtn.setTextColor(0xFF0A1A0A); wonBtn.setTextSize(14); wonBtn.setGravity(Gravity.CENTER);
         wonBtn.setTypeface(null,android.graphics.Typeface.BOLD);
         wonBtn.setBackground(box(GREEN,8,0xFF3DCC47,2)); wonBtn.setPadding(0,16,0,16);
@@ -2459,6 +2490,7 @@ public class OverlayService extends Service {
             advanceRound(1); buzz(); refreshEcon();
         }});
         pressFeedback(wonBtn);
+        econWonBtnTv=wonBtn;
         TextView lostBtn=new TextView(this); lostBtn.setText("✗  LOST");
         lostBtn.setTextColor(BLOODL); lostBtn.setTextSize(14); lostBtn.setGravity(Gravity.CENTER);
         lostBtn.setTypeface(null,android.graphics.Typeface.BOLD);
@@ -2674,6 +2706,7 @@ public class OverlayService extends Service {
         econIncomeTv.setText(income+"g");
         econBreakTv.setText("5 base  +  "+intr+"g interest  +  "+sBonus+"g streak");
         if(econProjectedTv!=null) econProjectedTv.setText("~"+(gold+income*2)+"g in 2r  ·  ~"+(gold+income*4)+"g in 4r");
+        if(econWonBtnTv!=null) econWonBtnTv.setText("✓  WON  +"+income+"g");
         if(econNextRoundBtn!=null) econNextRoundBtn.setText("→ NEXT ROUND  +"+income+"g");
         if(econRollBudgetTv!=null) econRollBudgetTv.setText(rollBudgetHint(gold));
         if(econHpTv!=null){

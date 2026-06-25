@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.23");
+        ver.setText("v1.99.24");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.24  ·  2026-06-25","POOL tab tracking section has a sort toggle (contest pressure vs scarcest first) so reroll players can instantly see which units are hardest to find. GOLD tab WON button now previews the income you will collect before you tap, keeping both round-result buttons self-explanatory. BOARD tab synergy section highlights traits where adding one more unit activates the next breakpoint, making board-improvement decisions obvious at a glance."},
             {"v1.99.23  ·  2026-06-24","POOL tab tracking section shows a 2-star proximity label when you are 1 or 2 copies away from 2-starring a champion and those copies exist in the pool. POOL tab shows a gold alert banner when any tracked champion is close to 2-starring. GOLD tab income card now shows a projected gold estimate for 2 and 4 rounds ahead, so you can plan a level push or roll-down timing."},
             {"v1.99.22  ·  2026-06-24","POOL tab tracking section now shows how many copies remain in the pool for each tracked champion, colored red/yellow/grey by scarcity. POOL tab glance line shows a one-liner lobby read when opponents have been scouted: boards seen, top carries, AP/AD skew, and diver-heavy flag. GOLD tab shows a forward event timeline (upcoming augments ★ and carousels ◉) below the next-event line."},
             {"v1.99.21  ·  2026-06-24","GOLD tab tracks your win-loss record and winrate for the game, shown next to the WON/LOST buttons. COACH tab shows a warning card at the top when your HP is low, so stabilization is never buried under comp advice. POOL tab has a RESET POOL button that clears your tracking data without touching gold, HP, streak, or stage. Critical HP is now flagged red in the POOL tab economy line."},
