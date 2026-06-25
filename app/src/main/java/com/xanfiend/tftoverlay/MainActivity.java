@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.26");
+        ver.setText("v1.99.27");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.27  ·  2026-06-25","POOL tab now alerts when a tracked champion is 1 or 2 copies away from 3-starring, shown as a separate banner so it is visually distinct from the 2-star proximity alert. GOLD tab now shows how much gold you can safely spend without dropping below your current interest bracket, or how much is above the 50g cap, so you always know what is free to use. AUGMENTS tab now lets you pin up to 3 augments side-by-side at the top of the list for quick comparison; tap a card to pin it, tap the X to clear."},
             {"v1.99.26  ·  2026-06-25","BUILDS and AUGMENTS tabs updated to patch 17.6: Bard, TwistedFate, LeBlanc, and Viktor all received meaningful buffs and are now tracked as meta carries with recommended item builds. Augment tier list refreshed with 17.6 changes including reworked Blood Offering, Best Friends, and Loot Singularity. Carry tier and comp priority notes updated throughout."},
             {"v1.99.25  ·  2026-06-25","POOL tab tracking section now shows 3-star progress (how many more copies you need for 3-star) once a champion is already 2-starred, making upgrade priority clear at a glance. COACH tab shows a compact list of meta carries you are still missing for your recommended comp, so you know exactly what to shop for. GOLD tab stage card highlights when item components should be slammed because PvE is one or two rounds away."},
             {"v1.99.24  ·  2026-06-25","POOL tab tracking section has a sort toggle (contest pressure vs scarcest first) so reroll players can instantly see which units are hardest to find. GOLD tab WON button now previews the income you will collect before you tap, keeping both round-result buttons self-explanatory. BOARD tab synergy section highlights traits where adding one more unit activates the next breakpoint, making board-improvement decisions obvious at a glance."},
