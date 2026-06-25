@@ -9,9 +9,8 @@ import java.io.File;
  * The app never blocks, never phones home, never reports any of this. It only
  * surfaces a quiet "heads up" card in SETUP when the device looks rooted or
  * like an emulator, because both raise the odds that a sideloaded build has
- * been tampered with (and, down the line, that a license key could be patched
- * out). Everything here is local, cheap, and best-effort: false positives are
- * possible and harmless since nothing depends on the result.
+ * been tampered with. Everything here is local, cheap, and best-effort: false
+ * positives are possible and harmless since nothing depends on the result.
  */
 public final class DeviceIntegrity {
 

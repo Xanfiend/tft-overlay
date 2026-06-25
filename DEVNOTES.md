@@ -108,7 +108,7 @@ Planned "AUTO-CALIBRATE FROM BOARD" button:
 ## Direction notes (decisions, so they aren't re-pitched)
 
 - Remote/auto meta-data updates for builds/comps: **declined.** No reliable on-device source for "what pros run"; hand-maintaining item metas is unwanted upkeep. COACH/BUILDS read the bundled `ChampItemData` snapshot and may go stale — accepted limitation.
-- Distribution stays GitHub-only; no ads; possible manual "license" monetization later. Automation (THE HUNT, planner auto-tap) stays.
+- Distribution stays GitHub-only; no ads. Automation (THE HUNT, planner auto-tap) stays.
 - Candidate future feature: **positioning helper** (high value — positioning wins otherwise-unwinnable rounds). Depends on reading the opponent board; the evergreen/reliable part is fundamentals + rule-based counter-positioning (spread vs clump, corner the carry) keyed off slow-changing per-champ threat tags (diver/AoE/backline-access), NOT patch-specific item data.
 - Deferred (big task): auto-scan that reads **every opponent in one planning phase**.
 
