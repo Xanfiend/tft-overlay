@@ -1507,10 +1507,10 @@ public class OverlayService extends Service {
         if(!autoScanResults.isEmpty()){
         addSecHdr(root, "REVEALED · YOUR BOARD", GOLD);
             if(autoScanGold>=0||autoScanLevel>=0){
-                StringBuilder glSb=new StringBuilder();
-                if(autoScanLevel>=0) glSb.append("Lv ").append(autoScanLevel);
-                if(autoScanGold>=0){ if(glSb.length()>0) glSb.append("  ·  "); glSb.append(autoScanGold).append("g"); }
-                TextView glTv=new TextView(this); glTv.setText(glSb.toString());
+                StringBuilder glSb2=new StringBuilder();
+                if(autoScanLevel>=0) glSb2.append("Lv ").append(autoScanLevel);
+                if(autoScanGold>=0){ if(glSb2.length()>0) glSb2.append("  ·  "); glSb2.append(autoScanGold).append("g"); }
+                TextView glTv=new TextView(this); glTv.setText(glSb2.toString());
                 glTv.setTextColor(BONE); glTv.setTextSize(12); glTv.setTypeface(null,android.graphics.Typeface.BOLD);
                 glTv.setPadding(2,0,2,4); root.addView(glTv);
             }
