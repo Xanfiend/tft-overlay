@@ -32,7 +32,7 @@ Needs a laptop/emulator + real game; can't verify in CI.
 
 ## Security
 - **Leaked token (found 06-25):** an old `ghp_…` GitHub PAT was sitting in commit author-email metadata (a pasted shell-setup blob) across ~25 early commits. Scrubbed from local history; force-pushed a clean `main`. **Must be revoked/rotated on GitHub regardless — it was public, so treat it as compromised** (scrubbing only stops future copies, not what's already been seen/cached).
-- Stale remote branches (`origin/claude/callback-fix`, `patch-174-and-scan-fix`, `scan-fix-android14`) may still carry the old history — delete them on GitHub to fully purge the public side.
+- Old feature branches may still carry pre-rewrite history — delete any stale ones on GitHub to fully purge the public side.
 - Don't commit tokens/keys.
 
 ## Branding
