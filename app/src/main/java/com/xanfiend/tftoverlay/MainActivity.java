@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.31");
+        ver.setText("v1.99.32");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.32  ·  2026-06-25","Smoother, faster panel rendering when the POOL and COACH tabs have many tracked units."},
             {"v1.99.31  ·  2026-06-25","GUIDE tab OPENER section now highlights the early-game phase that matches your current stage, with a clear marker, so the relevant advice stands out as the game progresses. OPENER item-slam section now shows your pinned carry's exact item plan in a banner, tying the evergreen slam priorities to the carry you have committed to. AUGMENTS tab now marks augments you have already taken with a checkmark and green highlight throughout the tier list, so they are easy to spot at a glance."},
             {"v1.99.30  ·  2026-06-25","POOL tab tracking chips now show a green buy prompt when you are exactly one copy away from 2-starring a champion and you have enough gold to buy it right now. AUGMENTS tab now lets you long-press any augment card to immediately record it as one of your taken augments, without needing a scan. COACH tab now shows a compact item reference for every scanned board champion that has a known build, so you can see the full board item plan in one place instead of only the primary carry."},
             {"v1.99.29  ·  2026-06-25","GOLD tab streak line now always shows contextual advice: what to do to start a streak, when the bonus activates, and how large it is once active, so the streak counter is never just a number. POOL tab shows a roll-check line under your pinned carry when you have gold to spend, giving you a hit percentage at your current level before you decide to roll. ITEMS tab has a new MY COMPONENTS section: tap which components you are holding, and see every item you can craft from them at a glance."},

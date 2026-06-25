@@ -1205,9 +1205,13 @@ public class OverlayService extends Service {
             root.addView(lobbyTv);
         }
 
+        // tracked-champ list, sorted once and reused by every section below
+        // (seenSorted allocates + sorts with per-compare map lookups — don't repeat it)
+        java.util.List<String> sortedPool = pool.seenSorted();
+
         // contest alert: flag any tracked champ with ≥2 opponents and ≤3 copies left
         java.util.List<String> hotList = new java.util.ArrayList<>();
-        for(String ch : pool.seenSorted()){
+        for(String ch : sortedPool){
             if(pool.oppCount(ch)>=2 && pool.remaining(ch)<=3) hotList.add(ch);
         }
         if(!hotList.isEmpty()){
@@ -1226,7 +1230,7 @@ public class OverlayService extends Service {
 
         // near-2★ alert: any tracked champ 1-2 copies from 2-starring with pool copies available
         java.util.List<String> nearStar=new java.util.ArrayList<>();
-        for(String ch : pool.seenSorted()){
+        for(String ch : sortedPool){
             int sc=pool.seenCount(ch); int need=Math.max(0,3-sc);
             if(need>0 && need<=2 && pool.remaining(ch)>=need) nearStar.add(ch);
         }
@@ -1246,7 +1250,7 @@ public class OverlayService extends Service {
 
         // near-3★ alert: tracked champ 1-2 copies from 3-starring (not 5-cost, pool=9 near-impossible)
         java.util.List<String> near3Star=new java.util.ArrayList<>();
-        for(String ch : pool.seenSorted()){
+        for(String ch : sortedPool){
             int sc=pool.seenCount(ch); int need=Math.max(0,9-sc);
             if(sc>=7 && need<=2 && pool.remaining(ch)>=need && Pool.costOf(ch)<5) near3Star.add(ch);
         }
@@ -1300,7 +1304,7 @@ public class OverlayService extends Service {
 
         // quick-access row: show tracked champs (those with seen or opp count > 0) at the
         // top so the player doesn't hunt through the grid every round
-        java.util.List<String> tracked = pool.seenSorted();
+        java.util.List<String> tracked = new java.util.ArrayList<>(sortedPool);
         if(trackingByScarcity){
             java.util.Collections.sort(tracked, new java.util.Comparator<String>(){
                 public int compare(String a, String b){ return pool.remaining(a)-pool.remaining(b); }
@@ -3291,15 +3295,19 @@ public class OverlayService extends Service {
             t.setTextColor(ASH); t.setTextSize(12); t.setPadding(2,2,2,8); root.addView(t);
         }
 
+        // unique board names, computed once and reused by BOARD ITEMS + YOUR UNITS
+        java.util.LinkedHashSet<String> uniqueBoard=new java.util.LinkedHashSet<>(board);
+
         // ---- board items reference: all scanned board champs with known item builds ----
-        java.util.List<String> boardWithItems=new java.util.ArrayList<>();
-        for(String bn : new java.util.LinkedHashSet<>(board)){
-            if(ChampItemData.get(bn)!=null) boardWithItems.add(bn);
+        java.util.LinkedHashMap<String,ChampItemData.Build> boardBuilds=new java.util.LinkedHashMap<>();
+        for(String bn : uniqueBoard){
+            ChampItemData.Build bb=ChampItemData.get(bn);
+            if(bb!=null) boardBuilds.put(bn, bb);
         }
-        if(!boardWithItems.isEmpty()){
+        if(!boardBuilds.isEmpty()){
             addSecHdr(root, "BOARD ITEMS", GOLD);
-            for(String bn : boardWithItems){
-                ChampItemData.Build bb=ChampItemData.get(bn);
+            for(java.util.Map.Entry<String,ChampItemData.Build> be : boardBuilds.entrySet()){
+                String bn=be.getKey(); ChampItemData.Build bb=be.getValue();
                 int bco=Pool.costOf(bn);
                 LinearLayout biRow=new LinearLayout(this); biRow.setOrientation(LinearLayout.HORIZONTAL); biRow.setGravity(Gravity.CENTER_VERTICAL);
                 biRow.setBackground(box(CARD,6,EDGE,1)); biRow.setPadding(10,7,10,7);
@@ -3315,11 +3323,8 @@ public class OverlayService extends Service {
 
         // ---- your units (ranked + contested) ----
         addSecHdr(root, "YOUR UNITS", GOLD);
-        LinearLayout chips=new LinearLayout(this); chips.setOrientation(LinearLayout.HORIZONTAL);
-        chips.setPadding(0,0,0,2);
-        java.util.LinkedHashSet<String> seen=new java.util.LinkedHashSet<>(board);
         int perRow=0; LinearLayout row=null;
-        for(String name:seen){
+        for(String name:uniqueBoard){
             if(perRow%3==0){ row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); root.addView(row); }
             String t=ChampItemData.tierOf(name);
             int contest=pool.oppCount(name);
