@@ -16,9 +16,9 @@ Use the best available model: `claude-fable-5` if available, otherwise `claude-o
 - Never `--no-verify` or force-push without explicit instruction.
 - Build validation goes through CI (GitHub Actions); do not attempt `./gradlew` locally — the sandbox cannot reach Maven Central.
 
-### CI verification is MANDATORY after every push (never let the build go red unnoticed)
+### Never let CI go red and stay red (catch it within a commit or two)
 
-The sandbox can't compile (no Maven), so CI is the *only* build signal. A push succeeding ≠ the build passing. **After every push to `main`, poll the `build.yml` run for that commit to completion (`mcp__github__actions_*`) and confirm `conclusion == success` before reporting the work done.** If it's red: read the failed job log, fix the cause, push the fix, and re-verify — before any new feature work. Do NOT stack new commits on an unverified/red build (that's how v1.99.22–32 silently piled onto one broken compile). Catching red on the very next push is what prevents a streak. CI green = code compiles + unit tests pass; that bar always holds. (Producing/releasing an installable APK is a *separate* goal — only pursue it when the user asks.)
+The sandbox can't compile (no Maven), so CI is the only build signal — a push succeeding ≠ the build passing. The goal is simply: **a red build never streaks.** Practically that means check the `build.yml` conclusion (`mcp__github__actions_*`) after a batch of code changes — not obsessively after every push, and don't bother polling docs-only commits (no `.java` change can't break the Java compile). Don't keep stacking feature commits without ever having seen green; once you've confirmed a recent code push is green, you can keep shipping and spot-check again after the next batch. If you do find red: read the failed job log, fix the cause, push, confirm green — before more feature work. (That's the gap that let one compile error ride from v1.99.22–32.) CI green = compiles + unit tests pass; producing/releasing an installable APK is a separate goal, only when asked.
 
 ## Coding style
 
