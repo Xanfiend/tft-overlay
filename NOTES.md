@@ -30,6 +30,11 @@ Needs a laptop/emulator + real game; can't verify in CI.
 - **Security pass COMPLETE**: R8 obfuscation, DeviceIntegrity root/emu heads-up, first-launch privacy notice.
 - **Dev mode**: tap version label 7x → cfg_devmode → SCAN FROM IMAGE + DEBUG LOG ring buffer + copyable DIAGNOSTICS card (build/device/screen/integrity/state/cal dump).
 
+## Security
+- **Leaked token (found 06-25):** an old `ghp_…` GitHub PAT was sitting in commit author-email metadata (a pasted shell-setup blob) across ~25 early commits. Scrubbed from local history; force-pushed a clean `main`. **Must be revoked/rotated on GitHub regardless — it was public, so treat it as compromised** (scrubbing only stops future copies, not what's already been seen/cached).
+- Stale remote branches (`origin/claude/callback-fix`, `patch-174-and-scan-fix`, `scan-fix-android14`) may still carry the old history — delete them on GitHub to fully purge the public side.
+- Don't commit tokens/keys. Repo planned to go private a few updates into v2; keep it clean + trustworthy through the v2 launch.
+
 ## Branding
 - Codename "TFT REAPER" (MainActivity.V2_CODENAME) — DISPLAY ONLY. App stays "TFT Scryer"; package `com.xanfiend.tftoverlay` must NEVER change (over-top updater orphans users otherwise). SETUP teaser card hypes 2.0, no spoilers.
 
