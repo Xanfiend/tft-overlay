@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.29");
+        ver.setText("v1.99.30");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.30  ·  2026-06-25","POOL tab tracking chips now show a green buy prompt when you are exactly one copy away from 2-starring a champion and you have enough gold to buy it right now. AUGMENTS tab now lets you long-press any augment card to immediately record it as one of your taken augments, without needing a scan. COACH tab now shows a compact item reference for every scanned board champion that has a known build, so you can see the full board item plan in one place instead of only the primary carry."},
             {"v1.99.29  ·  2026-06-25","GOLD tab streak line now always shows contextual advice: what to do to start a streak, when the bonus activates, and how large it is once active, so the streak counter is never just a number. POOL tab shows a roll-check line under your pinned carry when you have gold to spend, giving you a hit percentage at your current level before you decide to roll. ITEMS tab has a new MY COMPONENTS section: tap which components you are holding, and see every item you can craft from them at a glance."},
             {"v1.99.28  ·  2026-06-25","POOL tab tracking now shows a 3-star achieved badge when you have collected all 9 copies of a champion, making it clear at a glance which units have hit their ceiling. GOLD tab shows the current level-up cost under the gold counter, so you always know what it costs to buy the next level without guessing. COACH tab now warns you directly inside the recommended comp card when your recommended carry is being contested by two or more opponents, so you can decide whether to 3-star faster or pivot."},
             {"v1.99.27  ·  2026-06-25","POOL tab now alerts when a tracked champion is 1 or 2 copies away from 3-starring, shown as a separate banner so it is visually distinct from the 2-star proximity alert. GOLD tab now shows how much gold you can safely spend without dropping below your current interest bracket, or how much is above the 50g cap, so you always know what is free to use. AUGMENTS tab now lets you pin up to 3 augments side-by-side at the top of the list for quick comparison; tap a card to pin it, tap the X to clear."},
