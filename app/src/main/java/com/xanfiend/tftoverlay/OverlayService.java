@@ -91,8 +91,10 @@ public class OverlayService extends Service {
     private TextView econRoundsLeftTv, econStreakRoiTv, econLossBtnTv, econRecordTv;
     private TextView econWonBtnTv;
     private TextView econTimelineTv, econProjectedTv;
+    private TextView econEfficiencyTv;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
+    private java.util.List<String> augCompare = new java.util.ArrayList<>();
     private boolean trackingByScarcity = false;
 
     // hold-to-repeat gold buttons
@@ -899,7 +901,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null;
+        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null; econEfficiencyTv=null;
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
@@ -915,7 +917,7 @@ public class OverlayService extends Service {
         econIncomeTv=null; econBreakTv=null; econNextRoundBtn=null;
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
-        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null;
+        econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null; econEfficiencyTv=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -1239,6 +1241,26 @@ public class OverlayService extends Service {
             nearTv.setBackground(box(0xFF1A1400,6,GOLD,2)); nearTv.setPadding(10,8,10,8);
             LinearLayout.LayoutParams ntl=new LinearLayout.LayoutParams(-1,-2); ntl.setMargins(0,0,0,6); nearTv.setLayoutParams(ntl);
             root.addView(nearTv);
+        }
+
+        // near-3★ alert: tracked champ 1-2 copies from 3-starring (not 5-cost, pool=9 near-impossible)
+        java.util.List<String> near3Star=new java.util.ArrayList<>();
+        for(String ch : pool.seenSorted()){
+            int sc=pool.seenCount(ch); int need=Math.max(0,9-sc);
+            if(sc>=7 && need<=2 && pool.remaining(ch)>=need && Pool.costOf(ch)<5) near3Star.add(ch);
+        }
+        if(!near3Star.isEmpty()){
+            StringBuilder n3b=new StringBuilder("★★★ close:");
+            for(int i=0;i<near3Star.size();i++){
+                String ch=near3Star.get(i); int need=9-pool.seenCount(ch);
+                if(i>0) n3b.append("  ·");
+                n3b.append(" ").append(ch).append(" (").append(need).append(" more)");
+            }
+            TextView near3Tv=new TextView(this); near3Tv.setText(n3b.toString());
+            near3Tv.setTextColor(ASH); near3Tv.setTextSize(11); near3Tv.setGravity(Gravity.CENTER);
+            near3Tv.setBackground(box(CARD,6,EDGE,2)); near3Tv.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams n3l=new LinearLayout.LayoutParams(-1,-2); n3l.setMargins(0,0,0,6); near3Tv.setLayoutParams(n3l);
+            root.addView(near3Tv);
         }
 
         // bail alert: pinned carry has shallow pool and you're not 2-starred yet
@@ -2000,6 +2022,26 @@ public class OverlayService extends Service {
 
         // ---- tier-grouped augment list ----
         addSecHdr(root, "AUGMENTS", GOLD);
+        // compare row: up to 3 pinned augments shown at the top; tap an aug card below to pin/unpin
+        if(!augCompare.isEmpty()){
+            LinearLayout cmpRow=new LinearLayout(this); cmpRow.setOrientation(LinearLayout.HORIZONTAL); cmpRow.setPadding(0,0,0,8);
+            for(String ca:augCompare){
+                String ct=""; int cClr=EDGE;
+                for(AugmentData.AugmentEntry ae:AugmentData.AUGMENTS){ if(ae.name.equals(ca)){ct=ae.tier;break;} }
+                if(ct.equals("S"))cClr=GOLD; else if(ct.equals("A"))cClr=GREEN; else if(ct.equals("B"))cClr=ASH;
+                TextView cc=new TextView(this); cc.setText((ct.isEmpty()?"":("["+ct+"]  "))+ca);
+                cc.setTextColor(BONE); cc.setTextSize(11); cc.setGravity(Gravity.CENTER);
+                cc.setBackground(box(CARD,6,cClr,2)); cc.setPadding(10,6,10,6);
+                LinearLayout.LayoutParams ccl=new LinearLayout.LayoutParams(-2,-2); ccl.setMargins(0,0,6,4); cc.setLayoutParams(ccl);
+                cmpRow.addView(cc);
+            }
+            TextView clrCmp=new TextView(this); clrCmp.setText("✕");
+            clrCmp.setTextColor(BLOODL); clrCmp.setTextSize(12); clrCmp.setGravity(Gravity.CENTER);
+            clrCmp.setBackground(box(CARD,6,EDGE,1)); clrCmp.setPadding(10,6,10,6);
+            clrCmp.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ augCompare.clear(); showPanel(); }});
+            cmpRow.addView(clrCmp);
+            root.addView(cmpRow);
+        }
         int augFIdx=augFilter.isEmpty()?0:augFilter.equals("S")?1:augFilter.equals("A")?2:augFilter.equals("B")?3:4;
         pickRow(root, new String[]{"ALL","S","A","B","C"}, new int[]{0,1,2,3,4}, augFIdx, 8,
             new PickSetter(){ public void pick(int v){ String[] ts={"","S","A","B","C"}; augFilter=ts[v]; showPanel(); }});
@@ -2018,9 +2060,16 @@ public class OverlayService extends Service {
                     th.setPadding(2,8,0,4); root.addView(th);
                     headerAdded=true;
                 }
+                boolean pinned=augCompare.contains(aug.name);
                 LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-                card.setBackground(box(CARD,6,EDGE,1)); card.setPadding(10,8,10,8);
+                card.setBackground(box(CARD,6,pinned?tierClr[t]:EDGE,pinned?2:1)); card.setPadding(10,8,10,8);
                 LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,4); card.setLayoutParams(cl);
+                final String augName=aug.name; final int tClr=tierClr[t];
+                card.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    if(augCompare.contains(augName)){ augCompare.remove(augName); }
+                    else { if(augCompare.size()>=3) augCompare.remove(0); augCompare.add(augName); }
+                    showPanel();
+                }});
 
                 LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
                 // tier badge
@@ -2396,6 +2445,11 @@ public class OverlayService extends Service {
         econInterestTv.setTextColor(BONE); econInterestTv.setTextSize(17); econInterestTv.setTypeface(null, android.graphics.Typeface.BOLD); iRow.addView(econInterestTv);
         econBracketTv=new TextView(this); econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
         econBracketTv.setTextColor(gold>=50?GOLD:toNext<=2?GOLD:ASH); econBracketTv.setTextSize(11); iRow.addView(econBracketTv);
+        econEfficiencyTv=new TextView(this); econEfficiencyTv.setTextSize(11); econEfficiencyTv.setPadding(0,3,0,0);
+        int effOverhead=gold>=50?gold-50:gold%10;
+        if(effOverhead>0){ econEfficiencyTv.setText(gold>=50?effOverhead+"g above cap — spend freely":effOverhead+"g overhead — safe to spend without losing bracket"); econEfficiencyTv.setTextColor(GREEN); econEfficiencyTv.setVisibility(View.VISIBLE); }
+        else { econEfficiencyTv.setVisibility(View.GONE); }
+        iRow.addView(econEfficiencyTv);
         TextView intrExplain=new TextView(this); intrExplain.setText("1g interest per 10g saved  ·  max 5g per round");
         intrExplain.setTextColor(DIM); intrExplain.setTextSize(10); intrExplain.setPadding(0,4,0,0); iRow.addView(intrExplain);
         // interest ladder dots: 10 / 20 / 30 / 40 / 50
@@ -2695,6 +2749,11 @@ public class OverlayService extends Service {
         econInterestTv.setText("+"+intr+"g per round");
         econBracketTv.setText(gold>=50?"max interest (50g+)":"+"+toNext+"g to next bracket");
         econBracketTv.setTextColor(gold>=50?GOLD:toNext<=2?GOLD:ASH);
+        if(econEfficiencyTv!=null){
+            int eff=gold>=50?gold-50:gold%10;
+            if(eff>0){ econEfficiencyTv.setText(gold>=50?eff+"g above cap — spend freely":eff+"g overhead — safe to spend without losing bracket"); econEfficiencyTv.setTextColor(GREEN); econEfficiencyTv.setVisibility(View.VISIBLE); }
+            else { econEfficiencyTv.setVisibility(View.GONE); }
+        }
         int[] brackets={10,20,30,40,50};
         for(int i=0;i<5;i++){
             int b=brackets[i]; boolean reached=gold>=b; boolean cur=(gold/10)*10==b||(b==50&&gold>=50);
