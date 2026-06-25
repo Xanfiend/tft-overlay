@@ -2082,6 +2082,7 @@ public class OverlayService extends Service {
 
         String[] tiers   = {"S",   "A",    "B",  "C"};
         int[]    tierClr = {GOLD, GREEN,   ASH,  DIM};
+        java.util.List<String> takenAugs=pool.getMyAugments();
         for(int t=0;t<tiers.length;t++){
             if(!augFilter.isEmpty() && !augFilter.equals(tiers[t])) continue;
             boolean headerAdded=false;
@@ -2095,8 +2096,9 @@ public class OverlayService extends Service {
                     headerAdded=true;
                 }
                 boolean pinned=augCompare.contains(aug.name);
+                boolean taken=takenAugs.contains(aug.name);
                 LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-                card.setBackground(box(CARD,6,pinned?tierClr[t]:EDGE,pinned?2:1)); card.setPadding(10,8,10,8);
+                card.setBackground(box(taken?0xFF0D2210:CARD,6,taken?GREEN:pinned?tierClr[t]:EDGE,(taken||pinned)?2:1)); card.setPadding(10,8,10,8);
                 LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,-2); cl.setMargins(0,0,0,4); card.setLayoutParams(cl);
                 final String augName=aug.name; final int tClr=tierClr[t];
                 card.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
@@ -2116,8 +2118,8 @@ public class OverlayService extends Service {
                 badge.setBackground(box(tierClr[t],4,0,0)); badge.setPadding(10,4,10,4);
                 LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-2,-2); bl.setMargins(0,0,8,0); badge.setLayoutParams(bl);
                 // name
-                TextView nm=new TextView(this); nm.setText(aug.name);
-                nm.setTextColor(BONE); nm.setTextSize(13); nm.setTypeface(null, android.graphics.Typeface.BOLD);
+                TextView nm=new TextView(this); nm.setText((taken?"✓ ":"")+aug.name);
+                nm.setTextColor(taken?GREEN:BONE); nm.setTextSize(13); nm.setTypeface(null, android.graphics.Typeface.BOLD);
                 nm.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
                 row.addView(badge); row.addView(nm); card.addView(row);
                 // comps
@@ -3115,11 +3117,15 @@ public class OverlayService extends Service {
     // Static reference (OpenerData) — no scan needed, holds across patches.
     private void buildOpener(LinearLayout root){
         addSecHdr(root, "EARLY GAME", GOLD);
-        for(String[] ph:OpenerData.PHASES){
+        int curStg=pool.getStageNum();
+        int curPhaseIdx=curStg>=1?Math.min(curStg-1,OpenerData.PHASES.length-1):-1;
+        for(int pi=0;pi<OpenerData.PHASES.length;pi++){
+            String[] ph=OpenerData.PHASES[pi];
+            boolean here=(pi==curPhaseIdx);
             LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackground(box(CARD,8,EDGE,1)); card.setPadding(14,10,14,10);
+            card.setBackground(box(here?0xFF1A1400:CARD,8,here?GOLD:EDGE,here?2:1)); card.setPadding(14,10,14,10);
             LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,-2); clp.setMargins(0,0,0,6); card.setLayoutParams(clp);
-            TextView h=new TextView(this); h.setText(ph[0]);
+            TextView h=new TextView(this); h.setText(ph[0]+(here?"   ◀ now":""));
             h.setTextColor(GOLD); h.setTextSize(12); h.setTypeface(null,android.graphics.Typeface.BOLD); card.addView(h);
             TextView b=new TextView(this); b.setText(ph[1]);
             b.setTextColor(BONE); b.setTextSize(11); b.setLineSpacing(4,1f); b.setPadding(0,3,0,0); card.addView(b);
@@ -3127,6 +3133,19 @@ public class OverlayService extends Service {
         }
 
         addSecHdr(root, "ITEM SLAM PRIORITY", GOLD);
+        // pinned-carry slam hint: surface the carry's actual item plan from the build data
+        String slamPin=pool.getPinned();
+        if(!slamPin.isEmpty()){
+            ChampItemData.Build sb=ChampItemData.get(slamPin);
+            if(sb!=null && sb.items!=null && sb.items.length>0){
+                TextView slamHint=new TextView(this);
+                slamHint.setText("★ "+slamPin+" wants:  "+android.text.TextUtils.join("  ·  ", sb.items));
+                slamHint.setTextColor(VOID); slamHint.setTextSize(11); slamHint.setTypeface(null,android.graphics.Typeface.BOLD);
+                slamHint.setGravity(Gravity.CENTER); slamHint.setBackground(box(GOLD,6,0xFFE8C030,2)); slamHint.setPadding(10,9,10,9);
+                LinearLayout.LayoutParams shl=new LinearLayout.LayoutParams(-1,-2); shl.setMargins(0,0,0,8); slamHint.setLayoutParams(shl);
+                root.addView(slamHint);
+            }
+        }
         for(String[] s:OpenerData.SLAMS){
             LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(-1,-2); rlp.setMargins(0,1,0,1); row.setLayoutParams(rlp);
