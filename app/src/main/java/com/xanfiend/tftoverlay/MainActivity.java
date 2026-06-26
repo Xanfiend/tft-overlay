@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.33");
+        ver.setText("v1.99.34");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.34  ·  2026-06-26","POOL tab tracking header now shows how many champions you are currently tracking at a glance."},
             {"v1.99.33  ·  2026-06-25","Fixes a build problem that was preventing recent updates from installing. All recent POOL, COACH, GOLD, OPENER, and AUGMENTS improvements are now available."},
             {"v1.99.32  ·  2026-06-25","Smoother, faster panel rendering when the POOL and COACH tabs have many tracked units."},
             {"v1.99.31  ·  2026-06-25","GUIDE tab OPENER section now highlights the early-game phase that matches your current stage, with a clear marker, so the relevant advice stands out as the game progresses. OPENER item-slam section now shows your pinned carry's exact item plan in a banner, tying the evergreen slam priorities to the carry you have committed to. AUGMENTS tab now marks augments you have already taken with a checkmark and green highlight throughout the tier list, so they are easy to spot at a glance."},

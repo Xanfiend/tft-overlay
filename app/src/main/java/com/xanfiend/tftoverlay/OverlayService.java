@@ -1313,7 +1313,7 @@ public class OverlayService extends Service {
         if(!tracked.isEmpty()){
             // inline header with sort toggle
             LinearLayout thdr=new LinearLayout(this); thdr.setOrientation(LinearLayout.HORIZONTAL); thdr.setGravity(android.view.Gravity.CENTER_VERTICAL); thdr.setPadding(2,12,0,7);
-            TextView thdrTxt=new TextView(this); thdrTxt.setText("◇ TRACKING");
+            TextView thdrTxt=new TextView(this); thdrTxt.setText("◇ TRACKING ("+tracked.size()+")");
             thdrTxt.setTextColor(ASH); thdrTxt.setTextSize(10); thdrTxt.setLetterSpacing(0.08f); thdrTxt.setTypeface(null,android.graphics.Typeface.BOLD);
             thdrTxt.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
             TextView tSortBtn=new TextView(this);
