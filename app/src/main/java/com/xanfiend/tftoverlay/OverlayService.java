@@ -1335,7 +1335,19 @@ public class OverlayService extends Service {
             tSortBtn.setTextColor(trackingByScarcity?GOLD:DIM); tSortBtn.setTextSize(10);
             tSortBtn.setPadding(8,4,8,4); tSortBtn.setBackground(box(CARD,4,trackingByScarcity?GOLD:EDGE,1));
             tSortBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ trackingByScarcity=!trackingByScarcity; showPanel(); }});
-            thdr.addView(thdrTxt); thdr.addView(tSortBtn);
+            TextView tCopyBtn=new TextView(this); tCopyBtn.setText("⎘");
+            tCopyBtn.setTextColor(DIM); tCopyBtn.setTextSize(12);
+            tCopyBtn.setPadding(8,4,8,4); tCopyBtn.setBackground(box(CARD,4,EDGE,1));
+            LinearLayout.LayoutParams tcbl=new LinearLayout.LayoutParams(-2,-2); tcbl.setMargins(4,0,0,0); tCopyBtn.setLayoutParams(tcbl);
+            final java.util.List<String> tCopySnap=new java.util.ArrayList<>(tracked);
+            tCopyBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                StringBuilder sb=new StringBuilder();
+                for(String n:tCopySnap){ if(sb.length()>0) sb.append(", "); sb.append(n).append(" x").append(pool.seenCount(n)); }
+                android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("pool",sb.toString()));
+                Toast.makeText(OverlayService.this,"Pool list copied",Toast.LENGTH_SHORT).show();
+            }});
+            thdr.addView(thdrTxt); thdr.addView(tSortBtn); thdr.addView(tCopyBtn);
             root.addView(thdr);
             LinearLayout tRow=null;
             for(int ti=0;ti<tracked.size();ti++){
