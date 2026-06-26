@@ -57,6 +57,23 @@ public class NameMatchTest {
         assertNull(NameMatch.bestMatch("Vox", ROSTER));    // would be Vex but exact-only
     }
 
+    // ---- bestMatch: containment path (OCR ⊆ target or target ⊆ OCR, >=80% overlap) ----
+    @Test public void containmentTargetContainsOcr() {
+        // "twistedfat" is 10/11 chars of "TwistedFate" -> containment fires, d=1
+        assertEquals("TwistedFate", NameMatch.bestMatch("TwistedFat",
+                Arrays.asList("TwistedFate", "Samira")));
+    }
+    @Test public void containmentOcrContainsTarget() {
+        // OCR has trailing junk: "SamiraQ" contains "samira" at 6/7 > 80%
+        assertEquals("Samira", NameMatch.bestMatch("SamiraQ",
+                Arrays.asList("Corki", "Samira")));
+    }
+    @Test public void containmentTooShortForEightyPctRule() {
+        // "Twisted" (7) vs "TwistedFate" (11): 7/11 < 80% -> containment not triggered;
+        // edit distance = 4, tolerance(11) = 2 -> no match
+        assertNull(NameMatch.bestMatch("Twisted", Arrays.asList("TwistedFate")));
+    }
+
     // ---- bestMatch: rejects junk and ambiguity ----
     @Test public void rejectsJunk() {
         assertNull(NameMatch.bestMatch("zzzzz", ROSTER));
