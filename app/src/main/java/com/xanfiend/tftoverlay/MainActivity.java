@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
         title.setText("TFT SCRYER");
         title.setTextColor(BLOODL); title.setTextSize(30); title.setGravity(Gravity.CENTER);
         title.setTypeface(null, Typeface.BOLD); title.setLetterSpacing(0.14f);
+        title.setShadowLayer(22,0,0,BLOODL);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1,-2);
         titleLp.setMargins(0, 8, 0, 0);
         title.setLayoutParams(titleLp);
@@ -114,13 +115,14 @@ public class MainActivity extends Activity {
         TextView sub = new TextView(this);
         sub.setText("Set 17  ·  champion pool tracker");
         sub.setTextColor(GOLD); sub.setTextSize(13); sub.setGravity(Gravity.CENTER);
+        sub.setShadowLayer(10,0,0,GOLD);
         LinearLayout.LayoutParams subl = new LinearLayout.LayoutParams(-1,-2);
         subl.setMargins(0, 5, 0, 2);
         sub.setLayoutParams(subl);
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.35");
+        ver.setText("v1.99.36");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -192,6 +194,7 @@ public class MainActivity extends Activity {
             tabViews[i].setTextColor(on ? BONE : ASH);
             tabViews[i].setTypeface(null, on ? Typeface.BOLD : Typeface.NORMAL);
             tabViews[i].setBackground(shape(on ? BLOOD : CARD, on ? BLOODL : EDGE, 12, on ? 2 : 1));
+            tabViews[i].setShadowLayer(on ? 10 : 0, 0, 0, BLOODL);
         }
         contentArea.removeAllViews();
         if(activeTab == 0) buildSetup();
@@ -246,6 +249,7 @@ public class MainActivity extends Activity {
         TextView tt = new TextView(this);
         tt.setText("⛧  " + V2_CODENAME + "  ·  v2.0 INCOMING");
         tt.setTextColor(GOLD); tt.setTextSize(15); tt.setTypeface(null, Typeface.BOLD);
+        tt.setShadowLayer(16,0,0,GOLD);
         tt.setLetterSpacing(0.06f); teaser.addView(tt);
         TextView tb = new TextView(this);
         tb.setText("A massive update is being forged — the biggest yet. New powers, soon. "
@@ -364,7 +368,7 @@ public class MainActivity extends Activity {
         // tips section header
         TextView tipsHdr = new TextView(this);
         tipsHdr.setText("⛧  HOW TO USE");
-        tipsHdr.setTextColor(GOLD); tipsHdr.setTextSize(11);
+        tipsHdr.setTextColor(GOLD); tipsHdr.setTextSize(11); tipsHdr.setShadowLayer(8,0,0,GOLD);
         tipsHdr.setTypeface(null, Typeface.BOLD); tipsHdr.setLetterSpacing(0.1f);
         LinearLayout.LayoutParams thl = new LinearLayout.LayoutParams(-1,-2);
         thl.setMargins(0, 0, 0, 10);
@@ -535,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.36  ·  2026-06-26","The launch screen now matches the overlay's luminous look — glowing title and subtitle, glowing primary buttons and tabs, and a glowing v2 teaser and section headers."},
             {"v1.99.35  ·  2026-06-26","Visual refresh across the overlay: a luminous occult look with a glowing title and sigil, an ornamental header flourish, glowing section headers, brighter active-tab highlights, and softer panel corners."},
             {"v1.99.34  ·  2026-06-26","POOL tab tracking header now shows how many champions you are currently tracking at a glance."},
             {"v1.99.33  ·  2026-06-25","Fixes a build problem that was preventing recent updates from installing. All recent POOL, COACH, GOLD, OPENER, and AUGMENTS improvements are now available."},
@@ -629,6 +634,7 @@ public class MainActivity extends Activity {
         b.setTextColor(BONE); b.setTextSize(18); b.setPadding(0,28,0,28);
         b.setTypeface(null, Typeface.BOLD);
         b.setBackground(shape(BLOOD, BLOODL, 12, 2));
+        b.setShadowLayer(16,0,0,BLOODL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(0, 0, 0, 12);
         b.setLayoutParams(lp);
@@ -639,6 +645,7 @@ public class MainActivity extends Activity {
         TextView b = new TextView(this); b.setText(txt); b.setGravity(Gravity.CENTER);
         b.setTextColor(BLOODL); b.setTextSize(14); b.setPadding(0,18,0,18);
         b.setBackground(shape(CARD, BLOOD, 12, 1));
+        b.setShadowLayer(8,0,0,BLOODL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(0, 0, 0, 12);
         b.setLayoutParams(lp);
