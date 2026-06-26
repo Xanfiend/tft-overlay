@@ -2100,7 +2100,9 @@ public class OverlayService extends Service {
 
         // ---- tier-grouped augment list ----
         int augVisCount=0; for(AugmentData.AugmentEntry a:AugmentData.AUGMENTS) if(augFilter.isEmpty()||augFilter.equals(a.tier)) augVisCount++;
-        addSecHdr(root, augFilter.isEmpty()?"AUGMENTS  ("+augVisCount+")":"AUGMENTS — "+augFilter+"-Tier  ("+augVisCount+")", GOLD);
+        // count only — the active filter is already shown by the pickRow below and
+        // the per-tier subheaders, so don't repeat the tier name here
+        addSecHdr(root, "AUGMENTS  ("+augVisCount+")", GOLD);
         // compare row: up to 3 pinned augments shown at the top; tap an aug card below to pin/unpin
         if(!augCompare.isEmpty()){
             LinearLayout cmpRow=new LinearLayout(this); cmpRow.setOrientation(LinearLayout.HORIZONTAL); cmpRow.setPadding(0,0,0,8);
