@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.39");
+        ver.setText("v1.99.40");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.40  ·  2026-06-26","POOL tab now shows a gold banner on augment rounds (2-1 / 3-2 / 4-2) so you never miss an offer. BUILDS tab cost-tier headers now show how many meta builds exist for each tier at a glance."},
             {"v1.99.39  ·  2026-06-26","POOL tracking header now has a copy button — tap it to copy your tracked champion list to the clipboard. Section headers throughout the overlay also now show live counts at a glance."},
             {"v1.99.38  ·  2026-06-26","Section headers throughout the overlay now show live counts: AUGMENTS shows total and per-tier counts, REVEALED YOUR BOARD and REVEALED ENEMY show how many units were found, and CRAFTABLE in the items builder shows how many items your components can make."},
             {"v1.99.36  ·  2026-06-26","The launch screen now matches the overlay's luminous look — glowing title and subtitle, glowing primary buttons and tabs, and a glowing v2 teaser and section headers."},
