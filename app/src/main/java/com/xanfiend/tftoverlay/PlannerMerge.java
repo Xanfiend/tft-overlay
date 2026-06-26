@@ -92,9 +92,12 @@ public final class PlannerMerge {
      * names are logged but cannot be placed on the board.
      */
     public static List<String> floatingNames(List<String> plannerNames, int[][] healthBarUnits) {
-        int posCount  = healthBarUnits == null ? 0 : healthBarUnits.length;
-        int nameCount = plannerNames   == null ? 0 : plannerNames.size();
         List<String> out = new ArrayList<>();
+        // No position data at all means detection failed, not that every unit died —
+        // there is no real count to "exceed", so nothing is floating.
+        if (healthBarUnits == null) return out;
+        int posCount  = healthBarUnits.length;
+        int nameCount = plannerNames   == null ? 0 : plannerNames.size();
         for (int i = posCount; i < nameCount; i++) {
             String n = plannerNames.get(i);
             if (n != null && !n.isEmpty()) out.add(n);
