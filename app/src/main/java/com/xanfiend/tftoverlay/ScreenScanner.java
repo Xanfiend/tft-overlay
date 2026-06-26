@@ -226,6 +226,11 @@ public class ScreenScanner {
                 }
             }
         }
+        // single-letter OCR slip the containment loop missed — try edit distance
+        if (r.detectedBoardUnit.isEmpty()) {
+            String fb = fuzzyNameFallback(text, popLeft, 0, 0, minH, false);
+            if (!fb.isEmpty()) { r.detectedBoardUnit = fb; log("popup unit (fuzzy): " + fb); }
+        }
         // bounds set whenever any popup text appeared — lets auto-tap tell an item
         // popup (bounds, no champion) from an empty hex (no bounds at all). Map back
         // from scaled OCR space to full-crop pixels so template cropping stays correct.
@@ -752,6 +757,11 @@ public class ScreenScanner {
                 }
             }
         }
+        // single-letter OCR slip the containment loop missed — try edit distance
+        if (r.detectedBoardUnit.isEmpty()) {
+            String fb = fuzzyNameFallback(text, popLeft, popTop, popBot, minH, true);
+            if (!fb.isEmpty()) { r.detectedBoardUnit = fb; log("match (fuzzy): " + fb); }
+        }
         // Always record popup bounds when any qualifying text appeared in the zone —
         // used by auto-tap to distinguish "item popup" (bounds set, no champion) from
         // "empty hex" (no bounds), so item taps don't count toward the miss streak.
@@ -885,6 +895,28 @@ public class ScreenScanner {
             if (c == '★' || c == '⭐') n++;
         }
         return n;
+    }
+
+    // Additive edit-distance fallback for the popup name. ML Kit routinely misreads
+    // a single letter (Corki->Corkl, Jhin->Jhln, Samira->Samlra); the containment
+    // matcher can't catch a mid-word substitution, but Levenshtein within a
+    // length-scaled tolerance can. Returns the champion on the TALLEST qualifying
+    // block that resolves, or "" — callers run this ONLY after the containment loop
+    // found nothing, so it can never override an exact/contains hit. NameMatch
+    // guards short names (exact-only) and ambiguous ties itself.
+    private String fuzzyNameFallback(Text text, int popLeft, int popTop, int popBot,
+                                     int minH, boolean useCy) {
+        int bestH = 0; String found = "";
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            if (box.centerX() < popLeft) continue;
+            if (useCy && (box.centerY() < popTop || box.centerY() > popBot)) continue;
+            if (box.height() < minH || box.height() <= bestH) continue;
+            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            if (cand != null) { found = cand; bestH = box.height(); }
+        }
+        return found;
     }
 
     // Thin wrapper for callers that match against an arbitrary name (e.g. the star

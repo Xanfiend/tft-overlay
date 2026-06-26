@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.42");
+        ver.setText("v1.99.43");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.43  ·  2026-06-26","Board scan now recognizes a unit even when one letter of its name is misread, so fewer units get missed when reading them by popup."},
             {"v1.99.42  ·  2026-06-26","Internal scan improvements to keep the pipeline solid ahead of upcoming features."},
             {"v1.99.41  ·  2026-06-26","Cleaner AUGMENTS header when a tier filter is active — no more repeated tier label."},
             {"v1.99.40  ·  2026-06-26","POOL tab now shows a gold banner on augment rounds (2-1 / 3-2 / 4-2) so you never miss an offer. BUILDS tab cost-tier headers now show how many meta builds exist for each tier at a glance."},
