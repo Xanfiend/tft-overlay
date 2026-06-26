@@ -328,6 +328,17 @@ public class ScreenScanner {
                 }
             }
         }
+        // Fuzzy fallback: blocks the containment loop missed due to a single-letter OCR slip
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            if (cand != null && !r.shopChampions.contains(cand)) {
+                r.shopChampions.add(cand);
+                r.shopChampPos.add(new int[]{(int)(box.centerX()*inv), (int)(box.centerY()*inv)});
+                log("shopStrip (fuzzy): " + cand + " from \"" + block.getText().trim() + "\"");
+            }
+        }
         if (!r.shopChampions.isEmpty())
             log("shopStrip: " + r.shopChampions + (r.gold >= 0 ? " gold=" + r.gold : ""));
         return r;
@@ -684,6 +695,22 @@ public class ScreenScanner {
             }
         }
 
+        // Fuzzy fallback for shop and bench zones: catches single-letter OCR slips that
+        // containment matching missed. Only adds a candidate when NameMatch resolves it
+        // unambiguously and it isn't already in the list.
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null) continue;
+            int bcy = box.centerY();
+            boolean inShop  = bcy >= shopTop  && bcy <= shopBot;
+            boolean inBench = bcy >= benchTop && bcy <= benchBot;
+            if (!inShop && !inBench) continue;
+            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            if (cand == null) continue;
+            if (inShop  && !r.shopChampions.contains(cand))  { r.shopChampions.add(cand);  log("shop champ (fuzzy): "  + cand + " from \"" + block.getText().trim() + "\""); }
+            if (inBench && !r.benchChampions.contains(cand)) { r.benchChampions.add(cand); log("bench champ (fuzzy): " + cand + " from \"" + block.getText().trim() + "\""); }
+        }
+
         StringBuilder sb = new StringBuilder();
         if (r.gold >= 0) sb.append(r.gold).append("g");
         if (r.level >= 0) { if (sb.length() > 0) sb.append(" · "); sb.append("Lv").append(r.level); }
@@ -838,6 +865,16 @@ public class ScreenScanner {
                     log("auto match: " + name + " from \"" + rawLog + "\"");
                     break;
                 }
+            }
+        }
+        // Fuzzy fallback: blocks the containment loop missed due to single-letter OCR slips
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            android.graphics.Rect box = block.getBoundingBox();
+            if (box == null || box.height() < minH) continue;
+            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            if (cand != null && !r.autoChampions.contains(cand)) {
+                r.autoChampions.add(cand);
+                log("auto match (fuzzy): " + cand + " from \"" + block.getText().trim() + "\"");
             }
         }
         return r;

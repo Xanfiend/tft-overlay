@@ -46,5 +46,23 @@ public final class RosterMerge {
         return Math.max(0, detectedUnits - resolved);
     }
 
+    /* Combine two tallies from different scan passes without double-counting.
+     * Primary wins: a champion already present in `primary` is NOT incremented
+     * by `secondary`, because both passes saw the same physical unit.
+     * Champions only in `secondary` are added at their secondary count.
+     * Null inputs are treated as empty maps. */
+    public static LinkedHashMap<String,Integer> mergeNoDoubleCount(
+            LinkedHashMap<String,Integer> primary,
+            LinkedHashMap<String,Integer> secondary) {
+        LinkedHashMap<String,Integer> out = new LinkedHashMap<>();
+        if (primary != null) out.putAll(primary);
+        if (secondary != null) {
+            for (java.util.Map.Entry<String,Integer> e : secondary.entrySet()) {
+                if (!out.containsKey(e.getKey())) out.put(e.getKey(), e.getValue());
+            }
+        }
+        return out;
+    }
+
     private RosterMerge() {}
 }

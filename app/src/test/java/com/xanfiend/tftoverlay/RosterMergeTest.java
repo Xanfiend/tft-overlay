@@ -43,4 +43,48 @@ public class RosterMergeTest {
         assertEquals(0, RosterMerge.unresolvedCount(2, t));
         assertEquals(0, RosterMerge.unresolvedCount(1, t));   // never negative
     }
+
+    @Test public void mergeNoDoubleCountPrimaryWins() {
+        LinkedHashMap<String,Integer> primary = new LinkedHashMap<>();
+        primary.put("Jhin", 1);
+        primary.put("Samira", 2);
+        LinkedHashMap<String,Integer> secondary = new LinkedHashMap<>();
+        secondary.put("Jhin", 3);   // same unit, different pass — should NOT add
+        secondary.put("Corki", 1);  // new unit — should appear
+        LinkedHashMap<String,Integer> merged = RosterMerge.mergeNoDoubleCount(primary, secondary);
+        assertEquals(Integer.valueOf(1), merged.get("Jhin"));   // primary count preserved
+        assertEquals(Integer.valueOf(2), merged.get("Samira")); // primary-only
+        assertEquals(Integer.valueOf(1), merged.get("Corki"));  // secondary-only added
+        assertEquals(3, merged.size());
+    }
+
+    @Test public void mergeNoDoubleCountNulls() {
+        LinkedHashMap<String,Integer> primary = new LinkedHashMap<>();
+        primary.put("Jhin", 1);
+        // null secondary → no change
+        LinkedHashMap<String,Integer> r1 = RosterMerge.mergeNoDoubleCount(primary, null);
+        assertEquals(1, r1.size());
+        assertEquals(Integer.valueOf(1), r1.get("Jhin"));
+        // null primary → secondary only
+        LinkedHashMap<String,Integer> secondary = new LinkedHashMap<>();
+        secondary.put("Corki", 2);
+        LinkedHashMap<String,Integer> r2 = RosterMerge.mergeNoDoubleCount(null, secondary);
+        assertEquals(Integer.valueOf(2), r2.get("Corki"));
+        // both null → empty
+        assertTrue(RosterMerge.mergeNoDoubleCount(null, null).isEmpty());
+    }
+
+    @Test public void mergeNoDoubleCountOrderPreserved() {
+        LinkedHashMap<String,Integer> primary = new LinkedHashMap<>();
+        primary.put("Jhin", 1);
+        primary.put("Samira", 1);
+        LinkedHashMap<String,Integer> secondary = new LinkedHashMap<>();
+        secondary.put("Corki", 1);
+        LinkedHashMap<String,Integer> merged = RosterMerge.mergeNoDoubleCount(primary, secondary);
+        // insertion order: Jhin, Samira (from primary), then Corki (from secondary)
+        List<String> keys = new java.util.ArrayList<>(merged.keySet());
+        assertEquals("Jhin",   keys.get(0));
+        assertEquals("Samira", keys.get(1));
+        assertEquals("Corki",  keys.get(2));
+    }
 }

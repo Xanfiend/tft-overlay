@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.44");
+        ver.setText("v1.99.45");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.45  ·  2026-06-26","Planner scan now correctly pairs star levels from the health-bar pass with champion names from the snapshot, logs any names that had no matching position, and adds them to the pool even when health-bar data is partial."},
             {"v1.99.44  ·  2026-06-26","Stability fix in the scan groundwork."},
             {"v1.99.43  ·  2026-06-26","Board scan now recognizes a unit even when one letter of its name is misread, so fewer units get missed when reading them by popup."},
             {"v1.99.42  ·  2026-06-26","Internal scan improvements to keep the pipeline solid ahead of upcoming features."},

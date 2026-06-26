@@ -6824,23 +6824,40 @@ public class OverlayService extends Service {
         setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         int occupied=slotNames.size();
-        int matched=0;
-        // stars pair tile-order to health-bar order — only trusted when the counts
-        // agree, and they only affect the result list, never the pool counts
-        boolean starsUsable = plannerUnits!=null && plannerUnits.size()==occupied;
-        for(int i=0;i<occupied;i++){
-            String name=slotNames.get(i);
-            if(name==null) continue;
-            matched++;
-            int stars = starsUsable && plannerUnits.get(i).length>2 ? plannerUnits.get(i)[2] : 0;
-            pool.add(name,1);
-            StringBuilder e=new StringBuilder(name);
-            for(int s2=0;s2<stars;s2++) e.append('★');
-            e.append(" ≈");
-            autoScanResults.add(e.toString());
-        }
-        int unknown=occupied-matched;
+        int matched=0, unknown=0;
         long tookMs=autoScanStartMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
+
+        int[][] hbArray = plannerUnits!=null ? plannerUnits.toArray(new int[0][]) : null;
+        if(hbArray==null){
+            // health-bar scan did not run or failed — add all recognised names, no stars
+            for(String name:slotNames){
+                if(name==null||name.isEmpty()){ unknown++; continue; }
+                matched++;
+                pool.add(name,1);
+                autoScanResults.add(name+" ≈");
+            }
+        } else {
+            PlannerMerge.MergeResult merge=PlannerMerge.merge(slotNames,hbArray);
+            java.util.List<String> floating=PlannerMerge.floatingNames(slotNames,hbArray);
+            for(PlannerMerge.BoardUnit u:merge.resolved){
+                matched++;
+                pool.add(u.name,1);
+                StringBuilder e=new StringBuilder(u.name);
+                for(int s=0;s<u.stars;s++) e.append('★');
+                e.append(" ≈");
+                autoScanResults.add(e.toString());
+            }
+            // floating: planner named but no matching health-bar position (unit died between scans)
+            for(String n:floating){
+                matched++;
+                pool.add(n,1);
+                autoScanResults.add(n+" ≈");
+            }
+            unknown=merge.unresolvedCount();
+            if(!floating.isEmpty())
+                addScanLog("planner: "+floating.size()+" floating (no health-bar match): "+floating);
+        }
+
         addScanLog("planner scan: done, "+matched+" named, "+unknown+" unknown of "+occupied
                 +" tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
         if(occupied==0){
