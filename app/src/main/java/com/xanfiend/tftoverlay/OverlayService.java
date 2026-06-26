@@ -1519,7 +1519,7 @@ public class OverlayService extends Service {
 
         // auto scan results
         if(!autoScanResults.isEmpty()){
-        addSecHdr(root, "REVEALED · YOUR BOARD", GOLD);
+        addSecHdr(root, "REVEALED · YOUR BOARD  ("+autoScanResults.size()+")", GOLD);
             if(autoScanGold>=0||autoScanLevel>=0){
                 StringBuilder glSb2=new StringBuilder();
                 if(autoScanLevel>=0) glSb2.append("Lv ").append(autoScanLevel);
@@ -1548,7 +1548,7 @@ public class OverlayService extends Service {
 
         // opponent scan results
         if(!oppScanResults.isEmpty()){
-        addSecHdr(root, "REVEALED · ENEMY", GOLD);
+        addSecHdr(root, "REVEALED · ENEMY  ("+oppScanResults.size()+")", GOLD);
             StringBuilder osrSb=new StringBuilder();
             for(java.util.Map.Entry<String,Integer> e:oppScanResults.entrySet()){
                 if(osrSb.length()>0) osrSb.append(" \u00b7 ");
@@ -2055,7 +2055,7 @@ public class OverlayService extends Service {
         // ✦ YOUR AUGMENTS — remembered from scans that spotted them on screen
         java.util.List<String> mine=pool.getMyAugments();
         if(!mine.isEmpty()){
-            addSecHdr(root, "YOUR AUGMENTS", GOLD);
+            addSecHdr(root, "YOUR AUGMENTS  ("+mine.size()+")", GOLD);
             LinearLayout myCard=new LinearLayout(this); myCard.setOrientation(LinearLayout.VERTICAL);
             myCard.setBackground(box(CARD,6,GOLD,2)); myCard.setPadding(12,10,12,10);
             LinearLayout.LayoutParams mcl=new LinearLayout.LayoutParams(-1,-2); mcl.setMargins(0,2,0,10); myCard.setLayoutParams(mcl);
@@ -2073,7 +2073,8 @@ public class OverlayService extends Service {
         }
 
         // ---- tier-grouped augment list ----
-        addSecHdr(root, "AUGMENTS", GOLD);
+        int augVisCount=0; for(AugmentData.AugmentEntry a:AugmentData.AUGMENTS) if(augFilter.isEmpty()||augFilter.equals(a.tier)) augVisCount++;
+        addSecHdr(root, augFilter.isEmpty()?"AUGMENTS  ("+augVisCount+")":"AUGMENTS — "+augFilter+"-Tier  ("+augVisCount+")", GOLD);
         // compare row: up to 3 pinned augments shown at the top; tap an aug card below to pin/unpin
         if(!augCompare.isEmpty()){
             LinearLayout cmpRow=new LinearLayout(this); cmpRow.setOrientation(LinearLayout.HORIZONTAL); cmpRow.setPadding(0,0,0,8);
@@ -2100,6 +2101,8 @@ public class OverlayService extends Service {
 
         String[] tiers   = {"S",   "A",    "B",  "C"};
         int[]    tierClr = {GOLD, GREEN,   ASH,  DIM};
+        int[]    tierCts = new int[tiers.length];
+        for(AugmentData.AugmentEntry a:AugmentData.AUGMENTS) for(int ti=0;ti<tiers.length;ti++) if(a.tier.equals(tiers[ti])){ tierCts[ti]++; break; }
         java.util.List<String> takenAugs=pool.getMyAugments();
         for(int t=0;t<tiers.length;t++){
             if(!augFilter.isEmpty() && !augFilter.equals(tiers[t])) continue;
@@ -2107,7 +2110,7 @@ public class OverlayService extends Service {
             for(AugmentData.AugmentEntry aug : AugmentData.AUGMENTS){
                 if(!aug.tier.equals(tiers[t])) continue;
                 if(!headerAdded){
-                    TextView th=new TextView(this); th.setText(tiers[t]+"-Tier");
+                    TextView th=new TextView(this); th.setText(tiers[t]+"-Tier  ("+tierCts[t]+")");
                     th.setTextColor(tierClr[t]); th.setTextSize(10);
                     th.setTypeface(null, android.graphics.Typeface.BOLD);
                     th.setPadding(2,8,0,4); root.addView(th);
@@ -3055,7 +3058,8 @@ public class OverlayService extends Service {
             hClr.setTextColor(DIM); hClr.setTextSize(10); hClr.setPadding(2,4,2,0);
             hClr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ java.util.Arrays.fill(itemsHeld,false); showPanel(); }});
             root.addView(hClr);
-            addSecHdr(root, "CRAFTABLE", GOLD);
+            int craftCt=0; for(int ai:heldList) for(int bi:heldList){ if(bi<ai) continue; String cr=ItemData.COMBOS[ai][bi]; if(cr!=null&&!cr.isEmpty()) craftCt++; }
+            addSecHdr(root, "CRAFTABLE  ("+craftCt+")", GOLD);
             boolean anyCraft=false;
             for(int ai : heldList){
                 for(int bi : heldList){
@@ -3087,7 +3091,7 @@ public class OverlayService extends Service {
         tdiv.setTextColor(EDGE); tdiv.setTextSize(9); tdiv.setGravity(Gravity.CENTER); tdiv.setPadding(0,14,0,4);
         root.addView(tdiv);
 
-        addSecHdr(root, "TRAITS", GOLD);
+        addSecHdr(root, "TRAITS  ("+TraitData.TRAITS.length+")", GOLD);
 
         for(String[] tr : TraitData.TRAITS){
             LinearLayout tRow=new LinearLayout(this); tRow.setGravity(Gravity.CENTER_VERTICAL);
