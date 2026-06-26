@@ -1188,6 +1188,7 @@ public class OverlayService extends Service {
         // economy glance: gold / stage / HP without switching to GOLD tab
         int glGold=pool.getGold(), glHp=pool.getHp();
         String glStage=pool.getStageRound();
+        int glStageN=pool.getStageNum(), glRoundN=pool.getRoundNum();
         StringBuilder glSb=new StringBuilder(glGold+"g");
         if(!glStage.isEmpty()) glSb.append("  ·  ").append(glStage);
         glSb.append("  ·  ").append(glHp).append(" HP");
@@ -1199,6 +1200,18 @@ public class OverlayService extends Service {
         glance.setTextColor(glCrit?BLOODL:ASH); glance.setTextSize(10); glance.setGravity(Gravity.CENTER);
         glance.setPadding(0,4,0,6);
         root.addView(glance);
+        // augment-round banner — appears on 2-1 / 3-2 / 4-2 when stage info is known
+        boolean isAugNow=(glStageN==2&&glRoundN==1)||(glStageN==3&&glRoundN==2)||(glStageN==4&&glRoundN==2);
+        if(isAugNow){
+            int augNum=(glStageN==2)?1:(glStageN==3)?2:3;
+            TextView augBnr=new TextView(this);
+            augBnr.setText("★ Augment offer "+augNum+"/3  ·  see GUIDE → AUGMENTS for tier ratings");
+            augBnr.setTextColor(0xFF0A0800); augBnr.setTextSize(11);
+            augBnr.setTypeface(null,android.graphics.Typeface.BOLD); augBnr.setGravity(Gravity.CENTER);
+            augBnr.setBackground(box(GOLD,6,0xFFE8C030,2)); augBnr.setPadding(10,8,10,8);
+            LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,6); augBnr.setLayoutParams(abl);
+            root.addView(augBnr);
+        }
 
         // lobby snapshot: 1-liner from any scouted opponent boards
         OppScout.Profile oppSnap=OppScout.analyzeUnits(pool.getAllOppUnits());
@@ -1794,7 +1807,8 @@ public class OverlayService extends Service {
 
         // champion picker, grouped by cost
         for(int cost=1;cost<=5;cost++){
-            addSecHdr(root, cost+"-COST", COSTC[cost]);
+            int metaCt=0; for(String n:SetData.CHAMPS[cost]) if(ChampItemData.has(n)) metaCt++;
+            addSecHdr(root, cost+"-COST"+(metaCt>0?"  ("+metaCt+" meta)":""), COSTC[cost]);
             LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
             for(int j=0;j<arr.length;j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
