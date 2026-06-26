@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.43");
+        ver.setText("v1.99.44");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.44  ·  2026-06-26","Stability fix in the scan groundwork."},
             {"v1.99.43  ·  2026-06-26","Board scan now recognizes a unit even when one letter of its name is misread, so fewer units get missed when reading them by popup."},
             {"v1.99.42  ·  2026-06-26","Internal scan improvements to keep the pipeline solid ahead of upcoming features."},
             {"v1.99.41  ·  2026-06-26","Cleaner AUGMENTS header when a tier filter is active — no more repeated tier label."},
