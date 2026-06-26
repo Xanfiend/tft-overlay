@@ -1199,17 +1199,23 @@ public class OverlayService extends Service {
         TextView glance=new TextView(this); glance.setText(glSb.toString());
         glance.setTextColor(glCrit?BLOODL:ASH); glance.setTextSize(10); glance.setGravity(Gravity.CENTER);
         glance.setPadding(0,4,0,6);
+        // tap glance line to jump straight to the GOLD tab
+        glance.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=3; showPanel(); }});
+        pressFeedback(glance);
         root.addView(glance);
         // augment-round banner — appears on 2-1 / 3-2 / 4-2 when stage info is known
         boolean isAugNow=(glStageN==2&&glRoundN==1)||(glStageN==3&&glRoundN==2)||(glStageN==4&&glRoundN==2);
         if(isAugNow){
             int augNum=(glStageN==2)?1:(glStageN==3)?2:3;
             TextView augBnr=new TextView(this);
-            augBnr.setText("★ Augment offer "+augNum+"/3  ·  see GUIDE → AUGMENTS for tier ratings");
+            augBnr.setText("★ Augment offer "+augNum+"/3  ·  tap for tier ratings");
             augBnr.setTextColor(0xFF0A0800); augBnr.setTextSize(11);
             augBnr.setTypeface(null,android.graphics.Typeface.BOLD); augBnr.setGravity(Gravity.CENTER);
             augBnr.setBackground(box(GOLD,6,0xFFE8C030,2)); augBnr.setPadding(10,8,10,8);
             LinearLayout.LayoutParams abl=new LinearLayout.LayoutParams(-1,-2); abl.setMargins(0,0,0,6); augBnr.setLayoutParams(abl);
+            // tap the augment banner to open GUIDE → AUGMENTS
+            augBnr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=2; guideTab=3; showPanel(); }});
+            pressFeedback(augBnr);
             root.addView(augBnr);
         }
 
@@ -1568,6 +1574,13 @@ public class OverlayService extends Service {
                 visHint.setTextColor(DIM); visHint.setTextSize(9); visHint.setPadding(2,0,2,4);
                 root.addView(visHint);
             }
+            root.addView(miniChip("⎘ copy board", new View.OnClickListener(){ public void onClick(View v){
+                StringBuilder cb=new StringBuilder();
+                for(String s:autoScanResults){ if(cb.length()>0) cb.append(" · "); cb.append(s); }
+                android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-board",cb.toString()));
+                Toast.makeText(OverlayService.this,"Board copied",Toast.LENGTH_SHORT).show();
+            }}));
             root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }}));
         }
 
@@ -1587,6 +1600,17 @@ public class OverlayService extends Service {
                 filed.setText("filed as OPP "+lastOppSlot+" — scry the next enemy board to file OPP "+(lastOppSlot%7+1));
                 filed.setTextColor(DIM); filed.setTextSize(9); filed.setPadding(2,0,2,2); root.addView(filed);
             }
+            root.addView(miniChip("⎘ copy scan", new View.OnClickListener(){ public void onClick(View v){
+                StringBuilder cb=new StringBuilder();
+                for(java.util.Map.Entry<String,Integer> e2:oppScanResults.entrySet()){
+                    if(cb.length()>0) cb.append(" · ");
+                    cb.append(e2.getKey()); int st2=e2.getValue();
+                    if(st2>0){ cb.append(" "); for(int si=0;si<st2;si++) cb.append("★"); }
+                }
+                android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-opp",cb.toString()));
+                Toast.makeText(OverlayService.this,"Enemy scan copied",Toast.LENGTH_SHORT).show();
+            }}));
             root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }}));
         }
 
@@ -3936,7 +3960,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "AUTO-CLOSE PANEL", GOLD);
         TextView acHint=new TextView(this); acHint.setText("closes the panel automatically after this many seconds — matches the planning phase so you never leave it open mid-fight");
         acHint.setTextColor(DIM); acHint.setTextSize(10); acHint.setPadding(2,0,2,8); root.addView(acHint);
-        pickRow(root, new String[]{"15s","30s","off"}, new int[]{15,30,0}, pool.getPanelTimeout(), 0,
+        pickRow(root, new String[]{"15s","30s","45s","off"}, new int[]{15,30,45,0}, pool.getPanelTimeout(), 0,
             new PickSetter(){ public void pick(int v){ pool.setPanelTimeout(v); showPanel(); }});
 
         // ---- DISPLAY ----
