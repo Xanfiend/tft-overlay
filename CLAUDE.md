@@ -1,6 +1,6 @@
 # TFT Scryer — CLAUDE.md
 
-Project notes: architecture, conventions, known bugs, and direction. Running state lives in `MEMORY.md` — keep it current as decisions land, and compact it when it bloats. Keep these two files named as-is (auto-load); fuller cleanup is deferred to the repo going private.
+Project notes: architecture, conventions, known bugs, and direction. Running state lives in `.dev/MEMORY.md` — keep it current as decisions land, and compact it when it bloats. Keep CLAUDE.md in root (auto-loads); the state file is tucked in `.dev/` to keep the root clean. Fuller hiding is deferred to the repo going private.
 
 ## Git workflow
 
