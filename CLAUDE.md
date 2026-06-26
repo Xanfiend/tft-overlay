@@ -1,6 +1,6 @@
-# TFT Scryer — DEVNOTES
+# TFT Scryer — CLAUDE.md
 
-Developer notes: architecture, conventions, known bugs, and direction. Working scratch state lives in `NOTES.md` — keep it current as decisions land, and compact it when it bloats.
+Project notes: architecture, conventions, known bugs, and direction. Running state lives in `MEMORY.md` — keep it current as decisions land, and compact it when it bloats. Keep these two files named as-is (auto-load); fuller cleanup is deferred to the repo going private.
 
 ## Git workflow
 
