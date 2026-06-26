@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.34");
+        ver.setText("v1.99.35");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -535,6 +535,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.35  ·  2026-06-26","Visual refresh across the overlay: a luminous occult look with a glowing title and sigil, an ornamental header flourish, glowing section headers, brighter active-tab highlights, and softer panel corners."},
             {"v1.99.34  ·  2026-06-26","POOL tab tracking header now shows how many champions you are currently tracking at a glance."},
             {"v1.99.33  ·  2026-06-25","Fixes a build problem that was preventing recent updates from installing. All recent POOL, COACH, GOLD, OPENER, and AUGMENTS improvements are now available."},
             {"v1.99.32  ·  2026-06-25","Smoother, faster panel rendering when the POOL and COACH tabs have many tracked units."},

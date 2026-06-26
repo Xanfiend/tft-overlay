@@ -444,6 +444,7 @@ public class OverlayService extends Service {
         TextView t=new TextView(this); t.setText("◇ "+text);
         t.setTextColor(color); t.setTextSize(ts(11)); t.setTypeface(null,android.graphics.Typeface.BOLD);
         t.setLetterSpacing(0.12f);
+        t.setShadowLayer(9,0,0,color);
         h.addView(t);
         View rule=new View(this);
         GradientDrawable rg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
@@ -929,7 +930,7 @@ public class OverlayService extends Service {
             ScrollView scroll=new ScrollView(this);
             root=new LinearLayout(this);
             root.setOrientation(LinearLayout.VERTICAL);
-            root.setBackground(box(VOID,12,BLOOD,2));
+            root.setBackground(box(VOID,18,BLOOD,2));
             root.setPadding(22,18,22,18);
             scroll.addView(root);
             panel=scroll;
@@ -986,10 +987,12 @@ public class OverlayService extends Service {
         // app sigil anchors the brand in the corner of every tab
         TextView sigil=new TextView(this); sigil.setText("\u29bf");
         sigil.setTextColor(BLOODL); sigil.setTextSize(16); sigil.setPadding(0,0,10,0);
+        sigil.setShadowLayer(14,0,0,BLOODL);
         TextView title=new TextView(this);
         title.setText(mode==5?"\u2694 BUILDS":mode==4?"\u2699 SETUP":mode==3?"\u00a7 GOLD":mode==2?"\u229e GUIDE":mode==1?"\u2738 ODDS":"\u2738 POOL");
         title.setTextColor(BLOODL); title.setTextSize(ts(14)); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setLetterSpacing(0.08f);
+        title.setShadowLayer(12,0,0,BLOOD);
         title.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
         TextView verTv=new TextView(this); verTv.setText(APP_VERSION);
         verTv.setTextColor(DIM); verTv.setTextSize(9); verTv.setPadding(0,0,12,0);
@@ -1009,10 +1012,20 @@ public class OverlayService extends Service {
         }});
         TextView close=new TextView(this); close.setText("\u2715"); close.setTextColor(BONE); close.setTextSize(18);
         close.setGravity(Gravity.CENTER); close.setBackground(box(BLOOD,6,BLOODL,2)); close.setPadding(22,14,22,14);
+        close.setShadowLayer(8,0,0,BLOODL);
         close.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ itemA=-1; itemB=-1; closePanel(); } });
         pressFeedback(close);
         head.addView(sigil); head.addView(title); head.addView(verTv); head.addView(close);
         root.addView(head);
+
+        // ornamental gold flourish under the header — bright in the centre, fading to nothing at both ends
+        View hdiv=new View(this);
+        GradientDrawable hdg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0x00C9A227, GOLD, 0x00C9A227});
+        hdg.setCornerRadius(2);
+        LinearLayout.LayoutParams hdl=new LinearLayout.LayoutParams(-1,2); hdl.setMargins(6,9,6,0);
+        hdiv.setLayoutParams(hdl); hdiv.setBackground(hdg);
+        root.addView(hdiv);
 
         // tab row \u2014 ordered by in-game frequency of use
         LinearLayout tabs=new LinearLayout(this); tabs.setOrientation(LinearLayout.HORIZONTAL); tabs.setPadding(0,10,0,2);
@@ -1028,6 +1041,7 @@ public class OverlayService extends Service {
             tab.setLineSpacing(2,1f);
             tab.setTypeface(null, on?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
             tab.setBackground(box(on?BLOOD:CARD,6,on?BLOODL:EDGE,on?2:1)); tab.setPadding(0,11,0,11);
+            if(on) tab.setShadowLayer(10,0,0,BLOODL);
             tab.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=tm; pool.setLastTab(tm); showPanel(); } });
             pressFeedback(tab);
             tabWrap.addView(tab);
