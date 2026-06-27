@@ -35,6 +35,7 @@ public class OverlayService extends Service {
     private Pool pool;
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
+    private int lastBuiltMode = -1; // tab the panel last rendered, for scroll-to-top on switch
     private Vibrator vib;
     // bump this each release so the footer shows the current version
     private static final String APP_VERSION = "v1.99.17";
@@ -907,6 +908,16 @@ public class OverlayService extends Service {
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
+    // resize the open panel window to the current width setting in place, then
+    // rebuild — showPanel() alone reuses the window and never touches its width
+    private void reopenPanelResized(){
+        if(panel!=null && panelLp!=null){
+            panelLp.width=(int)(getResources().getDisplayMetrics().widthPixels*(pool.getPanelWidthPct()/100f));
+            try{ wm.updateViewLayout(panel,panelLp); }catch(Exception e){}
+        }
+        showPanel();
+    }
+
     @SuppressWarnings("deprecation")
     private void showPanel(){
         // detect current orientation for calibration
@@ -1110,15 +1121,20 @@ public class OverlayService extends Service {
             // starting now would finish before this frame is even visible
             content.setAlpha(0f);
             content.setTranslationY(12f);
+            // switching to a different tab: snap back to the top so you don't land
+            // mid-page where the last tab happened to be scrolled
+            final boolean switched=(mode!=lastBuiltMode);
             content.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
                 public boolean onPreDraw(){
                     content.getViewTreeObserver().removeOnPreDrawListener(this);
+                    if(switched && panel instanceof ScrollView) ((ScrollView)panel).scrollTo(0,0);
                     content.animate().alpha(1f).translationY(0f).setDuration(150)
                         .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
                     return true;
                 }
             });
         }
+        lastBuiltMode=mode;
     }
 
     private double rerollChance(String name){
@@ -3986,8 +4002,8 @@ public class OverlayService extends Service {
         root.addView(ctRow);
 
         // panel width
-        pickRow(root, new String[]{"slim","medium","full"}, new int[]{60,78,96}, pool.getPanelWidthPct(), 0,
-            new PickSetter(){ public void pick(int v){ pool.setPanelWidthPct(v); showPanel(); }});
+        pickRow(root, new String[]{"slim","narrow","medium","full"}, new int[]{60,70,78,96}, pool.getPanelWidthPct(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setPanelWidthPct(v); reopenPanelResized(); }});
         TextView wHint=new TextView(this); wHint.setText("slim = less game obstruction  ·  full = default");
         wHint.setTextColor(DIM); wHint.setTextSize(10); wHint.setPadding(2,4,2,0); root.addView(wHint);
 
