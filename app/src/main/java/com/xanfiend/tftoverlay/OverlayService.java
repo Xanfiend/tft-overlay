@@ -94,6 +94,11 @@ public class OverlayService extends Service {
     private TextView econWonBtnTv;
     private TextView econTimelineTv, econProjectedTv;
     private TextView econEfficiencyTv;
+    // one-step undo for the GOLD-tab round buttons (WON / LOST / NEXT ROUND):
+    // a stray tap silently rewrites gold, streak, HP, record and stage — the
+    // chip restores the exact prior snapshot. Action survives panel reopen.
+    private Runnable econUndoAction; private String econUndoLabel;
+    private TextView econUndoChip;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
     private java.util.List<String> augCompare = new java.util.ArrayList<>();
@@ -905,14 +910,25 @@ public class OverlayService extends Service {
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
         econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null; econEfficiencyTv=null;
+        econUndoChip=null; // action itself survives close/reopen
         scanStatusTv=null; buildSel=null; undoBar=null;
     }
 
-    // resize the open panel window to the current width setting in place, then
-    // rebuild — showPanel() alone reuses the window and never touches its width
+    private int panelGravity(){
+        int a=pool.getPanelAnchor();
+        return a==1 ? (Gravity.TOP|Gravity.CENTER_HORIZONTAL)
+             : a==2 ? (Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL)
+             : Gravity.CENTER;
+    }
+
+    // resize/re-anchor the open panel window to the current settings in place,
+    // then rebuild — showPanel() alone reuses the window and never touches
+    // its width, height or gravity
     private void reopenPanelResized(){
         if(panel!=null && panelLp!=null){
             panelLp.width=(int)(getResources().getDisplayMetrics().widthPixels*(pool.getPanelWidthPct()/100f));
+            panelLp.height=(int)(getResources().getDisplayMetrics().heightPixels*(pool.getPanelHeightPct()/100f));
+            panelLp.gravity=panelGravity();
             try{ wm.updateViewLayout(panel,panelLp); }catch(Exception e){}
         }
         showPanel();
@@ -931,6 +947,7 @@ public class OverlayService extends Service {
         econHpTv=null; econStageTv=null; econEventTv=null; econRollBudgetTv=null;
         econRoundsLeftTv=null; econStreakRoiTv=null; econLossBtnTv=null; econRecordTv=null;
         econWonBtnTv=null; econTimelineTv=null; econProjectedTv=null; econEfficiencyTv=null;
+        econUndoChip=null;
         scanStatusTv=null;
         if(goldRepeat!=null){ goldHandler.removeCallbacks(goldRepeat); goldRepeat=null; }
 
@@ -947,14 +964,14 @@ public class OverlayService extends Service {
             panel=scroll;
             panelLp=new WindowManager.LayoutParams(
                 (int)(getResources().getDisplayMetrics().widthPixels*(pool.getPanelWidthPct()/100f)),
-                (int)(getResources().getDisplayMetrics().heightPixels*0.86),
+                (int)(getResources().getDisplayMetrics().heightPixels*(pool.getPanelHeightPct()/100f)),
                 wtype(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                     | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
                     | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
-            panelLp.gravity=Gravity.CENTER;
+            panelLp.gravity=panelGravity();
             // tap anywhere outside the panel (on the game) to dismiss it
             panel.setOnTouchListener(new View.OnTouchListener(){
                 public boolean onTouch(View v, MotionEvent e){
@@ -1176,6 +1193,7 @@ public class OverlayService extends Service {
             pressFeedback(ngYes);
             ngYes.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 pool.reset(); autoScanResults.clear(); oppScanResults.clear();
+                econUndoAction=null; econUndoLabel=null;
                 undoAction=null; undoLabel=null;
                 newGameHint=false; lastOppSlot=0; buzz(); refreshHud(); showPanel();
             }});
@@ -2460,7 +2478,7 @@ public class OverlayService extends Service {
             wipe.setBackground(box(0xFF1A0C0E,6,BLOOD,2)); wipe.setTextColor(BLOODL);
         }};
         wipe.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(armed[0]){ wipe.removeCallbacks(disarm); pool.reset(); undoAction=null; undoLabel=null; refreshHud(); showPanel(); return; }
+            if(armed[0]){ wipe.removeCallbacks(disarm); pool.reset(); undoAction=null; undoLabel=null; econUndoAction=null; econUndoLabel=null; refreshHud(); showPanel(); return; }
             armed[0]=true; wipe.setText("TAP AGAIN TO WIPE");
             wipe.setBackground(box(BLOOD,6,BLOODL,2)); wipe.setTextColor(BONE); buzz();
             wipe.postDelayed(disarm, 3000);
@@ -2663,6 +2681,7 @@ public class OverlayService extends Service {
         econNextRoundBtn.setBackground(box(CARD,6,GOLD,2)); econNextRoundBtn.setPadding(0,14,0,14);
         LinearLayout.LayoutParams nrl=new LinearLayout.LayoutParams(-1,-2); nrl.setMargins(0,8,0,0); econNextRoundBtn.setLayoutParams(nrl);
         econNextRoundBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            armEconUndo("next round");
             int g=pool.getGold(), s=pool.getStreak();
             pool.setGold(g+Pool.expectedIncome(g,s)); advanceRound(1); buzz(); refreshEcon();
         }});
@@ -2678,6 +2697,7 @@ public class OverlayService extends Service {
         wonBtn.setBackground(box(GREEN,8,0xFF3DCC47,2)); wonBtn.setPadding(0,16,0,16);
         LinearLayout.LayoutParams wl=new LinearLayout.LayoutParams(0,-2,1f); wonBtn.setLayoutParams(wl);
         wonBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            armEconUndo("won");
             int g=pool.getGold(), s=pool.getStreak();
             pool.setGold(g+Pool.expectedIncome(g,s));
             pool.setStreak(s<0?1:s+1);
@@ -2692,6 +2712,7 @@ public class OverlayService extends Service {
         lostBtn.setBackground(box(0xFF1A0806,8,BLOODL,2)); lostBtn.setPadding(0,16,0,16);
         LinearLayout.LayoutParams ll=new LinearLayout.LayoutParams(0,-2,1f); ll.setMargins(8,0,0,0); lostBtn.setLayoutParams(ll);
         lostBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            armEconUndo("lost");
             int g=pool.getGold(), s=pool.getStreak();
             pool.setGold(g+Pool.expectedIncome(g,s));
             int stg=pool.getStageNum(); int[] sd=SetData.STAGE_BASE_DMG;
@@ -2715,6 +2736,20 @@ public class OverlayService extends Service {
         } else { econRecordTv.setVisibility(View.GONE); }
         econRecordTv.setTextColor(ASH); econRecordTv.setTextSize(11); econRecordTv.setGravity(Gravity.CENTER);
         econRecordTv.setPadding(0,5,0,0); root.addView(econRecordTv);
+
+        // ↶ undo chip for a misclicked round button — hidden until one is tapped
+        econUndoChip=new TextView(this);
+        econUndoChip.setTextColor(ASH); econUndoChip.setTextSize(11); econUndoChip.setGravity(Gravity.CENTER);
+        econUndoChip.setBackground(box(CARD,6,EDGE,1)); econUndoChip.setPadding(0,9,0,9);
+        LinearLayout.LayoutParams eul=new LinearLayout.LayoutParams(-1,-2); eul.setMargins(0,6,0,0); econUndoChip.setLayoutParams(eul);
+        econUndoChip.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(econUndoAction==null) return;
+            econUndoAction.run(); econUndoAction=null; econUndoLabel=null;
+            buzz(); refreshEcon();
+        }});
+        pressFeedback(econUndoChip);
+        root.addView(econUndoChip);
+        refreshEconUndo();
 
         // ◇ STAGE / ROUND — upcoming augments and carousels
         int stgNow=pool.getStageNum(), rndNow=pool.getRoundNum();
@@ -2790,6 +2825,7 @@ public class OverlayService extends Service {
             econLossBtnTv.setText("LOSS  −"+hpDmg+" HP  (stage "+stgForHp+" base)");
             econLossBtnTv.setTextColor(BLOODL); econLossBtnTv.setBackground(box(0xFF1A0806,6,BLOODL,2));
             econLossBtnTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                armEconUndo("hp loss");
                 int st=pool.getStageNum(); int[] sd=SetData.STAGE_BASE_DMG;
                 pool.setHp(pool.getHp()-sd[Math.min(st,sd.length-1)]); buzz(); refreshEcon();
             }});
@@ -2873,8 +2909,29 @@ public class OverlayService extends Service {
         root.addView(resetEcon);
     }
 
+    // snapshot everything a GOLD-tab round button can touch; running the action
+    // restores that exact state (refreshEcon repaints purely from pool state)
+    private void armEconUndo(String label){
+        final int g=pool.getGold(), s=pool.getStreak(), w=pool.getWins(), l=pool.getLosses(), hp=pool.getHp();
+        final String sr=pool.getStageRound();
+        econUndoLabel=label;
+        econUndoAction=new Runnable(){ public void run(){
+            pool.setGold(g); pool.setStreak(s); pool.setWins(w); pool.setLosses(l);
+            pool.setHp(hp); pool.setStageRound(sr);
+        }};
+    }
+
+    private void refreshEconUndo(){
+        if(econUndoChip==null) return;
+        if(econUndoAction!=null){
+            econUndoChip.setText("↶  undo "+econUndoLabel);
+            econUndoChip.setVisibility(View.VISIBLE);
+        } else econUndoChip.setVisibility(View.GONE);
+    }
+
     private void refreshEcon(){
         refreshHud();
+        refreshEconUndo();
         if(econGoldTv==null) return;
         int gold=pool.getGold(); int streak=pool.getStreak();
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
@@ -4006,6 +4063,22 @@ public class OverlayService extends Service {
             new PickSetter(){ public void pick(int v){ pool.setPanelWidthPct(v); reopenPanelResized(); }});
         TextView wHint=new TextView(this); wHint.setText("slim = less game obstruction  ·  full = default");
         wHint.setTextColor(DIM); wHint.setTextSize(10); wHint.setPadding(2,4,2,0); root.addView(wHint);
+
+        // panel height + anchor: a half-height panel pinned top or bottom keeps
+        // the shop (or the board) visible while the panel is open
+        TextView phLbl=new TextView(this); phLbl.setText("PANEL HEIGHT");
+        phLbl.setTextColor(ASH); phLbl.setTextSize(10); phLbl.setLetterSpacing(0.08f); phLbl.setPadding(2,12,0,2);
+        root.addView(phLbl);
+        pickRow(root, new String[]{"tall","half"}, new int[]{86,52}, pool.getPanelHeightPct(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setPanelHeightPct(v); reopenPanelResized(); }});
+
+        TextView paLbl=new TextView(this); paLbl.setText("PANEL POSITION");
+        paLbl.setTextColor(ASH); paLbl.setTextSize(10); paLbl.setLetterSpacing(0.08f); paLbl.setPadding(2,12,0,2);
+        root.addView(paLbl);
+        pickRow(root, new String[]{"top","middle","bottom"}, new int[]{1,0,2}, pool.getPanelAnchor(), 0,
+            new PickSetter(){ public void pick(int v){ pool.setPanelAnchor(v); reopenPanelResized(); }});
+        TextView paHint=new TextView(this); paHint.setText("half height + top keeps your shop visible while you read the odds");
+        paHint.setTextColor(DIM); paHint.setTextSize(10); paHint.setPadding(2,4,2,0); root.addView(paHint);
 
         // sigil size
         TextView sigLbl=new TextView(this); sigLbl.setText("SIGIL SIZE");
