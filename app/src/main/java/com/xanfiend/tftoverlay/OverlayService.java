@@ -4425,11 +4425,16 @@ public class OverlayService extends Service {
         int step=4;
         int xL=W/10, xR=W*9/10, yT=H*15/100, yB=H*85/100;
 
-        // Pass 1: bounding box of all teal/cyan hex-outline pixels
+        // Pass 1: bounding box of all teal/cyan hex-outline pixels.
+        // Rows are read in one bulk getPixels() each — a JNI crossing per ROW
+        // instead of per sampled pixel (~500x fewer for a 4x-downsampled scan).
+        int rowW=xR-xL;
+        int[] row=new int[rowW];
         int minX=W,maxX=0,minY=H,maxY=0,count=0;
         for(int y=yT;y<yB;y+=step){
+            bmp.getPixels(row,0,rowW,xL,y,rowW,1);
             for(int x=xL;x<xR;x+=step){
-                if(isTealHex(bmp.getPixel(x,y))){
+                if(isTealHex(row[x-xL])){
                     if(x<minX) minX=x; if(x>maxX) maxX=x;
                     if(y<minY) minY=y; if(y>maxY) maxY=y;
                     count++;
@@ -4444,17 +4449,21 @@ public class OverlayService extends Service {
 
         // Pass 2: measure row widths at top and bottom to capture trapezoid perspective
         int sH=(maxY-minY)/5;
+        int bandW=maxX-minX+1;
+        int[] band=new int[bandW];
         int topMinX=W,topMaxX=0,botMinX=W,botMaxX=0;
         for(int y=minY;y<minY+sH;y+=step){
+            bmp.getPixels(band,0,bandW,minX,y,bandW,1);
             for(int x=minX;x<=maxX;x+=step){
-                if(isTealHex(bmp.getPixel(x,y))){
+                if(isTealHex(band[x-minX])){
                     if(x<topMinX) topMinX=x; if(x>topMaxX) topMaxX=x;
                 }
             }
         }
         for(int y=maxY-sH;y<=maxY;y+=step){
+            bmp.getPixels(band,0,bandW,minX,y,bandW,1);
             for(int x=minX;x<=maxX;x+=step){
-                if(isTealHex(bmp.getPixel(x,y))){
+                if(isTealHex(band[x-minX])){
                     if(x<botMinX) botMinX=x; if(x>botMaxX) botMaxX=x;
                 }
             }

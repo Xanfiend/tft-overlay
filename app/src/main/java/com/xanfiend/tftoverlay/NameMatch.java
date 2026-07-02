@@ -61,24 +61,43 @@ public final class NameMatch {
      * Matching is on normalized forms; exact and high-overlap containment rank
      * ahead of distant edits. */
     public static String bestMatch(String ocr, List<String> candidates) {
+        if (candidates == null) return null;
+        String[] names = new String[candidates.size()];
+        String[] norms = new String[candidates.size()];
+        for (int i = 0; i < names.length; i++) {
+            names[i] = candidates.get(i);
+            norms[i] = norm(names[i]);
+        }
+        return bestMatch(ocr, names, norms);
+    }
+
+    /* Core matcher against a roster whose normalized forms are precomputed
+     * (parallel arrays). Callers that match many OCR blocks per screenshot
+     * (ScreenScanner) pass their cached arrays so the roster is never
+     * re-normalized per block. A length gate skips the O(n*m) edit distance
+     * for candidates whose length difference alone exceeds tolerance. */
+    public static String bestMatch(String ocr, String[] names, String[] norms) {
         String o = norm(ocr);
-        if (o.length() < 3 || candidates == null) return null;
+        if (o.length() < 3 || names == null) return null;
         String best = null;
         int bestD = Integer.MAX_VALUE, secondD = Integer.MAX_VALUE;
-        for (String cand : candidates) {
-            String t = norm(cand);
+        for (int i = 0; i < names.length; i++) {
+            String t = norms[i];
             if (t.isEmpty()) continue;
+            int tol = tolerance(t.length());
             int d;
             if (o.equals(t)) {
                 d = 0;
             } else if (t.length() >= 6 && (t.contains(o) || o.contains(t))
                     && Math.min(o.length(), t.length()) * 10 >= Math.max(o.length(), t.length()) * 8) {
                 d = 1;
+            } else if (Math.abs(o.length() - t.length()) > tol) {
+                continue;
             } else {
                 d = editDistance(o, t);
             }
-            if (d > tolerance(t.length())) continue;
-            if (d < bestD) { secondD = bestD; bestD = d; best = cand; }
+            if (d > tol) continue;
+            if (d < bestD) { secondD = bestD; bestD = d; best = names[i]; }
             else if (d < secondD) { secondD = d; }
         }
         if (best != null && bestD == secondD) return null;   // ambiguous — don't guess

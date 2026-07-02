@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.47");
+        ver.setText("v1.99.48");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.48  ·  2026-07-02","Performance pass across the app: roll odds stay stable instead of flickering slightly every time the panel refreshes, panels rebuild faster while tapping through a round, and scans finish quicker on slower devices."},
             {"v1.99.47  ·  2026-06-27","Switching tabs now snaps back to the top instead of staying scrolled where the last tab was. Added a 'narrow' panel-width option, and changing the width now resizes the open panel right away."},
             {"v1.99.46  ·  2026-06-26","Tap the gold/stage/HP glance bar to jump straight to the GOLD tab. Tap the augment-round banner to open GUIDE augment ratings. Copy your board or enemy scan results to clipboard. 45s panel auto-close option added."},
             {"v1.99.45  ·  2026-06-26","Planner scan now correctly pairs star levels from the health-bar pass with champion names from the snapshot, logs any names that had no matching position, and adds them to the pool even when health-bar data is partial."},
