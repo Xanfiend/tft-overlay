@@ -167,6 +167,13 @@ public class Pool {
     // panel width as a percentage of screen width (96 = default full-bleed)
     public int  getPanelWidthPct()      { return p.getInt("cfg_panelwidth", 96); }
     public void setPanelWidthPct(int w) { p.edit().putInt("cfg_panelwidth", w).apply(); }
+    // panel height as a percentage of screen height (86 = default tall)
+    public int  getPanelHeightPct()      { return p.getInt("cfg_panelheight", 86); }
+    public void setPanelHeightPct(int v) { p.edit().putInt("cfg_panelheight", v).apply(); }
+    // panel anchor: 0 = middle, 1 = top, 2 = bottom — with a half-height panel
+    // this keeps the shop or the board visible while the panel is open
+    public int  getPanelAnchor()      { return p.getInt("cfg_panelanchor", 0); }
+    public void setPanelAnchor(int a) { p.edit().putInt("cfg_panelanchor", a).apply(); }
     // large text: bump core panel text by +2sp for easier reading mid-game
     public boolean getLargeText()         { return p.getBoolean("cfg_largetext", false); }
     public void    setLargeText(boolean v){ p.edit().putBoolean("cfg_largetext", v).apply(); }
