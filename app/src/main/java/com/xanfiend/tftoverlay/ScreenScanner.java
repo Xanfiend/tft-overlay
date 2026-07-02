@@ -329,14 +329,16 @@ public class ScreenScanner {
             }
         }
         // Fuzzy fallback: blocks the containment loop missed due to a single-letter OCR slip
+        ensureChampArrays();
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
-            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            String btxt = block.getText().trim();
+            String cand = NameMatch.bestMatch(btxt, champNames, champNorms);
             if (cand != null && !r.shopChampions.contains(cand)) {
                 r.shopChampions.add(cand);
                 r.shopChampPos.add(new int[]{(int)(box.centerX()*inv), (int)(box.centerY()*inv)});
-                log("shopStrip (fuzzy): " + cand + " from \"" + block.getText().trim() + "\"");
+                log("shopStrip (fuzzy): " + cand + " from \"" + btxt + "\"");
             }
         }
         if (!r.shopChampions.isEmpty())
@@ -698,6 +700,7 @@ public class ScreenScanner {
         // Fuzzy fallback for shop and bench zones: catches single-letter OCR slips that
         // containment matching missed. Only adds a candidate when NameMatch resolves it
         // unambiguously and it isn't already in the list.
+        ensureChampArrays();
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null) continue;
@@ -705,10 +708,11 @@ public class ScreenScanner {
             boolean inShop  = bcy >= shopTop  && bcy <= shopBot;
             boolean inBench = bcy >= benchTop && bcy <= benchBot;
             if (!inShop && !inBench) continue;
-            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            String btxt = block.getText().trim();
+            String cand = NameMatch.bestMatch(btxt, champNames, champNorms);
             if (cand == null) continue;
-            if (inShop  && !r.shopChampions.contains(cand))  { r.shopChampions.add(cand);  log("shop champ (fuzzy): "  + cand + " from \"" + block.getText().trim() + "\""); }
-            if (inBench && !r.benchChampions.contains(cand)) { r.benchChampions.add(cand); log("bench champ (fuzzy): " + cand + " from \"" + block.getText().trim() + "\""); }
+            if (inShop  && !r.shopChampions.contains(cand))  { r.shopChampions.add(cand);  log("shop champ (fuzzy): "  + cand + " from \"" + btxt + "\""); }
+            if (inBench && !r.benchChampions.contains(cand)) { r.benchChampions.add(cand); log("bench champ (fuzzy): " + cand + " from \"" + btxt + "\""); }
         }
 
         StringBuilder sb = new StringBuilder();
@@ -871,10 +875,11 @@ public class ScreenScanner {
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
             if (box == null || box.height() < minH) continue;
-            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            String btxt = block.getText().trim();
+            String cand = NameMatch.bestMatch(btxt, champNames, champNorms);
             if (cand != null && !r.autoChampions.contains(cand)) {
                 r.autoChampions.add(cand);
-                log("auto match (fuzzy): " + cand + " from \"" + block.getText().trim() + "\"");
+                log("auto match (fuzzy): " + cand + " from \"" + btxt + "\"");
             }
         }
         return r;
@@ -943,6 +948,7 @@ public class ScreenScanner {
     // guards short names (exact-only) and ambiguous ties itself.
     private String fuzzyNameFallback(Text text, int popLeft, int popTop, int popBot,
                                      int minH, boolean useCy) {
+        ensureChampArrays();
         int bestH = 0; String found = "";
         for (Text.TextBlock block : text.getTextBlocks()) {
             android.graphics.Rect box = block.getBoundingBox();
@@ -950,7 +956,7 @@ public class ScreenScanner {
             if (box.centerX() < popLeft) continue;
             if (useCy && (box.centerY() < popTop || box.centerY() > popBot)) continue;
             if (box.height() < minH || box.height() <= bestH) continue;
-            String cand = NameMatch.bestMatch(block.getText().trim(), buildChampList());
+            String cand = NameMatch.bestMatch(block.getText().trim(), champNames, champNorms);
             if (cand != null) { found = cand; bestH = box.height(); }
         }
         return found;
