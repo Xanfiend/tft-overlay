@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.49");
+        ver.setText("v1.99.50");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.50  ·  2026-07-07","Faster scanning across the board, and gold is now read correctly when you're sitting on 100 or more — it previously capped out at two digits."},
             {"v1.99.49  ·  2026-07-02","Misclicked WON, LOST, NEXT ROUND or the HP loss button? A new undo chip on the GOLD tab restores everything the tap changed — gold, streak, HP, record and stage. Also added panel height (tall/half) and position (top/middle/bottom) options, so a half panel pinned to the top keeps your shop visible while you read odds."},
             {"v1.99.48  ·  2026-07-02","Performance pass across the app: roll odds stay stable instead of flickering slightly every time the panel refreshes, panels rebuild faster while tapping through a round, and scans finish quicker on slower devices."},
             {"v1.99.47  ·  2026-06-27","Switching tabs now snaps back to the top instead of staying scrolled where the last tab was. Added a 'narrow' panel-width option, and changing the width now resizes the open panel right away."},
