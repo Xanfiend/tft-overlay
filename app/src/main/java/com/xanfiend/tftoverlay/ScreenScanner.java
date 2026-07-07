@@ -218,8 +218,9 @@ public class ScreenScanner {
             if (box.right > pMaxX) pMaxX = box.right;
             if (box.bottom > pMaxY) pMaxY = box.bottom;
             String ocrNorm = norm(raw);
+            String ocrLower = raw.toLowerCase();
             for (int i = 0; i < champNames.length; i++) {
-                if (box.height() > bestH && matchChampNorm(ocrNorm, raw, champNorms[i], champWords[i])) {
+                if (box.height() > bestH && matchChampIdx(ocrNorm, ocrLower, i)) {
                     r.detectedBoardUnit = champNames[i];
                     bestH = box.height();
                     break;
@@ -251,10 +252,10 @@ public class ScreenScanner {
                 android.graphics.Rect b = block.getBoundingBox();
                 if (b == null || b.centerX() < popLeft) continue;
                 String raw = block.getText();
-                for (String[] tr : TraitData.TRAITS) {
-                    String tName = tr[0];
-                    if (!r.popupTraits.contains(tName) && fuzzyMatch(raw, tName)) {
-                        r.popupTraits.add(tName);
+                String rawL = raw.toLowerCase();
+                for (int t = 0; t < traitNamesArr.length; t++) {
+                    if (!r.popupTraits.contains(traitNamesArr[t]) && fuzzyCached(rawL, traitLower[t], traitSplit[t])) {
+                        r.popupTraits.add(traitNamesArr[t]);
                     }
                 }
             }
@@ -314,14 +315,14 @@ public class ScreenScanner {
             String raw = block.getText().trim();
             if (raw.isEmpty()) continue;
             // gold counter: standalone 0-99 in the right half of the strip
-            if (raw.matches("\\d{1,2}") && box.centerX() > rightHalf && box.height() > goldBoxH) {
+            if (P_GOLDNUM.matcher(raw).matches() && box.centerX() > rightHalf && box.height() > goldBoxH) {
                 r.gold = Integer.parseInt(raw);
                 goldBoxH = box.height();
             }
-            String rawNorm = norm(raw);
+            String rawNorm = norm(raw); String rawLower = raw.toLowerCase();
             for (int i = 0; i < champNames.length; i++) {
                 String name = champNames[i];
-                if (!r.shopChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                if (!r.shopChampions.contains(name) && matchChampIdx(rawNorm, rawLower, i)) {
                     r.shopChampions.add(name);
                     r.shopChampPos.add(new int[]{(int)(box.centerX()*inv), (int)(box.centerY()*inv)});
                     break;
@@ -433,7 +434,7 @@ public class ScreenScanner {
                 // all-digits match would miss it). Tallest box wins; among blocks
                 // within 4px of the same height prefer the rightmost — the gold
                 // counter is always in the far-right corner.
-                java.util.regex.Matcher gm = java.util.regex.Pattern.compile("(\\d{1,3})").matcher(raw);
+                java.util.regex.Matcher gm = P_GOLD.matcher(raw);
                 if (gm.find()) {
                     int v = Integer.parseInt(gm.group(1));
                     if (v >= 0 && v <= 300) {
@@ -448,10 +449,9 @@ public class ScreenScanner {
                 continue;
             }
             // top-left band: level, XP progress, stage-round
-            if (r.level == -1 && raw.matches("[1-9]|10")) r.level = Integer.parseInt(raw);
+            if (r.level == -1 && P_LEVEL.matcher(raw).matches()) r.level = Integer.parseInt(raw);
             if (r.xpNeed < 0) {
-                java.util.regex.Matcher xm = java.util.regex.Pattern
-                        .compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b").matcher(raw);
+                java.util.regex.Matcher xm = P_XP.matcher(raw);
                 if (xm.find()) {
                     int cur = Integer.parseInt(xm.group(1));
                     int need = Integer.parseInt(xm.group(2));
@@ -461,8 +461,7 @@ public class ScreenScanner {
                 }
             }
             if (r.stageRound.isEmpty()) {
-                java.util.regex.Matcher sm = java.util.regex.Pattern
-                        .compile("\\b([1-9])-([1-7])\\b").matcher(raw);
+                java.util.regex.Matcher sm = P_STAGE.matcher(raw);
                 if (sm.find()) r.stageRound = sm.group(1) + "-" + sm.group(2);
             }
         }
@@ -595,10 +594,10 @@ public class ScreenScanner {
             // gold: 0-99 in bottom-right corner. Use find() not matches() so a fused
             // coin glyph like "⛃53" still yields 53 instead of being discarded.
             if (cy > bottomStart && cx > leftHalf) {
-                java.util.regex.Matcher gm = java.util.regex.Pattern.compile("(\\d{1,2})").matcher(raw);
+                java.util.regex.Matcher gm = P_GOLD.matcher(raw);
                 if (gm.find()) {
                     int val = Integer.parseInt(gm.group(1));
-                    if (val >= 0 && val <= 99 && box.height() > goldBoxH) {
+                    if (val >= 0 && val <= 999 && box.height() > goldBoxH) {
                         r.gold = val;
                         goldBoxH = box.height();
                     }
@@ -606,14 +605,13 @@ public class ScreenScanner {
             }
 
             // level: standalone 1-10 in top-left corner (1 = Tocker's Trials start)
-            if (raw.matches("[1-9]|10") && cy < topEnd && cx < leftHalf && r.level == -1) {
+            if (P_LEVEL.matcher(raw).matches() && cy < topEnd && cx < leftHalf && r.level == -1) {
                 r.level = Integer.parseInt(raw);
             }
 
             // stage-round indicator: "3-2" style, top strip of the screen
             if (r.stageRound.isEmpty() && cy < topEnd) {
-                java.util.regex.Matcher sm = java.util.regex.Pattern
-                        .compile("\\b([1-9])-([1-7])\\b").matcher(raw);
+                java.util.regex.Matcher sm = P_STAGE.matcher(raw);
                 if (sm.find()) {
                     r.stageRound = sm.group(1) + "-" + sm.group(2);
                     log("stage round: " + r.stageRound + " from \"" + raw + "\"");
@@ -623,8 +621,7 @@ public class ScreenScanner {
             // XP progress: "cur/need" near the level button, top-left.
             // Validate need against the XP table so score fractions don't match.
             if (r.xpNeed < 0 && cy < topEnd && cx < leftHalf) {
-                java.util.regex.Matcher xm = java.util.regex.Pattern
-                        .compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b").matcher(raw);
+                java.util.regex.Matcher xm = P_XP.matcher(raw);
                 if (xm.find()) {
                     int cur = Integer.parseInt(xm.group(1));
                     int need = Integer.parseInt(xm.group(2));
@@ -637,10 +634,12 @@ public class ScreenScanner {
                 }
             }
 
-            // augments: full-screen match
-            for (AugmentData.AugmentEntry aug : AugmentData.AUGMENTS) {
-                if (!r.augments.contains(aug.name) && fuzzyMatch(raw, aug.name)) {
-                    r.augments.add(aug.name);
+            // augments: full-screen match (cached lowercase forms — the fuzzy
+            // word rule runs per block x per augment, so no per-call allocation)
+            String rawLower = raw.toLowerCase();
+            for (int a = 0; a < augNamesArr.length; a++) {
+                if (!r.augments.contains(augNamesArr[a]) && fuzzyCached(rawLower, augLower[a], augSplit[a])) {
+                    r.augments.add(augNamesArr[a]);
                     break;
                 }
             }
@@ -650,7 +649,7 @@ public class ScreenScanner {
                 String rawNorm = norm(raw);
                 for (int i = 0; i < champNames.length; i++) {
                     String name = champNames[i];
-                    if (!r.shopChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                    if (!r.shopChampions.contains(name) && matchChampIdx(rawNorm, rawLower, i)) {
                         r.shopChampions.add(name);
                         log("shop champ: " + name + " from \"" + raw + "\"");
                         break;
@@ -663,7 +662,7 @@ public class ScreenScanner {
                 String rawNorm = norm(raw);
                 for (int i = 0; i < champNames.length; i++) {
                     String name = champNames[i];
-                    if (!r.benchChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                    if (!r.benchChampions.contains(name) && matchChampIdx(rawNorm, rawLower, i)) {
                         r.benchChampions.add(name);
                         log("bench champ: " + name + " from \"" + raw + "\"");
                         break;
@@ -778,9 +777,9 @@ public class ScreenScanner {
             if (box.top < pMinY) pMinY = box.top;
             if (box.right > pMaxX) pMaxX = box.right;
             if (box.bottom > pMaxY) pMaxY = box.bottom;
-            String rawNorm = norm(raw);
+            String rawNorm = norm(raw); String rawLower = raw.toLowerCase();
             for (int i = 0; i < champNames.length; i++) {
-                if (box.height() > bestH && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                if (box.height() > bestH && matchChampIdx(rawNorm, rawLower, i)) {
                     r.detectedBoardUnit = champNames[i];
                     bestH = box.height();
                     log("match: " + champNames[i] + " h=" + box.height() + " from \"" + raw + "\"");
@@ -829,10 +828,10 @@ public class ScreenScanner {
                 int cy = box.centerY(), cx = box.centerX();
                 if (cy < popTop || cy > popBot || cx < popLeft) continue;
                 String raw = block.getText();
-                for (String[] tr : TraitData.TRAITS) {
-                    String tName = tr[0];
-                    if (!r.popupTraits.contains(tName) && fuzzyMatch(raw, tName)) {
-                        r.popupTraits.add(tName);
+                String rawL = raw.toLowerCase();
+                for (int t = 0; t < traitNamesArr.length; t++) {
+                    if (!r.popupTraits.contains(traitNamesArr[t]) && fuzzyCached(rawL, traitLower[t], traitSplit[t])) {
+                        r.popupTraits.add(traitNamesArr[t]);
                     }
                 }
             }
@@ -861,10 +860,10 @@ public class ScreenScanner {
                 continue;
             }
             log("cand h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
-            String rawNorm = norm(raw);
+            String rawNorm = norm(raw); String rawLower = raw.toLowerCase();
             for (int i = 0; i < champNames.length; i++) {
                 String name = champNames[i];
-                if (!r.autoChampions.contains(name) && matchChampNorm(rawNorm, raw, champNorms[i], champWords[i])) {
+                if (!r.autoChampions.contains(name) && matchChampIdx(rawNorm, rawLower, i)) {
                     r.autoChampions.add(name);
                     log("auto match: " + name + " from \"" + rawLog + "\"");
                     break;
@@ -893,6 +892,24 @@ public class ScreenScanner {
     private static String[] champNames = null;
     private static String[] champNorms = null;
     private static String[] champWords = null;
+    // Lowercase + token forms for the fuzzy word-overlap rule. fuzzyMatch()
+    // lowercases and regex-splits its target on every call — per OCR block per
+    // candidate that is thousands of Pattern compiles in one scan. These are the
+    // same forms, built once, for the three rosters matched in hot loops.
+    private static String[] champWordsLower = null;
+    private static String[][] champWordSplit = null;
+    private static String[] augNamesArr = null, augLower = null;
+    private static String[][] augSplit = null;
+    private static String[] traitNamesArr = null, traitLower = null;
+    private static String[][] traitSplit = null;
+    private static final java.util.regex.Pattern P_WORD_SEP = java.util.regex.Pattern.compile("[ ']+");
+    // Hoisted per-block regexes (String.matches / Pattern.compile in a block loop
+    // recompile the pattern for every OCR block).
+    private static final java.util.regex.Pattern P_LEVEL = java.util.regex.Pattern.compile("[1-9]|10");
+    private static final java.util.regex.Pattern P_STAGE = java.util.regex.Pattern.compile("\\b([1-9])-([1-7])\\b");
+    private static final java.util.regex.Pattern P_XP    = java.util.regex.Pattern.compile("\\b(\\d{1,3})\\s*/\\s*(\\d{1,3})\\b");
+    private static final java.util.regex.Pattern P_GOLD  = java.util.regex.Pattern.compile("(\\d{1,3})");
+    private static final java.util.regex.Pattern P_GOLDNUM = java.util.regex.Pattern.compile("\\d{1,3}");
 
     private static List<String> buildChampList() {
         if (champListCache == null) {
@@ -909,11 +926,37 @@ public class ScreenScanner {
         String[] names = list.toArray(new String[0]);
         String[] norms = new String[names.length];
         String[] words = new String[names.length];
+        String[] wLower = new String[names.length];
+        String[][] wSplit = new String[names.length][];
         for (int i = 0; i < names.length; i++) {
             norms[i] = norm(names[i]);
             words[i] = names[i].replaceAll("([A-Z])", " $1").trim();
+            wLower[i] = words[i].toLowerCase();
+            wSplit[i] = P_WORD_SEP.split(wLower[i]);
         }
         champNorms = norms; champWords = words;
+        champWordsLower = wLower; champWordSplit = wSplit;
+
+        String[] an = new String[AugmentData.AUGMENTS.length];
+        String[] al = new String[an.length];
+        String[][] as = new String[an.length][];
+        for (int i = 0; i < an.length; i++) {
+            an[i] = AugmentData.AUGMENTS[i].name;
+            al[i] = an[i].toLowerCase();
+            as[i] = P_WORD_SEP.split(al[i]);
+        }
+        augNamesArr = an; augLower = al; augSplit = as;
+
+        String[] tn = new String[TraitData.TRAITS.length];
+        String[] tl = new String[tn.length];
+        String[][] tsp = new String[tn.length][];
+        for (int i = 0; i < tn.length; i++) {
+            tn[i] = TraitData.TRAITS[i][0];
+            tl[i] = tn[i].toLowerCase();
+            tsp[i] = P_WORD_SEP.split(tl[i]);
+        }
+        traitNamesArr = tn; traitLower = tl; traitSplit = tsp;
+
         champNames = names; // assign last: readers gate on champNames != null
     }
 
@@ -989,13 +1032,31 @@ public class ScreenScanner {
     private boolean fuzzyMatch(String ocr, String target) {
         String ocrL = ocr.toLowerCase();
         String tarL = target.toLowerCase();
+        String[] words = P_WORD_SEP.split(tarL);
+        return fuzzyCached(ocrL, tarL, words);
+    }
+
+    // fuzzyMatch body on precomputed lowercase + token forms — zero allocation,
+    // no per-call Pattern compile. Same rules, same outcomes.
+    private static boolean fuzzyCached(String ocrL, String tarL, String[] words) {
         if (ocrL.length() < 4) return false;
         if (ocrL.contains(tarL)) return true;
         if (tarL.contains(ocrL) && ocrL.length() * 10 >= tarL.length() * 8) return true;
-        String[] words = tarL.split("[ ']+");
         if (words.length == 0) return false;
         int matched = 0;
         for (String w : words) { if (w.length() > 3 && ocrL.contains(w)) matched++; }
         return matched > 0 && (float) matched / words.length >= 0.6f;
+    }
+
+    // Hot-loop champion matcher: same decision chain as matchChampNorm, but every
+    // per-target form (norm / lowercase words / tokens) comes from the startup
+    // caches and the caller lowercases the OCR string once per block.
+    private boolean matchChampIdx(String ocrNorm, String ocrLower, int i) {
+        String tarNorm = champNorms[i];
+        if (tarNorm.length() <= 4) return ocrNorm.equals(tarNorm);
+        if (ocrNorm.length() < 4) return false;
+        if (ocrNorm.equals(tarNorm) || ocrNorm.contains(tarNorm)) return true;
+        if (tarNorm.length() >= 6 && tarNorm.contains(ocrNorm) && ocrNorm.length() * 10 >= tarNorm.length() * 8) return true;
+        return fuzzyCached(ocrLower, champWordsLower[i], champWordSplit[i]);
     }
 }
