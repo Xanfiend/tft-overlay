@@ -4281,7 +4281,7 @@ public class OverlayService extends Service {
         root.addView(autoCalBtn);
 
         TextView autoCalHint=new TextView(this);
-        autoCalHint.setText("Detects the teal hex grid outlines automatically. Open TFT to planning phase, tap this, then SHOW DOTS to verify.");
+        autoCalHint.setText("Places the grid on the board automatically. Best during a planning phase; if the board can't be read precisely it applies the standard centered position, so the dots always land on the board. Verify with SHOW DOTS.");
         autoCalHint.setTextColor(ASH); autoCalHint.setTextSize(10); autoCalHint.setPadding(2,0,0,10);
         root.addView(autoCalHint);
 
@@ -4516,7 +4516,7 @@ public class OverlayService extends Service {
         }
         if(count<80||maxX-minX<W/5||maxY-minY<H/6){
             bmp.recycle();
-            onHexCalFail("no hex grid found ("+count+" teal pixels) — must be in planning phase");
+            applyStandardGrid(W,H,"no hex outlines visible ("+count+" px)");
             return;
         }
 
@@ -4544,7 +4544,7 @@ public class OverlayService extends Service {
         bmp.recycle();
 
         if(topMaxX<=topMinX||botMaxX<=botMinX){
-            onHexCalFail("could not measure row widths");
+            applyStandardGrid(W,H,"row measurement failed");
             return;
         }
 
@@ -4562,8 +4562,21 @@ public class OverlayService extends Service {
         int calBL=blX*100/W, calBR=brX*100/W;
         int calTop=topY*100/H, calBot=botY*100/H;
 
-        if(calTop>=calBot||calTL<3||calBR>97||calTop<10||calBot>90){
-            onHexCalFail("detected bounds look implausible (tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot+")");
+        // The board is height-fit and centered on every device (fixed camera), so
+        // the true corners can only sit near the aspect-derived model values. A
+        // detection outside that window means the teal threshold latched onto
+        // something else (unit glows, UI accents, arena art) — in arenas that hide
+        // the hex outlines the old loose check let a near-full-screen bounding box
+        // through and saved a garbage grid. Disagreement now falls back to the
+        // standard centered grid instead.
+        int[] exp=standardGridPct(W,H);
+        final int TOL=8;
+        boolean agrees =
+            Math.abs(calTL-exp[0])<=TOL && Math.abs(calTR-exp[1])<=TOL &&
+            Math.abs(calBL-exp[2])<=TOL && Math.abs(calBR-exp[3])<=TOL &&
+            calTop<calBot && calTop>=30 && calTop<=58 && calBot>=58 && calBot<=85;
+        if(!agrees){
+            applyStandardGrid(W,H,"detection off-model (tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot+")");
             return;
         }
 
@@ -4586,6 +4599,35 @@ public class OverlayService extends Service {
     private boolean isTealHex(int px){
         int r=(px>>16)&0xFF, g=(px>>8)&0xFF, b=px&0xFF;
         return r<80 && g>120 && b>120 && Math.abs(g-b)<80;
+    }
+
+    // Expected corner-column centers {TL,TR,BL,BR} in % of width, from the same
+    // aspect-aware model as the no-calibration fallback grid: the back row spans
+    // ~0.667x and the front row ~0.978x the screen HEIGHT, horizontally centered.
+    private static int[] standardGridPct(int W,int H){
+        float aspect=(float)W/H;
+        int tl=Math.max(3,Math.round((0.5f-0.667f/aspect/2f)*100));
+        int bl=Math.max(1,Math.round((0.5f-0.978f/aspect/2f)*100));
+        return new int[]{tl,100-tl,bl,100-bl};
+    }
+
+    // Save the standard centered grid. Auto-calibrate always ends with a usable
+    // grid: detection fine-tunes it when the outlines are cleanly visible, and
+    // everything else lands here instead of failing or saving noise.
+    private void applyStandardGrid(int W,int H,String why){
+        int[] exp=standardGridPct(W,H);
+        pool.setBoardTopPct(44);
+        pool.setBoardBotPct(72);
+        pool.setBoardTopLeftPct(exp[0]);
+        pool.setBoardTopRightPct(exp[1]);
+        pool.setBoardBotLeftPct(exp[2]);
+        pool.setBoardBotRightPct(exp[3]);
+        addScanLog("hexCal: "+why+" — standard centered grid applied"
+                +" (tl="+exp[0]+" tr="+exp[1]+" bl="+exp[2]+" br="+exp[3]+" top=44 bot=72)");
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
+            Toast.makeText(this,"Standard board grid applied — check the dots, then ADJUST GRID to fine-tune if needed",Toast.LENGTH_LONG).show();
+            showProbeDots();
+        });
     }
 
     private void onHexCalFail(String reason){
