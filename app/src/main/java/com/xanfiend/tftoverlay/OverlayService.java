@@ -157,6 +157,14 @@ public class OverlayService extends Service {
     // nothing) no longer inflates the pool count on every poll.
     private final java.util.Map<String,Long> huntPendingBuys = new java.util.HashMap<>();
     private static final long HUNT_CONFIRM_MS = 900; // let the shop redraw before judging a tap
+    // hunt shop-band auto-lock. The shop strip's position differs across devices
+    // and TFT versions (top drawer vs bottom bar in landscape), and a wrong fixed
+    // guess made the hunt read the board forever and never buy anything. Start
+    // from the configured/orientation guess, flip to the other band after a few
+    // empty polls, and lock on the first band that actually shows shop cards.
+    private boolean huntBandTop = true;
+    private boolean huntBandLocked = false;
+    private int huntBandMisses = 0;
     private Runnable huntPollRunnable, huntCountdownRunnable;
     // fast hunt capture: a held MediaProjection streams frames with no rate limit,
     // so the shop check runs ~3x per second instead of the accessibility API's
@@ -3994,7 +4002,7 @@ public class OverlayService extends Service {
         addSecHdr(root, "SHOP POSITION (hunt)", GOLD);
 
         TextView spHint=new TextView(this);
-        spHint.setText("Where THE HUNT looks for the shop. Auto reads the top in landscape and the bottom in portrait — switch it if auto-buy isn't seeing your shop.");
+        spHint.setText("Where THE HUNT starts looking for the shop. It now finds the shop by itself within a few seconds either way — set this only to skip that brief search.");
         spHint.setTextColor(DIM); spHint.setTextSize(10); spHint.setPadding(2,0,0,8); root.addView(spHint);
 
         pickRow(root, new String[]{"Auto","Top","Bottom"}, new int[]{0,1,2}, pool.getShopPos(), 14,
@@ -7484,6 +7492,10 @@ public class OverlayService extends Service {
         huntBuys.clear();
         huntCooldown.clear();
         huntPendingBuys.clear();
+        android.util.DisplayMetrics hdm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(hdm);
+        huntBandTop=shopAtTop(hdm.heightPixels>hdm.widthPixels);
+        huntBandLocked=false; huntBandMisses=0;
         huntProjection=mp;
         if(mp!=null) setupHuntCapture(); else huntFast=false;
         if(!huntFast && mp!=null){ // capture setup failed — drop the projection
@@ -7561,16 +7573,12 @@ public class OverlayService extends Service {
             Bitmap full=Bitmap.createBitmap(w+rowPadding/pixStride,h,Bitmap.Config.ARGB_8888);
             full.copyPixelsFromBuffer(plane.getBuffer());
             img.close(); img=null;
-            boolean portrait=h>w;
-            // The shop strip is NOT at the bottom in landscape: TFT Mobile draws the
-            // shop cards along the TOP of the screen in landscape (and near the bottom
-            // in portrait). The old fixed 65-85% band read the board/ground in
-            // landscape and never saw the shop, so nothing was ever bought. Scanning
-            // the shop's real band (not the whole frame) also avoids matching bench
-            // unit labels, which would mis-tap the bench instead of a shop card.
-            boolean shopTop=shopAtTop(portrait);
-            final int cropTop=shopTop? h*5/100 : h*66/100;
-            int cropBot   =   shopTop? h*47/100 : h*92/100;
+            // Band chosen by the auto-lock (see huntBandTop): scanning only the
+            // shop's band (not the whole frame) also avoids matching bench unit
+            // labels, which would mis-tap the bench instead of a shop card.
+            boolean shopTop=huntBandTop;
+            final int cropTop=shopTop? h*5/100 : h*60/100;
+            int cropBot   =   shopTop? h*47/100 : h*95/100;
             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,w,cropBot-cropTop);
             full.recycle();
             huntOcrBusy=true;
@@ -7618,12 +7626,10 @@ public class OverlayService extends Service {
                             Bitmap full=hw.copy(Bitmap.Config.ARGB_8888,false);
                             hw.recycle();
                             int sw=full.getWidth(), sh=full.getHeight();
-                            boolean portrait=sh>sw;
-                            // shop is at the TOP in landscape, near the bottom in portrait
-                            // (overridable via the SHOP POSITION setting)
-                            boolean shopTop=shopAtTop(portrait);
-                            final int cropTop=shopTop? sh*5/100 : sh*66/100;
-                            int cropBot   =   shopTop? sh*47/100 : sh*92/100;
+                            // band chosen by the auto-lock (see huntBandTop)
+                            boolean shopTop=huntBandTop;
+                            final int cropTop=shopTop? sh*5/100 : sh*60/100;
+                            int cropBot   =   shopTop? sh*47/100 : sh*95/100;
                             Bitmap crop=Bitmap.createBitmap(full,0,cropTop,sw,cropBot-cropTop);
                             full.recycle();
                             new ScreenScanner(OverlayService.this,null).scanShopStrip(crop,sw,sh,
@@ -7640,6 +7646,23 @@ public class OverlayService extends Service {
 
     private void handleHuntResult(ScreenScanner.ScanResult r, final int cropTop){
         if(!huntMode) return;
+        // shop-band auto-lock: a band that shows card names is the shop; a band
+        // that stays empty is the wrong guess (or the shop is closed) — flip and
+        // try the other one until cards appear, then lock. If a locked band goes
+        // quiet for a long stretch (rotation, layout change), search again.
+        if(r.shopChampions.isEmpty()){
+            huntBandMisses++;
+            if(!huntBandLocked && huntBandMisses>=3){
+                huntBandTop=!huntBandTop; huntBandMisses=0;
+                addScanLog("hunt: no shop text — trying the "+(huntBandTop?"top":"bottom")+" band");
+            } else if(huntBandLocked && huntBandMisses>=12){
+                huntBandLocked=false; huntBandMisses=0;
+                addScanLog("hunt: shop lost — searching both bands again");
+            }
+        } else {
+            if(!huntBandLocked) addScanLog("hunt: shop found in the "+(huntBandTop?"top":"bottom")+" band");
+            huntBandLocked=true; huntBandMisses=0;
+        }
         long now=System.currentTimeMillis();
         // Resolve taps from a previous frame: once enough time has passed for the shop
         // to redraw, a marked champ that VANISHED was actually bought (count it); one
