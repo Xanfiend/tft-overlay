@@ -4324,7 +4324,7 @@ public class OverlayService extends Service {
         root.addView(autoCalBtn);
 
         TextView autoCalHint=new TextView(this);
-        autoCalHint.setText("Places the grid on the board automatically. Best during a planning phase; if the board can't be read precisely it applies the standard centered position, so the dots always land on the board. Verify with SHOW DOTS.");
+        autoCalHint.setText("Instantly places the grid at the board's measured standard position — works in any phase, on any arena. Verify with SHOW DOTS; use ADJUST GRID only if your device needs a nudge.");
         autoCalHint.setTextColor(ASH); autoCalHint.setTextSize(10); autoCalHint.setPadding(2,0,0,10);
         root.addView(autoCalHint);
 
@@ -4503,163 +4503,31 @@ public class OverlayService extends Service {
 
     }
 
-    // ---- auto-calibrate from hex-outline detection ----
+    // ---- auto-calibrate ----
 
-    @android.annotation.SuppressLint("NewApi")
+    // AUTO-CALIBRATE: apply the measured standard board position instantly.
+    // This used to run a teal hex-outline detector on a screenshot, but arenas
+    // with teal scenery (water, foliage) biased the detected bounding box and it
+    // repeatedly saved misaligned grids (user reports: dots scattered; whole
+    // grid shifted ~130px right by pond water). The standard model is measured
+    // from the game's real hex mesh and height-fit, so it IS the board on any
+    // device — detection added risk, not accuracy. ADJUST GRID remains for
+    // per-device fine-tuning at 0.1% precision.
     private void hexAutoCalibrate(){
-        if(Build.VERSION.SDK_INT<30||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,"Enable Accessibility first (SETUP tab)",Toast.LENGTH_LONG).show();
-            return;
-        }
-        Toast.makeText(this,"Detecting hex grid — be in planning phase",Toast.LENGTH_SHORT).show();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        int W=dm.widthPixels, H=dm.heightPixels;
+        if(W<=H){ Toast.makeText(this,"Rotate to landscape first",Toast.LENGTH_LONG).show(); return; }
         closePanel();
-        try {
-            TFTAccessibilityService.instance.takeScreenshot(
-                android.view.Display.DEFAULT_DISPLAY,
-                getMainExecutor(),
-                new android.accessibilityservice.AccessibilityService.TakeScreenshotCallback(){
-                    @Override public void onSuccess(android.accessibilityservice.AccessibilityService.ScreenshotResult r){
-                        android.hardware.HardwareBuffer hb=r.getHardwareBuffer();
-                        android.graphics.Bitmap bmp=android.graphics.Bitmap.wrapHardwareBuffer(hb,null);
-                        if(bmp==null){ hb.close(); onHexCalFail("bitmap null"); return; }
-                        android.graphics.Bitmap soft=bmp.copy(android.graphics.Bitmap.Config.ARGB_8888,false);
-                        bmp.recycle(); hb.close();
-                        if(soft==null){ onHexCalFail("soft copy null"); return; }
-                        // pixel scan is O(W*H) — run on a background thread
-                        new Thread(()->applyHexCalibration(soft)).start();
-                    }
-                    @Override public void onFailure(int err){ onHexCalFail("screenshot err "+err); }
-                });
-        } catch(Exception e){ onHexCalFail(e.getMessage()); }
+        applyStandardGrid(W,H,"user tap");
     }
 
-    private void applyHexCalibration(android.graphics.Bitmap bmp){
-        int W=bmp.getWidth(), H=bmp.getHeight();
-        if(W<=H){ bmp.recycle(); onHexCalFail("rotate to landscape first"); return; }
 
-        // Downsample 4x for speed (still sub-pixel accurate at % level)
-        int step=4;
-        int xL=W/10, xR=W*9/10, yT=H*15/100, yB=H*85/100;
 
-        // Pass 1: bounding box of all teal/cyan hex-outline pixels.
-        // Rows are read in one bulk getPixels() each — a JNI crossing per ROW
-        // instead of per sampled pixel (~500x fewer for a 4x-downsampled scan).
-        int rowW=xR-xL;
-        int[] row=new int[rowW];
-        int minX=W,maxX=0,minY=H,maxY=0,count=0;
-        for(int y=yT;y<yB;y+=step){
-            bmp.getPixels(row,0,rowW,xL,y,rowW,1);
-            for(int x=xL;x<xR;x+=step){
-                if(isTealHex(row[x-xL])){
-                    if(x<minX) minX=x; if(x>maxX) maxX=x;
-                    if(y<minY) minY=y; if(y>maxY) maxY=y;
-                    count++;
-                }
-            }
-        }
-        if(count<80||maxX-minX<W/5||maxY-minY<H/6){
-            bmp.recycle();
-            applyStandardGrid(W,H,"no hex outlines visible ("+count+" px)");
-            return;
-        }
 
-        // Pass 2: measure row widths at top and bottom to capture trapezoid perspective
-        int sH=(maxY-minY)/5;
-        int bandW=maxX-minX+1;
-        int[] band=new int[bandW];
-        int topMinX=W,topMaxX=0,botMinX=W,botMaxX=0;
-        for(int y=minY;y<minY+sH;y+=step){
-            bmp.getPixels(band,0,bandW,minX,y,bandW,1);
-            for(int x=minX;x<=maxX;x+=step){
-                if(isTealHex(band[x-minX])){
-                    if(x<topMinX) topMinX=x; if(x>topMaxX) topMaxX=x;
-                }
-            }
-        }
-        for(int y=maxY-sH;y<=maxY;y+=step){
-            bmp.getPixels(band,0,bandW,minX,y,bandW,1);
-            for(int x=minX;x<=maxX;x+=step){
-                if(isTealHex(band[x-minX])){
-                    if(x<botMinX) botMinX=x; if(x>botMaxX) botMaxX=x;
-                }
-            }
-        }
-        bmp.recycle();
-
-        if(topMaxX<=topMinX||botMaxX<=botMinX){
-            applyStandardGrid(W,H,"row measurement failed");
-            return;
-        }
-
-        // Inset from outer outline edge to hex center (half a hex width for 7 cols,
-        // fraction of measured board height for vertical)
-        int hInsetTop=(topMaxX-topMinX)/14;
-        int hInsetBot=(botMaxX-botMinX)/14;
-        int vInset=(maxY-minY)/8;
-
-        int tlX=topMinX+hInsetTop, trX=topMaxX-hInsetTop;
-        int blX=botMinX+hInsetBot, brX=botMaxX-hInsetBot;
-        int topY=minY+vInset,      botY=maxY-vInset;
-
-        int calTL=tlX*100/W, calTR=trX*100/W;
-        int calBL=blX*100/W, calBR=brX*100/W;
-        int calTop=topY*100/H, calBot=botY*100/H;
-
-        // The board is height-fit and centered on every device (fixed camera), so
-        // the true corners can only sit near the aspect-derived model values. A
-        // detection outside that window means the teal threshold latched onto
-        // something else (unit glows, UI accents, arena art) — in arenas that hide
-        // the hex outlines the old loose check let a near-full-screen bounding box
-        // through and saved a garbage grid. Disagreement now falls back to the
-        // standard centered grid instead.
-        int[] exp=standardGridPct(W,H);
-        final int TOL=8;
-        boolean agrees =
-            Math.abs(calTL-exp[0])<=TOL && Math.abs(calTR-exp[1])<=TOL &&
-            Math.abs(calBL-exp[2])<=TOL && Math.abs(calBR-exp[3])<=TOL &&
-            calTop<calBot && calTop>=30 && calTop<=58 && calBot>=58 && calBot<=85;
-        if(!agrees){
-            applyStandardGrid(W,H,"detection off-model (tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot+")");
-            return;
-        }
-
-        // full precision (integer percents round by up to ±14px on wide screens),
-        // and spacing goes back to auto so the rows recompute for these corners
-        pool.setLandscapeGridF(topY*100f/H, botY*100f/H,
-                tlX*100f/W, trX*100f/W, blX*100f/W, brX*100f/W);
-        pool.clearRowSpacing();
-
-        android.util.Log.d("TFTScryer","hexCal: tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot);
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
-            Toast.makeText(this,"Grid detected — tap SHOW DOTS to verify",Toast.LENGTH_LONG).show();
-            showProbeDots();
-        });
-    }
-
-    // TFT planning-phase hex outlines are cyan/teal: high G and B, low R.
-    // Excludes health bars (green: low B), mana bars (blue: low G), white text (high R).
-    private boolean isTealHex(int px){
-        int r=(px>>16)&0xFF, g=(px>>8)&0xFF, b=px&0xFF;
-        return r<80 && g>120 && b>120 && Math.abs(g-b)<80;
-    }
-
-    // Expected corner-column centers {TL,TR,BL,BR} in % of width, from the
-    // measured standard board model (HexGrid.standardAnchors). Used only as the
-    // agreement gate for the teal-mesh detection.
-    private static int[] standardGridPct(int W,int H){
-        float[] a=HexGrid.standardAnchors(W,H);
-        return new int[]{ Math.max(1,Math.round(a[0]*100f/W)), Math.round(a[1]*100f/W),
-                          Math.max(1,Math.round(a[3]*100f/W)), Math.min(99,Math.round(a[4]*100f/W)) };
-    }
-
-    // Apply the standard centered grid. Auto-calibrate always ends with a usable
-    // grid: detection fine-tunes it when the outlines are cleanly visible, and
-    // everything else lands here instead of failing or saving noise.
-    // Implementation detail that matters for alignment: the standard grid is NOT
-    // saved as corner percents — integer percent storage rounds by up to ±0.5%
-    // (±14px on a 2712px screen, a tenth of a hex). Clearing the saved grid
-    // instead routes buildProbeGrid through the full-precision float aspect
-    // model, which computes identical positions without the rounding.
+    // Apply the measured standard grid (HexGrid.standardAnchors) and clear any
+    // stale overrides. Saved via the float-precision setters — integer percent
+    // storage would round by up to ±14px on a 2712px screen.
     private void applyStandardGrid(int W,int H,String why){
         pool.clearLandscapeGridCal();
         pool.clearRowSpacing();   // stale explicit spacing would override the projective rows
@@ -4676,12 +4544,6 @@ public class OverlayService extends Service {
         });
     }
 
-    private void onHexCalFail(String reason){
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
-            Toast.makeText(this,"Auto-cal: "+reason,Toast.LENGTH_LONG).show();
-            mode=4; showPanel();
-        });
-    }
 
     // ---- tap-to-calibrate ----
 
