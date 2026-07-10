@@ -27,6 +27,27 @@ public final class HexGrid {
 
     public static final int ROWS = 4, COLS = 7;
 
+    /* Standard mobile-camera constants, measured from the drawn hex mesh in a
+     * 2712x1220 planning-phase screenshot (drag a unit and the game paints all
+     * 28 hex outlines; edge detection recovered every row's 7 column centers).
+     * Everything is proportional to screen HEIGHT (the board is height-fit);
+     * the centerline offsets are relative to screen center (the board sits
+     * slightly right of center — the front, aligned row by ~7.7% of height).
+     * Measured fit: all four row centers reproduced within 2px. */
+    static final float STD_BACK_Y  = 0.4902f, STD_FRONT_Y  = 0.7639f;   // row-center heights
+    static final float STD_BACK_P  = 0.13098f, STD_FRONT_P = 0.15033f;  // hex pitch
+    static final float STD_BACK_C  = 0.00328f, STD_FRONT_C = 0.07705f;  // row-center x − 0.5W, in H units
+
+    /* Standard anchors {backLeftX, backRightX, backY, frontLeftX, frontRightX,
+     * frontY} in pixels for a w x h landscape screen — the same outer-hex-center
+     * semantics as calibration, ready to feed player()/opp(). */
+    public static float[] standardAnchors(int w, int h){
+        float bC = 0.5f*w + STD_BACK_C*h,  pB = STD_BACK_P*h;
+        float fC = 0.5f*w + STD_FRONT_C*h, pF = STD_FRONT_P*h;
+        return new float[]{ bC-3*pB, bC+3*pB, STD_BACK_Y*h,
+                            fC-3*pF, fC+3*pF, STD_FRONT_Y*h };
+    }
+
     /* Phase of player row r counted BACK(0) -> FRONT(3), in pitch units.
      * Board row i from the player's front: phase = (i % 2 == 1) ? -0.5 : 0.
      * Player rows back->front are board rows 3,2,1,0. */

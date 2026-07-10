@@ -97,6 +97,29 @@ public class HexGridTest {
         assertTrue(pOppFront < (1251 - 557) / 6f + 1f);
     }
 
+    // Ground truth measured from the drawn hex mesh in a 2712x1220 planning-phase
+    // screenshot (edge-detected outlines; 7 evenly spaced column centers per row):
+    //   rows (back->front) y = 598, 701, 811, 932
+    //   row centers x       = 1356.5, 1443, 1358, 1450
+    //   front row columns 900..2000 (pitch 183.3), back-row col6 = 1839
+    @Test public void standardAnchorsMatchMeasuredMobileMesh() {
+        float[] a = HexGrid.standardAnchors(2712, 1220);
+        assertEquals(598, a[2], 4f);    // back row y
+        assertEquals(932, a[5], 4f);    // front row y
+        assertEquals(900, a[3], 8f);    // front col0
+        assertEquals(2000, a[4], 8f);   // front col6
+        assertEquals(1839, a[1], 8f);   // back col6
+
+        float[][][] g = HexGrid.player(a[0], a[1], a[2], a[3], a[4], a[5], -1, -1);
+        // middle rows: measured y and staggered centers
+        assertEquals(701, g[1][0][1], 8f);
+        assertEquals(811, g[2][0][1], 8f);
+        assertEquals(1443, (g[1][0][0] + g[1][6][0]) / 2f, 10f);  // aligned row
+        assertEquals(1358, (g[2][0][0] + g[2][6][0]) / 2f, 10f);  // offset row
+        // back row center measured at 1356.5 — the offset row sits at screen center
+        assertEquals(1356.5f, (g[0][0][0] + g[0][6][0]) / 2f, 10f);
+    }
+
     @Test public void degenerateInputsAreSafe() {
         // zero spans fall back to even fractions and produce finite points
         float[] f = HexGrid.autoRowFractions(0, 0);
