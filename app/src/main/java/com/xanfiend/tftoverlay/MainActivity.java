@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.52");
+        ver.setText("v1.99.53");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.53  ·  2026-07-09","Perfectly aligned board grid. The tap grid now follows the board's real layout — the alternating row offset and the perspective — verified against the game's actual hex positions. Taps land dead-centre on every hex, on your board and the enemy's, and row spacing is worked out automatically. ADJUST GRID is now just for fine-tuning."},
             {"v1.99.52  ·  2026-07-08","THE HUNT (auto-buy) now finds your shop by itself. On devices where the shop sits somewhere else on screen than expected, auto-buy silently never saw it and bought nothing — it now searches for the shop within the first few seconds and locks on, on any device and orientation."},
             {"v1.99.51  ·  2026-07-08","AUTO-CALIBRATE now always lands the grid on the board. In arenas where it previously scattered the dots or failed, it applies the standard centered board position automatically — the board sits in the same place on every device, so the dots can never end up off the board again."},
             {"v1.99.50  ·  2026-07-07","Faster scanning across the board, and gold is now read correctly when you're sitting on 100 or more — it previously capped out at two digits."},
