@@ -36,6 +36,10 @@ public class OverlayService extends Service {
     private int level = 8; // loaded from pool in onCreate
     private int mode = 0; // 0 = scout grid, 1 = summary
     private int lastBuiltMode = -1; // tab the panel last rendered, for scroll-to-top on switch
+    // SETUP progressive disclosure: first-time users see only the setup path
+    // (permissions + scan test); the ~17 tuning/calibration sections stay behind
+    // one expander. Session-only — reopens collapsed.
+    private boolean setupAdvanced = false;
     private Vibrator vib;
     // bump this each release so the footer shows the current version
     private static final String APP_VERSION = "v1.99.17";
@@ -1699,15 +1703,24 @@ public class OverlayService extends Service {
         // these remain only to amend the rare miss (a unit the scry could not
         // read, or freeing copies when a player dies).
         addSecHdr(root, "\u2720 GRIMOIRE \u00B7 CORRECTIONS", GOLD);
-        LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
-        howCard.setBackground(box(CARD,8,EDGE,1)); howCard.setPadding(14,11,14,11);
-        LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
-        String[] howItems={"The rite records all \u2014 touch these only to amend it","Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting","Hold a name = mark \u2726 prey for THE HUNT (auto-buy)"};
-        for(String h:howItems){
-            TextView hv=new TextView(this); hv.setText("\u2726  "+h);
-            hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,2,0,2); hv.setLineSpacing(2,1f); howCard.addView(hv);
+        // full how-to card only while the grimoire is untouched (first game);
+        // afterwards a single hint line keeps the tab lean
+        if(pool.isEmpty()){
+            LinearLayout howCard=new LinearLayout(this); howCard.setOrientation(LinearLayout.VERTICAL);
+            howCard.setBackground(box(CARD,8,EDGE,1)); howCard.setPadding(14,11,14,11);
+            LinearLayout.LayoutParams hcl=new LinearLayout.LayoutParams(-1,-2); hcl.setMargins(0,4,0,8); howCard.setLayoutParams(hcl);
+            String[] howItems={"The rite records all \u2014 touch these only to amend it","Tap a name = +1 copy seen","Tap the count badge = \u22121 copy","Tap the \u25C9 badge = +1 player contesting","Hold a name = mark \u2726 prey for THE HUNT (auto-buy)"};
+            for(String h:howItems){
+                TextView hv=new TextView(this); hv.setText("\u2726  "+h);
+                hv.setTextColor(ASH); hv.setTextSize(10); hv.setPadding(0,2,0,2); hv.setLineSpacing(2,1f); howCard.addView(hv);
+            }
+            root.addView(howCard);
+        } else {
+            TextView howHint=new TextView(this);
+            howHint.setText("tap +1 \u00B7 count badge \u22121 \u00B7 \u25C9 +1 contest \u00B7 hold = \u2726 auto-buy mark");
+            howHint.setTextColor(DIM); howHint.setTextSize(9); howHint.setPadding(2,2,2,8);
+            root.addView(howHint);
         }
-        root.addView(howCard);
 
         // RECENT: the champs you've tapped this game, for instant re-tapping
         java.util.List<String> rec = pool.recentList();
@@ -3896,6 +3909,28 @@ public class OverlayService extends Service {
             }
         }
         root.addView(logBox);
+
+        // ---- everything below is optional tuning: hidden until asked for, so a
+        // first-time user sees one screen (enable accessibility → test a scan)
+        // instead of seventeen sections of dials.
+        TextView advBtn=new TextView(this);
+        advBtn.setText(setupAdvanced?"▾  HIDE ADVANCED SETTINGS":"▸  ADVANCED SETTINGS & CALIBRATION");
+        advBtn.setTextColor(BONE); advBtn.setTextSize(13); advBtn.setGravity(Gravity.CENTER);
+        advBtn.setTypeface(null,android.graphics.Typeface.BOLD);
+        advBtn.setPadding(0,13,0,13); advBtn.setBackground(box(CARD,6,setupAdvanced?GOLD:EDGE,setupAdvanced?2:1));
+        LinearLayout.LayoutParams advl=new LinearLayout.LayoutParams(-1,-2); advl.setMargins(0,16,0,4); advBtn.setLayoutParams(advl);
+        advBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            setupAdvanced=!setupAdvanced; showPanel();
+        }});
+        pressFeedback(advBtn);
+        root.addView(advBtn);
+        if(!setupAdvanced){
+            TextView advHint=new TextView(this);
+            advHint.setText("Scanning already works with the defaults. In here: looks, behavior, automation calibration, and debug tools.");
+            advHint.setTextColor(DIM); advHint.setTextSize(10); advHint.setPadding(2,2,2,8);
+            root.addView(advHint);
+            return;
+        }
 
         // ◇ TEMPLATES
         addSecHdr(root, "TEMPLATES", GOLD);
