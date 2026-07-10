@@ -4643,18 +4643,13 @@ public class OverlayService extends Service {
         return r<80 && g>120 && b>120 && Math.abs(g-b)<80;
     }
 
-    // Expected corner-column centers {TL,TR,BL,BR} in % of width, from the same
-    // aspect-aware model as the no-calibration fallback grid: the back row spans
-    // ~0.667x and the front row ~0.978x the screen HEIGHT. The front row is an
-    // aligned honeycomb row (centered); the back row is an OFFSET row, half a
-    // hex pitch left of the centerline (verified against measured game
-    // coordinates — see HexGrid).
+    // Expected corner-column centers {TL,TR,BL,BR} in % of width, from the
+    // measured standard board model (HexGrid.standardAnchors). Used only as the
+    // agreement gate for the teal-mesh detection.
     private static int[] standardGridPct(int W,int H){
-        float aspect=(float)W/H;
-        float pB=0.667f/aspect*100f/6f, pF=0.978f/aspect*100f/6f;  // pitch, % of width
-        int tl=Math.round(50f-3.5f*pB), tr=Math.round(50f+2.5f*pB);
-        int bl=Math.round(50f-3f*pF),   br=Math.round(50f+3f*pF);
-        return new int[]{Math.max(1,tl), tr, Math.max(1,bl), Math.min(99,br)};
+        float[] a=HexGrid.standardAnchors(W,H);
+        return new int[]{ Math.max(1,Math.round(a[0]*100f/W)), Math.round(a[1]*100f/W),
+                          Math.max(1,Math.round(a[3]*100f/W)), Math.min(99,Math.round(a[4]*100f/W)) };
     }
 
     // Apply the standard centered grid. Auto-calibrate always ends with a usable
@@ -4668,9 +4663,13 @@ public class OverlayService extends Service {
     private void applyStandardGrid(int W,int H,String why){
         pool.clearLandscapeGridCal();
         pool.clearRowSpacing();   // stale explicit spacing would override the projective rows
-        pool.setBoardTopPct(44);
-        pool.setBoardBotPct(72);
-        addScanLog("hexCal: "+why+" — standard centered grid applied (full-precision aspect model)");
+        // save the measured standard anchors at full precision — the fallback
+        // model computes the same values, but persisting them keeps every
+        // reader (incl. rows top/bot) on the fresh numbers
+        float[] a=HexGrid.standardAnchors(W,H);
+        pool.setLandscapeGridF(a[2]*100f/H, a[5]*100f/H,
+                a[0]*100f/W, a[1]*100f/W, a[3]*100f/W, a[4]*100f/W);
+        addScanLog("hexCal: "+why+" — standard measured grid applied");
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
             Toast.makeText(this,"Standard board grid applied — check the dots, then ADJUST GRID to fine-tune if needed",Toast.LENGTH_LONG).show();
             showProbeDots();
@@ -4901,17 +4900,16 @@ public class OverlayService extends Service {
                     wF1=pool.getPortraitRowF1Pct();          wF2=pool.getPortraitRowF2Pct();
                     wBenchL=pool.getPortraitBenchLeftPct();  wBenchR=pool.getPortraitBenchRightPct();
                 } else {
-                    wTop=pool.getBoardTopPctF();     wBot=pool.getBoardBotPctF();
                     if(pool.hasLandscapeGridCal()){
+                        wTop=pool.getBoardTopPctF();     wBot=pool.getBoardBotPctF();
                         wTL =pool.getBoardTopLeftPctF();  wTR =pool.getBoardTopRightPctF();
                         wBL =pool.getBoardBotLeftPctF();  wBR =pool.getBoardBotRightPctF();
                     } else {
-                        // no saved grid: start from the same full-precision aspect
-                        // model the tap grid uses, so the rings open on the dots
-                        float aspect=(float)sw/sh;
-                        float pB=0.667f/aspect*100f/6f, pF=0.978f/aspect*100f/6f;
-                        wTL=50f-3.5f*pB; wTR=50f+2.5f*pB;
-                        wBL=50f-3f*pF;   wBR=50f+3f*pF;
+                        // no saved grid: start from the same measured standard model
+                        // the tap grid uses, so the rings open on the dots
+                        float[] a=HexGrid.standardAnchors(sw,sh);
+                        wTL=a[0]*100f/sw; wTR=a[1]*100f/sw; wTop=a[2]*100f/sh;
+                        wBL=a[3]*100f/sw; wBR=a[4]*100f/sw; wBot=a[5]*100f/sh;
                     }
                     wBenchY=pool.getBenchYPct();
                     wF1=pool.getRowF1PctF();         wF2=pool.getRowF2PctF();
@@ -5796,26 +5794,21 @@ public class OverlayService extends Service {
             botRight = w * pool.getPortraitBoardBotRightPct() / 100;
             benchY   = h * pool.getPortraitBenchYPct()        / 100;
         } else {
-            top      = Math.round(h * pool.getBoardTopPctF() / 100f);
-            bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
             benchY   = h * pool.getBenchYPct()        / 100;
             if(pool.hasLandscapeGridCal()){
+                top      = Math.round(h * pool.getBoardTopPctF() / 100f);
+                bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
                 topLeft  = Math.round(w * pool.getBoardTopLeftPctF()  / 100f);
                 topRight = Math.round(w * pool.getBoardTopRightPctF() / 100f);
                 botLeft  = Math.round(w * pool.getBoardBotLeftPctF()  / 100f);
                 botRight = Math.round(w * pool.getBoardBotRightPctF() / 100f);
             } else {
-                // Aspect-aware default: TFT draws the board height-fit and centered, so on
-                // a wider screen it takes up a smaller fraction of the width. Deriving the
-                // back/front row spans from the screen aspect makes the grid land on the
-                // board on any device with no manual calibration. Measured spans: the back
-                // row is ~0.67x and the front row ~0.98x the screen HEIGHT. The back row is
-                // an OFFSET honeycomb row — half a hex pitch left of the aligned centerline
-                // (verified against real measured game coordinates; see HexGrid).
-                float aspect=(float)w/h;
-                float pB=0.667f/aspect/6f, pF=0.978f/aspect/6f;   // hex pitch, fraction of width
-                topLeft  = (int)((0.5f-3.5f*pB)*w); topRight = (int)((0.5f+2.5f*pB)*w);
-                botLeft  = (int)((0.5f-3f*pF)*w);   botRight = (int)((0.5f+3f*pF)*w);
+                // No calibration: standard board position, measured from the drawn
+                // hex mesh (see HexGrid.standardAnchors) — height-fit, so it lands
+                // on the board on any device with no manual calibration.
+                float[] a=HexGrid.standardAnchors(w,h);
+                topLeft=Math.round(a[0]); topRight=Math.round(a[1]); top=Math.round(a[2]);
+                botLeft=Math.round(a[3]); botRight=Math.round(a[4]); bot=Math.round(a[5]);
             }
         }
         // Repair swapped calibration saved by older versions (front row tapped before
@@ -5896,18 +5889,17 @@ public class OverlayService extends Service {
             botLeft  = w * pool.getPortraitBoardBotLeftPct()  / 100;
             botRight = w * pool.getPortraitBoardBotRightPct() / 100;
         } else {
-            top      = Math.round(h * pool.getBoardTopPctF() / 100f);
-            bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
             if(pool.hasLandscapeGridCal()){
+                top      = Math.round(h * pool.getBoardTopPctF() / 100f);
+                bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
                 topLeft  = Math.round(w * pool.getBoardTopLeftPctF()  / 100f);
                 topRight = Math.round(w * pool.getBoardTopRightPctF() / 100f);
                 botLeft  = Math.round(w * pool.getBoardBotLeftPctF()  / 100f);
                 botRight = Math.round(w * pool.getBoardBotRightPctF() / 100f);
             } else {
-                float aspect=(float)w/h;
-                float pB=0.667f/aspect/6f, pF=0.978f/aspect/6f;
-                topLeft  = (int)((0.5f-3.5f*pB)*w); topRight = (int)((0.5f+2.5f*pB)*w);
-                botLeft  = (int)((0.5f-3f*pF)*w);   botRight = (int)((0.5f+3f*pF)*w);
+                float[] a=HexGrid.standardAnchors(w,h);
+                topLeft=Math.round(a[0]); topRight=Math.round(a[1]); top=Math.round(a[2]);
+                botLeft=Math.round(a[3]); botRight=Math.round(a[4]); bot=Math.round(a[5]);
             }
         }
         if(top > bot){
