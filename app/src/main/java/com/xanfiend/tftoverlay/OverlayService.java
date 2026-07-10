@@ -4562,10 +4562,8 @@ public class OverlayService extends Service {
         pool.setLandscapeGridF(a[2]*100f/H, a[5]*100f/H,
                 a[0]*100f/W, a[1]*100f/W, a[3]*100f/W, a[4]*100f/W);
         addScanLog("hexCal: "+why+" — standard measured grid applied");
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
-            Toast.makeText(this,"Standard board grid applied — check the dots, then ADJUST GRID to fine-tune if needed",Toast.LENGTH_LONG).show();
-            showProbeDots();
-        });
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->
+            showGridDots("STANDARD GRID APPLIED · nudge or ADJUST GRID to fine-tune"));
     }
 
 
@@ -4588,7 +4586,7 @@ public class OverlayService extends Service {
                 pool.getBoardBotLeftPctF()+dxPctW, pool.getBoardBotRightPctF()+dxPctW);
         addScanLog(String.format(java.util.Locale.US,
                 "grid nudge: dx=%.2f%%W dy=%.2f%%H", dxPctW, dyPctH));
-        buzz(); closePanel(); showProbeDots();
+        buzz(); closePanel(); showGridDots("GRID NUDGE · check the dots, nudge again if needed");
     }
 
     // ---- tap-to-calibrate ----
@@ -5069,6 +5067,19 @@ public class OverlayService extends Service {
     }
 
     @SuppressWarnings({"deprecation","NewApi"})
+    // Grid-only dot preview: renders the calibrated 4x7+bench grid directly —
+    // no screenshot, no detection. Used by the calibration flows (AUTO-CALIBRATE,
+    // GRID NUDGE), where the smart-scan preview would hide exactly the thing
+    // being verified — and its detection shot could even mark the calibration
+    // toast itself as a unit (user screenshot: marker on the toast icon).
+    private void showGridDots(String banner){
+        hideProbeDots();
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        int sw=dm.widthPixels, sh=dm.heightPixels;
+        renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh, banner);
+    }
+
     private void showProbeDots(){
         hideProbeDots();
         android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
@@ -5081,11 +5092,14 @@ public class OverlayService extends Service {
         if(pool.getSmartScan() && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
             final TFTAccessibilityService svc=TFTAccessibilityService.instance;
             try{
-                // small delay so the just-closed panel is gone from the capture
+                // small delay so the just-closed panel is gone from the capture;
+                // our own overlays are hidden so they can't cover units in the shot
+                setOverlayShotHidden(true);
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->
                 svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                     new AccessibilityService.TakeScreenshotCallback(){
                         @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                            setOverlayShotHidden(false);
                             try{
                                 android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                                 Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
@@ -5113,6 +5127,7 @@ public class OverlayService extends Service {
                                     "GRID FALLBACK · preview error"); }
                         }
                         @Override public void onFailure(int errorCode){
+                            setOverlayShotHidden(false);
                             renderProbeDots(buildProbeGrid(sw,sh), autoTapBoardProbeCount, sw, sh, sw, sh,
                                 "GRID FALLBACK · screenshot failed ("+errorCode+")");
                         }
