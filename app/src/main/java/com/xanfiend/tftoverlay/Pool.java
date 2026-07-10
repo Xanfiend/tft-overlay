@@ -516,7 +516,10 @@ public class Pool {
         p.edit().remove("cal_top").remove("cal_bot").remove("cal_left")
                 .remove("cal_right").remove("cal_bench").remove("cal_bench_x")
                 .remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br")
+                .remove("cal_top_f").remove("cal_bot_f")
+                .remove("cal_tl_f").remove("cal_tr_f").remove("cal_bl_f").remove("cal_br_f")
                 .remove("cal_rowf1").remove("cal_rowf2")
+                .remove("cal_rowf1_f").remove("cal_rowf2_f")
                 .remove("cal_bench_l").remove("cal_bench_r").apply();
     }
     // Per-corner X% for trapezoidal board (front row wider than back row).
@@ -525,7 +528,40 @@ public class Pool {
     // full-precision aspect model should take over from a saved integer grid
     public void clearLandscapeGridCal(){
         p.edit().remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br")
+                .remove("cal_tl_f").remove("cal_tr_f").remove("cal_bl_f").remove("cal_br_f")
+                .remove("cal_top_f").remove("cal_bot_f")
                 .remove("cal_left").remove("cal_right").apply();
+    }
+
+    // ---- float-precision landscape calibration ----
+    // Integer percent storage rounds by up to ±0.5% — ±14px on a 2712px screen,
+    // a tenth of a hex — which caps how good a hand-tuned grid can ever be.
+    // Float keys win when present; the int keys are written alongside so old
+    // readers and hasLandscapeGridCal() stay consistent.
+    public float getBoardTopPctF()     { return p.contains("cal_top_f") ? p.getFloat("cal_top_f",44f) : getBoardTopPct(); }
+    public float getBoardBotPctF()     { return p.contains("cal_bot_f") ? p.getFloat("cal_bot_f",72f) : getBoardBotPct(); }
+    public float getBoardTopLeftPctF() { return p.contains("cal_tl_f") ? p.getFloat("cal_tl_f",0f) : getBoardTopLeftPct(); }
+    public float getBoardTopRightPctF(){ return p.contains("cal_tr_f") ? p.getFloat("cal_tr_f",0f) : getBoardTopRightPct(); }
+    public float getBoardBotLeftPctF() { return p.contains("cal_bl_f") ? p.getFloat("cal_bl_f",0f) : getBoardBotLeftPct(); }
+    public float getBoardBotRightPctF(){ return p.contains("cal_br_f") ? p.getFloat("cal_br_f",0f) : getBoardBotRightPct(); }
+    public float getRowF1PctF()        { return p.contains("cal_rowf1_f") ? p.getFloat("cal_rowf1_f",-1f) : getRowF1Pct(); }
+    public float getRowF2PctF()        { return p.contains("cal_rowf2_f") ? p.getFloat("cal_rowf2_f",-1f) : getRowF2Pct(); }
+    public void setLandscapeGridF(float top,float bot,float tl,float tr,float bl,float br){
+        p.edit().putFloat("cal_top_f",top).putFloat("cal_bot_f",bot)
+                .putFloat("cal_tl_f",tl).putFloat("cal_tr_f",tr)
+                .putFloat("cal_bl_f",bl).putFloat("cal_br_f",br)
+                .putInt("cal_top",Math.round(top)).putInt("cal_bot",Math.round(bot))
+                .putInt("cal_tl",Math.round(tl)).putInt("cal_tr",Math.round(tr))
+                .putInt("cal_bl",Math.round(bl)).putInt("cal_br",Math.round(br)).apply();
+    }
+    public void setRowSpacingF(float f1,float f2){
+        p.edit().putFloat("cal_rowf1_f",f1).putFloat("cal_rowf2_f",f2)
+                .putInt("cal_rowf1",Math.round(f1)).putInt("cal_rowf2",Math.round(f2)).apply();
+    }
+    // back to auto (projective) spacing — clears any explicit override
+    public void clearRowSpacing(){
+        p.edit().remove("cal_rowf1").remove("cal_rowf2")
+                .remove("cal_rowf1_f").remove("cal_rowf2_f").apply();
     }
     public int getBoardTopLeftPct()       { return p.getInt("cal_tl", getBoardLeftPct()); }
     public void setBoardTopLeftPct(int v) { p.edit().putInt("cal_tl", v).apply(); }

@@ -4623,12 +4623,11 @@ public class OverlayService extends Service {
             return;
         }
 
-        pool.setBoardTopPct(calTop);
-        pool.setBoardBotPct(calBot);
-        pool.setBoardTopLeftPct(calTL);
-        pool.setBoardTopRightPct(calTR);
-        pool.setBoardBotLeftPct(calBL);
-        pool.setBoardBotRightPct(calBR);
+        // full precision (integer percents round by up to ±14px on wide screens),
+        // and spacing goes back to auto so the rows recompute for these corners
+        pool.setLandscapeGridF(topY*100f/H, botY*100f/H,
+                tlX*100f/W, trX*100f/W, blX*100f/W, brX*100f/W);
+        pool.clearRowSpacing();
 
         android.util.Log.d("TFTScryer","hexCal: tl="+calTL+" tr="+calTR+" bl="+calBL+" br="+calBR+" top="+calTop+" bot="+calBot);
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
@@ -4668,6 +4667,7 @@ public class OverlayService extends Service {
     // model, which computes identical positions without the rounding.
     private void applyStandardGrid(int W,int H,String why){
         pool.clearLandscapeGridCal();
+        pool.clearRowSpacing();   // stale explicit spacing would override the projective rows
         pool.setBoardTopPct(44);
         pool.setBoardBotPct(72);
         addScanLog("hexCal: "+why+" — standard centered grid applied (full-precision aspect model)");
@@ -4901,10 +4901,10 @@ public class OverlayService extends Service {
                     wF1=pool.getPortraitRowF1Pct();          wF2=pool.getPortraitRowF2Pct();
                     wBenchL=pool.getPortraitBenchLeftPct();  wBenchR=pool.getPortraitBenchRightPct();
                 } else {
-                    wTop=pool.getBoardTopPct();      wBot=pool.getBoardBotPct();
+                    wTop=pool.getBoardTopPctF();     wBot=pool.getBoardBotPctF();
                     if(pool.hasLandscapeGridCal()){
-                        wTL =pool.getBoardTopLeftPct();  wTR =pool.getBoardTopRightPct();
-                        wBL =pool.getBoardBotLeftPct();  wBR =pool.getBoardBotRightPct();
+                        wTL =pool.getBoardTopLeftPctF();  wTR =pool.getBoardTopRightPctF();
+                        wBL =pool.getBoardBotLeftPctF();  wBR =pool.getBoardBotRightPctF();
                     } else {
                         // no saved grid: start from the same full-precision aspect
                         // model the tap grid uses, so the rings open on the dots
@@ -4914,7 +4914,7 @@ public class OverlayService extends Service {
                         wBL=50f-3f*pF;   wBR=50f+3f*pF;
                     }
                     wBenchY=pool.getBenchYPct();
-                    wF1=pool.getRowF1Pct();          wF2=pool.getRowF2Pct();
+                    wF1=pool.getRowF1PctF();         wF2=pool.getRowF2PctF();
                     wBenchL=pool.getBenchLeftPct();  wBenchR=pool.getBenchRightPct();
                 }
                 if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
@@ -5089,17 +5089,13 @@ public class OverlayService extends Service {
                                 pool.setPortraitBenchLeftPct(Math.round(wBenchL));
                                 pool.setPortraitBenchRightPct(Math.round(wBenchR));
                             } else {
-                                pool.setBoardTopPct(Math.round(wTop));
-                                pool.setBoardBotPct(Math.round(wBot));
-                                pool.setBoardTopLeftPct(Math.round(wTL));
-                                pool.setBoardTopRightPct(Math.round(wTR));
-                                pool.setBoardBotLeftPct(Math.round(wBL));
-                                pool.setBoardBotRightPct(Math.round(wBR));
+                                // full precision: integer rounding (±0.5% = ±14px on a
+                                // 2712px screen) would quantize away a careful adjustment
+                                pool.setLandscapeGridF(wTop,wBot,wTL,wTR,wBL,wBR);
+                                pool.setRowSpacingF(wF1,wF2);
                                 pool.setBoardLeftPct(Math.round((wTL+wBL)/2f));
                                 pool.setBoardRightPct(Math.round((wTR+wBR)/2f));
                                 pool.setBenchYPct(Math.round(wBenchY));
-                                pool.setRowF1Pct(Math.round(wF1));
-                                pool.setRowF2Pct(Math.round(wF2));
                                 pool.setBenchLeftPct(Math.round(wBenchL));
                                 pool.setBenchRightPct(Math.round(wBenchR));
                             }
@@ -5800,14 +5796,14 @@ public class OverlayService extends Service {
             botRight = w * pool.getPortraitBoardBotRightPct() / 100;
             benchY   = h * pool.getPortraitBenchYPct()        / 100;
         } else {
-            top      = h * pool.getBoardTopPct()      / 100;
-            bot      = h * pool.getBoardBotPct()      / 100;
+            top      = Math.round(h * pool.getBoardTopPctF() / 100f);
+            bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
             benchY   = h * pool.getBenchYPct()        / 100;
             if(pool.hasLandscapeGridCal()){
-                topLeft  = w * pool.getBoardTopLeftPct()  / 100;
-                topRight = w * pool.getBoardTopRightPct() / 100;
-                botLeft  = w * pool.getBoardBotLeftPct()  / 100;
-                botRight = w * pool.getBoardBotRightPct() / 100;
+                topLeft  = Math.round(w * pool.getBoardTopLeftPctF()  / 100f);
+                topRight = Math.round(w * pool.getBoardTopRightPctF() / 100f);
+                botLeft  = Math.round(w * pool.getBoardBotLeftPctF()  / 100f);
+                botRight = Math.round(w * pool.getBoardBotRightPctF() / 100f);
             } else {
                 // Aspect-aware default: TFT draws the board height-fit and centered, so on
                 // a wider screen it takes up a smaller fraction of the width. Deriving the
@@ -5838,8 +5834,8 @@ public class OverlayService extends Service {
         //   topLeft/topRight  = measured centers of column 0 / column 6, BACK row
         //   botLeft/botRight  = measured centers of column 0 / column 6, FRONT row
         //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
-        int f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct();
-        int f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct();
+        float f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1PctF();
+        float f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2PctF();
         float[][][] hexes = HexGrid.player(topLeft, topRight, top, botLeft, botRight, bot,
                 f1raw < 0 ? -1f : f1raw / 100f, f2raw < 0 ? -1f : f2raw / 100f);
         int cols=7;
@@ -5900,13 +5896,13 @@ public class OverlayService extends Service {
             botLeft  = w * pool.getPortraitBoardBotLeftPct()  / 100;
             botRight = w * pool.getPortraitBoardBotRightPct() / 100;
         } else {
-            top      = h * pool.getBoardTopPct()      / 100;
-            bot      = h * pool.getBoardBotPct()      / 100;
+            top      = Math.round(h * pool.getBoardTopPctF() / 100f);
+            bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
             if(pool.hasLandscapeGridCal()){
-                topLeft  = w * pool.getBoardTopLeftPct()  / 100;
-                topRight = w * pool.getBoardTopRightPct() / 100;
-                botLeft  = w * pool.getBoardBotLeftPct()  / 100;
-                botRight = w * pool.getBoardBotRightPct() / 100;
+                topLeft  = Math.round(w * pool.getBoardTopLeftPctF()  / 100f);
+                topRight = Math.round(w * pool.getBoardTopRightPctF() / 100f);
+                botLeft  = Math.round(w * pool.getBoardBotLeftPctF()  / 100f);
+                botRight = Math.round(w * pool.getBoardBotRightPctF() / 100f);
             } else {
                 float aspect=(float)w/h;
                 float pB=0.667f/aspect/6f, pF=0.978f/aspect/6f;
@@ -5919,8 +5915,8 @@ public class OverlayService extends Service {
             t=topLeft;  topLeft=botLeft;   botLeft=t;
             t=topRight; topRight=botRight; botRight=t;
         }
-        int f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct();
-        int f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct();
+        float f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1PctF();
+        float f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2PctF();
         float[][][] hexes = HexGrid.opp(topLeft, topRight, top, botLeft, botRight, bot,
                 f1raw < 0 ? -1f : f1raw / 100f, f2raw < 0 ? -1f : f2raw / 100f);
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
