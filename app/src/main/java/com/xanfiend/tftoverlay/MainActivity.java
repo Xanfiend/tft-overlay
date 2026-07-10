@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.58");
+        ver.setText("v1.99.59");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.59  ·  2026-07-11","New GRID NUDGE arrows in SETUP: when the dots are aligned but sit a hair off, tap an arrow to shift the whole grid a few pixels in that direction with a live preview. Every tap is saved exactly."},
             {"v1.99.58  ·  2026-07-11","AUTO-CALIBRATE is now instant and always exact. It previously tried to read the board off the screen first, and scenery in some arenas could nudge the whole grid sideways — your screenshots showed it shifted right by about a third of a hex. It now applies the measured board position directly, every time. Tap it once after updating."},
             {"v1.99.57  ·  2026-07-10","The board grid is now measured, not estimated. Using a real screenshot of the game's own hex outlines, every constant was re-derived from the actual board — the grid was sitting a few percent too high and slightly too narrow at the back. Dots now land on the measured hex centres to within a few pixels. Run AUTO-CALIBRATE once after updating."},
             {"v1.99.56  ·  2026-07-10","Middle-row dots could sit noticeably low if an old version had saved its row spacing — AUTO-CALIBRATE now resets spacing so the rows are computed fresh. Hand-adjusted grids also save at ten times finer precision, so a carefully dragged grid stays exactly where you put it."},

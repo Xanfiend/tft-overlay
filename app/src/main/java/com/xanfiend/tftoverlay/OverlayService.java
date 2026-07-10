@@ -4399,6 +4399,30 @@ public class OverlayService extends Service {
         adjHint.setTextColor(ASH); adjHint.setTextSize(10); adjHint.setPadding(2,0,0,12);
         root.addView(adjHint);
 
+        // grid nudge: shift the whole saved grid a few pixels per tap with a live
+        // dot preview — for when everything is aligned but sits a hair off
+        TextView ngLbl=new TextView(this); ngLbl.setText("GRID NUDGE");
+        ngLbl.setTextColor(ASH); ngLbl.setTextSize(10); ngLbl.setLetterSpacing(0.08f); ngLbl.setPadding(2,0,0,2);
+        root.addView(ngLbl);
+        LinearLayout ngRow=new LinearLayout(this); ngRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams ngrl=new LinearLayout.LayoutParams(-1,-2); ngrl.setMargins(0,0,0,2); ngRow.setLayoutParams(ngrl);
+        String[] ngLabels={"\u25c0","\u25b6","\u25b2","\u25bc"};
+        final float[][] ngDelta={{-0.25f,0f},{0.25f,0f},{0f,-0.5f},{0f,0.5f}};
+        for(int i=0;i<4;i++){
+            final float ndx=ngDelta[i][0], ndy=ngDelta[i][1];
+            TextView b=new TextView(this); b.setText(ngLabels[i]);
+            b.setTextColor(BONE); b.setTextSize(14); b.setGravity(Gravity.CENTER); b.setPadding(0,10,0,10);
+            b.setBackground(box(CARD,6,EDGE,1));
+            LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(0,-2,1f); blp.setMargins(i>0?4:0,0,0,0); b.setLayoutParams(blp);
+            b.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ nudgeGrid(ndx,ndy); }});
+            pressFeedback(b); ngRow.addView(b);
+        }
+        root.addView(ngRow);
+        TextView ngHint=new TextView(this);
+        ngHint.setText("shifts the whole grid ~6px per tap and previews the dots \u2014 saved exactly");
+        ngHint.setTextColor(DIM); ngHint.setTextSize(10); ngHint.setPadding(2,0,0,12);
+        root.addView(ngHint);
+
         String[] calLabels={"Board top row","Board bottom row","Board left edge","Board right edge","Bench row","Bench L/R shift"};
         final TextView[] calValTvs=new TextView[6];
         for(int ci=0;ci<6;ci++){
@@ -4544,6 +4568,28 @@ public class OverlayService extends Service {
         });
     }
 
+
+    // Shift the whole saved landscape grid by (dx %W, dy %H) and preview the
+    // dots. Starts from the measured standard grid when nothing is saved yet.
+    // Float-precision storage keeps every tap exact.
+    private void nudgeGrid(float dxPctW, float dyPctH){
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        int W=dm.widthPixels, H=dm.heightPixels;
+        if(W<=H){ Toast.makeText(this,"Rotate to landscape first",Toast.LENGTH_SHORT).show(); return; }
+        if(!pool.hasLandscapeGridCal()){
+            float[] a=HexGrid.standardAnchors(W,H);
+            pool.setLandscapeGridF(a[2]*100f/H, a[5]*100f/H,
+                    a[0]*100f/W, a[1]*100f/W, a[3]*100f/W, a[4]*100f/W);
+        }
+        pool.setLandscapeGridF(
+                pool.getBoardTopPctF()+dyPctH,     pool.getBoardBotPctF()+dyPctH,
+                pool.getBoardTopLeftPctF()+dxPctW, pool.getBoardTopRightPctF()+dxPctW,
+                pool.getBoardBotLeftPctF()+dxPctW, pool.getBoardBotRightPctF()+dxPctW);
+        addScanLog(String.format(java.util.Locale.US,
+                "grid nudge: dx=%.2f%%W dy=%.2f%%H", dxPctW, dyPctH));
+        buzz(); closePanel(); showProbeDots();
+    }
 
     // ---- tap-to-calibrate ----
 
