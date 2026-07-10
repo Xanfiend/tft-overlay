@@ -499,9 +499,12 @@ public class Pool {
     // Row spacing: vertical position of board rows 2 and 3 as a percent of the
     // back-to-front span (row 1 = 0, row 4 = 100). Defaults match the previously
     // hardcoded perspective fractions 0.27 / 0.58.
-    public int getRowF1Pct()        { return p.getInt("cal_rowf1", 33); }
+    // -1 = auto: derive the middle-row spacing projectively from the calibrated
+    // row spans (HexGrid.autoRowFractions). Users who dragged the ADJUST GRID
+    // spacing handles keep their explicit saved values.
+    public int getRowF1Pct()        { return p.getInt("cal_rowf1", -1); }
     public void setRowF1Pct(int v)  { p.edit().putInt("cal_rowf1", Math.max(5, Math.min(95,v))).apply(); }
-    public int getRowF2Pct()        { return p.getInt("cal_rowf2", 66); }
+    public int getRowF2Pct()        { return p.getInt("cal_rowf2", -1); }
     public void setRowF2Pct(int v)  { p.edit().putInt("cal_rowf2", Math.max(5, Math.min(95,v))).apply(); }
     // Bench span: explicit left/right ends of the bench row as a percent of screen
     // width. -1 = unset, fall back to deriving the span from the board's front row.

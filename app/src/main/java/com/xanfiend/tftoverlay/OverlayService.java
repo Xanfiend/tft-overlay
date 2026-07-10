@@ -4611,12 +4611,16 @@ public class OverlayService extends Service {
 
     // Expected corner-column centers {TL,TR,BL,BR} in % of width, from the same
     // aspect-aware model as the no-calibration fallback grid: the back row spans
-    // ~0.667x and the front row ~0.978x the screen HEIGHT, horizontally centered.
+    // ~0.667x and the front row ~0.978x the screen HEIGHT. The front row is an
+    // aligned honeycomb row (centered); the back row is an OFFSET row, half a
+    // hex pitch left of the centerline (verified against measured game
+    // coordinates — see HexGrid).
     private static int[] standardGridPct(int W,int H){
         float aspect=(float)W/H;
-        int tl=Math.max(3,Math.round((0.5f-0.667f/aspect/2f)*100));
-        int bl=Math.max(1,Math.round((0.5f-0.978f/aspect/2f)*100));
-        return new int[]{tl,100-tl,bl,100-bl};
+        float pB=0.667f/aspect*100f/6f, pF=0.978f/aspect*100f/6f;  // pitch, % of width
+        int tl=Math.round(50f-3.5f*pB), tr=Math.round(50f+2.5f*pB);
+        int bl=Math.round(50f-3f*pF),   br=Math.round(50f+3f*pF);
+        return new int[]{Math.max(1,tl), tr, Math.max(1,bl), Math.min(99,br)};
     }
 
     // Save the standard centered grid. Auto-calibrate always ends with a usable
@@ -4878,6 +4882,12 @@ public class OverlayService extends Service {
                     wBenchL=wBL-halfGap+shift;
                     wBenchR=wBR+halfGap+shift;
                 }
+                // row spacing on auto (-1): show the projective values so the
+                // handles start where the taps actually land
+                if(wF1<0 || wF2<=wF1){
+                    float[] af=HexGrid.autoRowFractions(wTR-wTL, wBR-wBL);
+                    wF1=af[0]*100f; wF2=af[1]*100f;
+                }
             }
             int dragIdx=-1;       // 0..3 corners, 4..5 row spacing, 6..7 bench ends, -1 none
             boolean downOnBar=false; boolean downOnSave=false;
@@ -4894,11 +4904,11 @@ public class OverlayService extends Service {
                     case 2: return new float[]{sw*wBL/100f, botY};
                     case 3: return new float[]{sw*wBR/100f, botY};
                     case 4: case 5: {
-                        float t=(i==4?wF1:wF2)/100f;
-                        float cy=topY+t*(botY-topY);
-                        float rowL=sw*wTL/100f+t*(sw*wBL/100f-sw*wTL/100f);
-                        float rowR=sw*wTR/100f+t*(sw*wBR/100f-sw*wTR/100f);
-                        return new float[]{(rowL+rowR)/2f, cy};
+                        // ring sits mid-row on the actual (staggered) hex row
+                        float[][][] g=HexGrid.player(sw*wTL/100f, sw*wTR/100f, topY,
+                                sw*wBL/100f, sw*wBR/100f, botY, wF1/100f, wF2/100f);
+                        int row=(i==4)?1:2;
+                        return new float[]{(g[row][0][0]+g[row][6][0])/2f, g[row][0][1]};
                     }
                     case 6: return new float[]{sw*wBenchL/100f, sh*wBenchY/100f};
                     default: return new float[]{sw*wBenchR/100f, sh*wBenchY/100f};
@@ -4911,20 +4921,15 @@ public class OverlayService extends Service {
                 p.setColor(0x26000000);
                 canvas.drawRect(0,0,W,H,p);
 
-                // probe dots — same interpolation as buildProbeGrid so what you see is what taps
-                final float[] ROW_F={0f,wF1/100f,wF2/100f,1f};
+                // probe dots — same HexGrid model as buildProbeGrid (honeycomb
+                // stagger included) so what you see is exactly what taps
                 float topY=H*wTop/100f, botY=H*wBot/100f;
                 float tlx=W*wTL/100f, trx=W*wTR/100f, blx=W*wBL/100f, brx=W*wBR/100f;
+                float[][][] g=HexGrid.player(tlx,trx,topY, blx,brx,botY, wF1/100f, wF2/100f);
                 p.setColor(0xFFE03131);
-                for(int row=0;row<4;row++){
-                    float t=ROW_F[row];
-                    float cy=topY+t*(botY-topY);
-                    float rowL=tlx+t*(blx-tlx), rowR=trx+t*(brx-trx);
-                    for(int col=0;col<7;col++){
-                        float cx=rowL+col*(rowR-rowL)/6f;
-                        canvas.drawCircle(cx,cy,7,p);
-                    }
-                }
+                for(int row=0;row<4;row++)
+                    for(int col=0;col<7;col++)
+                        canvas.drawCircle(g[row][col][0], g[row][col][1], 7, p);
                 // bench dots (blue) — span runs between the two bench end handles
                 float bLx=W*wBenchL/100f, bRx=W*wBenchR/100f;
                 float bY=H*wBenchY/100f;
@@ -5753,11 +5758,13 @@ public class OverlayService extends Service {
                 // a wider screen it takes up a smaller fraction of the width. Deriving the
                 // back/front row spans from the screen aspect makes the grid land on the
                 // board on any device with no manual calibration. Measured spans: the back
-                // row is ~0.67x and the front row ~0.98x the screen HEIGHT, centered.
+                // row is ~0.67x and the front row ~0.98x the screen HEIGHT. The back row is
+                // an OFFSET honeycomb row — half a hex pitch left of the aligned centerline
+                // (verified against real measured game coordinates; see HexGrid).
                 float aspect=(float)w/h;
-                float backHalf=0.667f/aspect/2f, frontHalf=0.978f/aspect/2f;
-                topLeft  = (int)((0.5f-backHalf)*w);  topRight = (int)((0.5f+backHalf)*w);
-                botLeft  = (int)((0.5f-frontHalf)*w); botRight = (int)((0.5f+frontHalf)*w);
+                float pB=0.667f/aspect/6f, pF=0.978f/aspect/6f;   // hex pitch, fraction of width
+                topLeft  = (int)((0.5f-3.5f*pB)*w); topRight = (int)((0.5f+2.5f*pB)*w);
+                botLeft  = (int)((0.5f-3f*pF)*w);   botRight = (int)((0.5f+3f*pF)*w);
             }
         }
         // Repair swapped calibration saved by older versions (front row tapped before
@@ -5768,33 +5775,25 @@ public class OverlayService extends Service {
             t=topLeft;  topLeft=botLeft;   botLeft=t;
             t=topRight; topRight=botRight; botRight=t;
         }
-        // The TFT board is 4 rows x 7 columns, drawn in PERSPECTIVE: back rows are
-        // visually compressed, front rows are spread apart. We tried adding an extra
-        // alternating row-stagger correction (derived from real measured PC coordinates)
-        // in v1.28, but on TFT Mobile it overcorrected — small differences between the
-        // two measured corner rows get amplified into a big alternating swing, producing
-        // a dense crisscross mesh instead of clean rows. Reverted to plain smooth
-        // interpolation between the four measured corners, which users reported as close.
+        // Hex centers come from the projection model (HexGrid): honeycomb stagger
+        // (alternate rows offset half a pitch left — a column-aligned grid misses
+        // two of the four rows by half a hex), pitch linear in screen Y, and
+        // middle-row spacing derived projectively from the anchors when no
+        // explicit spacing was saved (rowF < 0 = auto).
         //   topLeft/topRight  = measured centers of column 0 / column 6, BACK row
         //   botLeft/botRight  = measured centers of column 0 / column 6, FRONT row
         //   top = back-row hex-center Y   ·   bot = front-row hex-center Y
-        // ROW_F[0]=back ... ROW_F[3]=front. Gaps grow toward the front (perspective).
-        // The two middle fractions are adjustable via ADJUST GRID (row-spacing handles).
-        final float[] ROW_F = {0f,
-            (portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct())/100f,
-            (portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct())/100f,
-            1f};
+        int f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct();
+        int f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct();
+        float[][][] hexes = HexGrid.player(topLeft, topRight, top, botLeft, botRight, bot,
+                f1raw < 0 ? -1f : f1raw / 100f, f2raw < 0 ? -1f : f2raw / 100f);
         int cols=7;
         int frontWidth = botRight - botLeft;
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
         for(int row=3;row>=0;row--){
-            float t = ROW_F[row];
-            int cy = top + (int)(t * (bot - top));
-            int rowLeft  = (int)(topLeft  + t * (botLeft  - topLeft));
-            int rowRight = (int)(topRight + t * (botRight - topRight));
             for(int col=0;col<cols;col++){
-                int cx=rowLeft+col*(rowRight-rowLeft)/(cols-1);
+                int cx=(int)hexes[row][col][0], cy=(int)hexes[row][col][1];
                 if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
                           &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
                 pts.add(new int[]{cx,cy});
@@ -5827,49 +5826,54 @@ public class OverlayService extends Service {
         return pts;
     }
 
-    // Probe grid for the opponent's board during combat. The opponent's units fight
-    // from the top portion of the board — their front row (nearest the player) sits
-    // near screen-centre and their back row is at the top. We mirror the player's
-    // calibrated Y zone vertically: oppFrontY = 100 - boardBotPct, oppBackY = 100 -
-    // boardTopPct. Perspective row fractions are also inverted so the wider gaps are
-    // near the player (opponent front) and compress toward the top (opponent back).
+    // Probe grid for the opponent's board during combat. Their four rows continue
+    // the SAME board honeycomb above the player's back row, so the hex centers come
+    // from extrapolating the calibrated projection upward (HexGrid.opp): pitch and
+    // centerline extrapolate linearly in screen Y, row gaps keep compressing with
+    // distance, and the honeycomb stagger continues through their rows. Replaces
+    // the old mirrored-Y guess with untapered rows, which drifted off the far rows.
     // No bench probes — opponent bench units don't fight.
     private java.util.List<int[]> buildOppProbeGrid(int w, int h){
         java.util.List<int[]> pts=new java.util.ArrayList<>();
         boolean portrait = h > w;
-        int oppFrontY, oppBackY, oppLeft, oppRight;
-        if(portrait){
-            oppFrontY = h * (100 - pool.getPortraitBoardBotPct()) / 100;
-            oppBackY  = h * (100 - pool.getPortraitBoardTopPct()) / 100;
-            oppLeft   = w * pool.getPortraitBoardTopLeftPct()  / 100;
-            oppRight  = w * pool.getPortraitBoardTopRightPct() / 100;
+        int top, bot, topLeft, topRight, botLeft, botRight;
+        if (portrait) {
+            top      = h * pool.getPortraitBoardTopPct()      / 100;
+            bot      = h * pool.getPortraitBoardBotPct()      / 100;
+            topLeft  = w * pool.getPortraitBoardTopLeftPct()  / 100;
+            topRight = w * pool.getPortraitBoardTopRightPct() / 100;
+            botLeft  = w * pool.getPortraitBoardBotLeftPct()  / 100;
+            botRight = w * pool.getPortraitBoardBotRightPct() / 100;
         } else {
-            oppFrontY = h * (100 - pool.getBoardBotPct()) / 100;
-            oppBackY  = h * (100 - pool.getBoardTopPct()) / 100;
-            oppLeft   = w * pool.getBoardTopLeftPct()  / 100;
-            oppRight  = w * pool.getBoardTopRightPct() / 100;
+            top      = h * pool.getBoardTopPct()      / 100;
+            bot      = h * pool.getBoardBotPct()      / 100;
+            if(pool.hasLandscapeGridCal()){
+                topLeft  = w * pool.getBoardTopLeftPct()  / 100;
+                topRight = w * pool.getBoardTopRightPct() / 100;
+                botLeft  = w * pool.getBoardBotLeftPct()  / 100;
+                botRight = w * pool.getBoardBotRightPct() / 100;
+            } else {
+                float aspect=(float)w/h;
+                float pB=0.667f/aspect/6f, pF=0.978f/aspect/6f;
+                topLeft  = (int)((0.5f-3.5f*pB)*w); topRight = (int)((0.5f+2.5f*pB)*w);
+                botLeft  = (int)((0.5f-3f*pF)*w);   botRight = (int)((0.5f+3f*pF)*w);
+            }
         }
-        // Repair swapped calibration (see buildProbeGrid): opponent back row must be
-        // the upper one, otherwise the mirrored perspective also runs backwards.
-        if(oppBackY > oppFrontY){ int t=oppBackY; oppBackY=oppFrontY; oppFrontY=t; }
-        // Inverted perspective: gaps widen toward oppFrontY (screen centre, closest to
-        // player). Row 0 = opponent back row (top), row 3 = opponent front row (nearest
-        // player, oppFrontY). ROW_F[0..3] is 0→1 mapping back→front. Middle fractions
-        // follow the same adjustable row spacing as the player grid.
-        final float[] ROW_F = {0f,
-            (portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct())/100f,
-            (portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct())/100f,
-            1f};
-        int cols=7;
+        if(top > bot){
+            int t=top; top=bot; bot=t;
+            t=topLeft;  topLeft=botLeft;   botLeft=t;
+            t=topRight; topRight=botRight; botRight=t;
+        }
+        int f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1Pct();
+        int f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2Pct();
+        float[][][] hexes = HexGrid.opp(topLeft, topRight, top, botLeft, botRight, bot,
+                f1raw < 0 ? -1f : f1raw / 100f, f2raw < 0 ? -1f : f2raw / 100f);
         int[] btnLoc=new int[2]; int btnW=0,btnH=0;
         if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
         for(int row=0;row<4;row++){
-            float t=ROW_F[row];
-            int cy=oppBackY-(int)(t*(oppBackY-oppFrontY)); // back=top, front=lower
-            int rowLeft =(int)(oppLeft);
-            int rowRight=(int)(oppRight);
-            for(int col=0;col<cols;col++){
-                int cx=rowLeft+col*(rowRight-rowLeft)/(cols-1);
+            for(int col=0;col<7;col++){
+                int cx=(int)hexes[row][col][0], cy=(int)hexes[row][col][1];
+                if(cy<0) continue;
                 if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
                           &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
                 pts.add(new int[]{cx,cy});
