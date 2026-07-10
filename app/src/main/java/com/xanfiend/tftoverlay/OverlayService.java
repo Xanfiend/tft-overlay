@@ -4658,19 +4658,19 @@ public class OverlayService extends Service {
         return new int[]{Math.max(1,tl), tr, Math.max(1,bl), Math.min(99,br)};
     }
 
-    // Save the standard centered grid. Auto-calibrate always ends with a usable
+    // Apply the standard centered grid. Auto-calibrate always ends with a usable
     // grid: detection fine-tunes it when the outlines are cleanly visible, and
     // everything else lands here instead of failing or saving noise.
+    // Implementation detail that matters for alignment: the standard grid is NOT
+    // saved as corner percents — integer percent storage rounds by up to ±0.5%
+    // (±14px on a 2712px screen, a tenth of a hex). Clearing the saved grid
+    // instead routes buildProbeGrid through the full-precision float aspect
+    // model, which computes identical positions without the rounding.
     private void applyStandardGrid(int W,int H,String why){
-        int[] exp=standardGridPct(W,H);
+        pool.clearLandscapeGridCal();
         pool.setBoardTopPct(44);
         pool.setBoardBotPct(72);
-        pool.setBoardTopLeftPct(exp[0]);
-        pool.setBoardTopRightPct(exp[1]);
-        pool.setBoardBotLeftPct(exp[2]);
-        pool.setBoardBotRightPct(exp[3]);
-        addScanLog("hexCal: "+why+" — standard centered grid applied"
-                +" (tl="+exp[0]+" tr="+exp[1]+" bl="+exp[2]+" br="+exp[3]+" top=44 bot=72)");
+        addScanLog("hexCal: "+why+" — standard centered grid applied (full-precision aspect model)");
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
             Toast.makeText(this,"Standard board grid applied — check the dots, then ADJUST GRID to fine-tune if needed",Toast.LENGTH_LONG).show();
             showProbeDots();
@@ -4902,8 +4902,17 @@ public class OverlayService extends Service {
                     wBenchL=pool.getPortraitBenchLeftPct();  wBenchR=pool.getPortraitBenchRightPct();
                 } else {
                     wTop=pool.getBoardTopPct();      wBot=pool.getBoardBotPct();
-                    wTL =pool.getBoardTopLeftPct();  wTR =pool.getBoardTopRightPct();
-                    wBL =pool.getBoardBotLeftPct();  wBR =pool.getBoardBotRightPct();
+                    if(pool.hasLandscapeGridCal()){
+                        wTL =pool.getBoardTopLeftPct();  wTR =pool.getBoardTopRightPct();
+                        wBL =pool.getBoardBotLeftPct();  wBR =pool.getBoardBotRightPct();
+                    } else {
+                        // no saved grid: start from the same full-precision aspect
+                        // model the tap grid uses, so the rings open on the dots
+                        float aspect=(float)sw/sh;
+                        float pB=0.667f/aspect*100f/6f, pF=0.978f/aspect*100f/6f;
+                        wTL=50f-3.5f*pB; wTR=50f+2.5f*pB;
+                        wBL=50f-3f*pF;   wBR=50f+3f*pF;
+                    }
                     wBenchY=pool.getBenchYPct();
                     wF1=pool.getRowF1Pct();          wF2=pool.getRowF2Pct();
                     wBenchL=pool.getBenchLeftPct();  wBenchR=pool.getBenchRightPct();
@@ -5601,12 +5610,17 @@ public class OverlayService extends Service {
         showStopButton("✦ STOP SCAN");
         if(btnLabel!=null) btnLabel.setText("...");
         addScanLog("auto-tap: starting, getting screen size");
-        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        // hide our overlays for the detection shot — the STOP pill or sigil parked
+        // over the board would blank out the health bars underneath it
+        setOverlayShotHidden(true);
+        boardHandler.postDelayed(new Runnable(){ public void run(){
         try{
             lastShotMs=android.os.SystemClock.uptimeMillis();
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        setOverlayShotHidden(false);
                         Bitmap goldTmp=null; // visible to catch so an early failure can recycle it
                         try{
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
@@ -5681,9 +5695,10 @@ public class OverlayService extends Service {
                             autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel();
                         }
                     }
-                    @Override public void onFailure(int errorCode){ autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
+                    @Override public void onFailure(int errorCode){ setOverlayShotHidden(false); autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
                 });
-        }catch(Exception e){ autoScanPending=false; addScanLog("ERR startAutoTapScan: "+e.getMessage()); mode=0; showPanel(); }
+        }catch(Exception e){ setOverlayShotHidden(false); autoScanPending=false; addScanLog("ERR startAutoTapScan: "+e.getMessage()); mode=0; showPanel(); }
+        }}, 120);
     }
 
     @SuppressWarnings("NewApi")
@@ -5709,12 +5724,16 @@ public class OverlayService extends Service {
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
         addScanLog("auto-opp: starting");
-        TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        // hide our overlays for the detection shot (see startAutoTapScan)
+        setOverlayShotHidden(true);
+        boardHandler.postDelayed(new Runnable(){ public void run(){
         try{
             lastShotMs=android.os.SystemClock.uptimeMillis();
             svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                 new AccessibilityService.TakeScreenshotCallback(){
                     @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        setOverlayShotHidden(false);
                         Bitmap bmpTmp=null; // visible to catch so an early failure can recycle it
                         try{
                             android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
@@ -5762,9 +5781,10 @@ public class OverlayService extends Service {
                             autoScanPending=false; addScanLog("ERR auto-opp init: "+e.getMessage()); mode=0; showPanel();
                         }
                     }
-                    @Override public void onFailure(int errorCode){ autoScanPending=false; autoOppMode=false; addScanLog("ERR auto-opp shot: "+errorCode); mode=0; showPanel(); }
+                    @Override public void onFailure(int errorCode){ setOverlayShotHidden(false); autoScanPending=false; autoOppMode=false; addScanLog("ERR auto-opp shot: "+errorCode); mode=0; showPanel(); }
                 });
-        }catch(Exception e){ autoScanPending=false; autoOppMode=false; addScanLog("ERR startAutoOppScan: "+e.getMessage()); mode=0; showPanel(); }
+        }catch(Exception e){ setOverlayShotHidden(false); autoScanPending=false; autoOppMode=false; addScanLog("ERR startAutoOppScan: "+e.getMessage()); mode=0; showPanel(); }
+        }}, 120);
     }
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
@@ -6924,7 +6944,12 @@ public class OverlayService extends Service {
         closePanel();
         if(btnLabel!=null) btnLabel.setText("PLAN");
         addScanLog("planner scan: board shot for positions/stars");
+        // hide our overlays for the detection shot — a pill/sigil over the board
+        // would blank out the health bars underneath (see startAutoTapScan)
+        setOverlayShotHidden(true);
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
         plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
+            setOverlayShotHidden(false);
             if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
             if(bmp!=null){
                 // best-effort: unit count + star levels from health bars. Names come
@@ -6936,6 +6961,7 @@ public class OverlayService extends Service {
                     :plannerUnits.size()+" units (health bar)")+", opening planner");
             plannerOpenPhase();
         }});
+        }}, 120);
     }
 
     private void plannerOpenPhase(){
@@ -7308,6 +7334,20 @@ public class OverlayService extends Service {
     // its spot. Reusing this for every long-running mode means the user never has
     // to chase the small floating sigil to halt the auto-tapping.
     @SuppressWarnings("deprecation")
+    // Our own overlay windows (STOP pill, floating sigil, HUD numbers) are part
+    // of accessibility screenshots — parked over the board they hide the units
+    // underneath from detection. Hidden for the one-shot detection captures and
+    // restored in the shot callback. Alpha (not visibility) so no relayout.
+    private void setOverlayShotHidden(boolean hidden){
+        try{ if(button!=null)      button.setAlpha(hidden?0f:1f); }catch(Exception e){}
+        try{ if(stopBtnView!=null) stopBtnView.setAlpha(hidden?0f:0.97f); }catch(Exception e){}
+        try{ if(hudGoldView!=null) hudGoldView.setAlpha(hidden?0f:1f); }catch(Exception e){}
+        try{ if(hudXpView!=null)   hudXpView.setAlpha(hidden?0f:1f); }catch(Exception e){}
+        // watchdog: if a shot callback is ever dropped (HyperOS), restore anyway —
+        // idempotent, and no legitimate hide lasts anywhere near this long
+        if(hidden) boardHandler.postDelayed(()->setOverlayShotHidden(false), 4000);
+    }
+
     private void showStopButton(final String label){
         hideStopButton();
         final TextView b=new TextView(this);
@@ -7322,8 +7362,12 @@ public class OverlayService extends Service {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
         lp.gravity=Gravity.TOP|Gravity.START;
-        lp.x=pool.getHudPos("stop_x", dm.widthPixels*40/100);
-        lp.y=pool.getHudPos("stop_y", dm.heightPixels*45/100);
+        // default OFF the board: the old 40%/45% default parked the pill dead on
+        // the back row's middle hexes — it appears in accessibility screenshots
+        // and hid those units' health bars from the scan entirely. The top strip
+        // is outside every scan zone. Still draggable; a moved position is kept.
+        lp.x=pool.getHudPos("stop_x", dm.widthPixels*63/100);
+        lp.y=pool.getHudPos("stop_y", dm.heightPixels*1/100);
         stopBtnView=b; stopBtnLp=lp;
         b.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; boolean moved;

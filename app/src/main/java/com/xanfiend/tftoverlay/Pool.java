@@ -521,6 +521,12 @@ public class Pool {
     }
     // Per-corner X% for trapezoidal board (front row wider than back row).
     // Default falls back to the rectangular cal_left/cal_right so old calibrations still work.
+    // drop only the landscape corner grid (keeps top/bot rows) — used when the
+    // full-precision aspect model should take over from a saved integer grid
+    public void clearLandscapeGridCal(){
+        p.edit().remove("cal_tl").remove("cal_tr").remove("cal_bl").remove("cal_br")
+                .remove("cal_left").remove("cal_right").apply();
+    }
     public int getBoardTopLeftPct()       { return p.getInt("cal_tl", getBoardLeftPct()); }
     public void setBoardTopLeftPct(int v) { p.edit().putInt("cal_tl", v).apply(); }
     public int getBoardTopRightPct()      { return p.getInt("cal_tr", getBoardRightPct()); }
