@@ -1494,12 +1494,22 @@ public class OverlayService extends Service {
             LinearLayout row1=new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams r1p=new LinearLayout.LayoutParams(-1,-2); r1p.setMargins(0,0,0,4); row1.setLayoutParams(r1p);
 
-            LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD","level \u00b7 gold \u00b7 every unit",
+            // tap-free by default: when the planner is calibrated and icons are
+            // bundled, SCRY MY BOARD reads the whole board from one Team Planner
+            // snapshot — zero unit taps. Long-press forces the classic tap read.
+            SetIcons.load(this);
+            final boolean plnRoute = accAvail && pool.plannerCalibrated() && SetIcons.champCount()>0;
+            LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD",
+                    plnRoute ? "no unit taps \u00b7 hold for tap scan" : "level \u00b7 gold \u00b7 every unit",
                     accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ openAccessibilitySettings(); return; }
-                startAutoTapScan();
+                if(plnRoute) startPlannerScan(); else startAutoTapScan();
+            }});
+            asBtn.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
+                if(!accAvail) return false;
+                buzz(); startAutoTapScan(); return true;
             }});
 
             LinearLayout aoBtn=ritualBtn("\u25C9 SCRY THE ENEMY","scout a foe's board",
@@ -1513,19 +1523,13 @@ public class OverlayService extends Service {
             row1.addView(asBtn); row1.addView(aoBtn);
             root.addView(row1);
 
-            // PLANNER SCAN \u2014 whole board from one Team Planner snapshot, no unit taps
-            final boolean plnReady = accAvail && pool.plannerCalibrated();
-            LinearLayout plnBtn=ritualBtn("\u2742 SCRY THE PLANNER",
-                    plnReady ? "whole board in one snapshot \u00b7 no unit taps"
-                             : "calibrate the planner in SETUP first",
-                    plnReady?0xFF1A1400:0xFF0D0909, plnReady?GOLD:DIM, plnReady);
-            LinearLayout.LayoutParams pbl=new LinearLayout.LayoutParams(-1,-2); pbl.setMargins(0,0,0,4); plnBtn.setLayoutParams(pbl);
-            plnBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ openAccessibilitySettings(); return; }
-                if(!pool.plannerCalibrated()){ Toast.makeText(OverlayService.this,"Calibrate the planner in the SETUP tab first",Toast.LENGTH_LONG).show(); return; }
-                startPlannerScan();
-            }});
-            root.addView(plnBtn);
+            if(accAvail && !plnRoute){
+                TextView plnTip=new TextView(this);
+                plnTip.setText("tip: calibrate the planner once (SETUP) and board scans stop needing unit taps");
+                plnTip.setTextColor(DIM); plnTip.setTextSize(9); plnTip.setGravity(Gravity.CENTER);
+                plnTip.setPadding(0,0,0,4);
+                root.addView(plnTip);
+            }
 
             // SCRY THE LOBBY \u2014 one-pass scan of every enemy board (REAPER)
             final boolean lobbyReady = accAvail && pool.hasOppPortraitCal();
@@ -6876,7 +6880,18 @@ public class OverlayService extends Service {
                 // best-effort: unit count + star levels from health bars. Names come
                 // from the planner; this only pairs stars to tiles, so failure is fine.
                 try{ plannerUnits=detectHealthBarUnits(bmp,false); }catch(Exception e){ plannerUnits=null; }
-                bmp.recycle();
+                // the same shot carries gold/level/XP/stage — read them in parallel
+                // with the planner steps so the tap-free scan is a full scry
+                // (scanBitmap recycles the bitmap)
+                new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                    new ScreenScanner.ScanCallback(){
+                        public void onResult(ScreenScanner.ScanResult r){
+                            autoScanGold=r.gold; autoScanLevel=r.level;
+                            autoScanXpCur=r.xpCur; autoScanXpNeed=r.xpNeed;
+                            autoScanStage=r.stageRound;
+                        }
+                        public void onError(String msg){}
+                    }, ScreenScanner.MODE_FULL);
             }
             addScanLog("planner scan: "+(plannerUnits==null?"no health-bar read"
                     :plannerUnits.size()+" units (health bar)")+", opening planner");
@@ -7016,8 +7031,15 @@ public class OverlayService extends Service {
                 addScanLog("planner: "+floating.size()+" floating (no health-bar match): "+floating);
         }
 
+        if(autoScanGold>=0) pool.setGold(autoScanGold);
+        if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
+        if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
+        if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
+        refreshHud();
         addScanLog("planner scan: done, "+matched+" named, "+unknown+" unknown of "+occupied
-                +" tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
+                +" tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s"
+                +(autoScanGold>=0?(" · gold="+autoScanGold):"")
+                +(autoScanLevel>=0?(" · lv"+autoScanLevel):""));
         if(occupied==0){
             Toast.makeText(this,"No snapshot tiles found — did the planner open? Recalibrate in SETUP if not.",Toast.LENGTH_LONG).show();
         } else if(unknown>0){
