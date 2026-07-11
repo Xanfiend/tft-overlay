@@ -5971,11 +5971,18 @@ public class OverlayService extends Service {
                 leftExtreme  = w *  3 / 100;
                 rightExtreme = w * 97 / 100;
             } else {
-                // landscape own board: back-row bars ~33%, front units ~70%
-                zoneTop      = h * 27 / 100;
-                zoneBot      = h * 76 / 100;
-                leftExtreme  = w *  5 / 100;
-                rightExtreme = w * 93 / 100;
+                // Landscape own board: zone derived from the measured board anchors
+                // (HexGrid.standardAnchors) — bars float ~11-13%H above their hex
+                // row, so the zone runs from just above the back row's bars to just
+                // above the front row's units, padded one hex pitch sideways. The
+                // old fixed 27-76% / 5-93% zone included the left-cliff foliage and
+                // the enemy half: leaf-green bands were accepted as "units" (user
+                // screenshot: unit marker rendered on the trees at 13%W).
+                float[] a = HexGrid.standardAnchors(w, h);
+                zoneTop      = Math.round(a[2] - 0.14f * h);   // back-row bars
+                zoneBot      = Math.round(a[5] - 0.05f * h);   // front-row bars
+                leftExtreme  = Math.round(a[0] - 0.15f * h);   // back col0 − ~1 pitch
+                rightExtreme = Math.round(a[4] + 0.15f * h);   // front col6 + ~1 pitch
             }
             zoneTop = Math.max(0, zoneTop);
             zoneBot = Math.min(h, zoneBot);
@@ -6051,8 +6058,11 @@ public class OverlayService extends Service {
                                                    boolean opp, int tier,
                                                    int zoneLeft, int zoneTop,
                                                    int[] btnLoc, int btnW, int btnH){
-        int minLen=Math.max(6, w*2/100);          // a bar is at least ~2% of screen wide
-        int maxLen=Math.max(minLen+4, w*11/100);  // and at most ~11% wide
+        // Bar size scales with screen HEIGHT (the board is height-fit), not width:
+        // on a wide 20:9 screen 2%W was 54px while a small unit's bar has only
+        // ~50px of fill — every short bar was rejected (user's knight was missed).
+        int minLen=Math.max(6, h*35/1000);        // a bar is at least ~3.5% of screen height wide
+        int maxLen=Math.max(minLen+4, h*20/100);  // and at most ~20% of height
         // Runs tolerate up to 2 non-matching pixels in a row, so the thin tick
         // marks and star icons drawn over the bar don't split one bar into two
         // short segments that both fail the minimum-length check.
