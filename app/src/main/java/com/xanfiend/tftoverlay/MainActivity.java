@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.61");
+        ver.setText("v1.99.62");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.62  ·  2026-07-11","Tap-free scanning is now the default. Once the planner is calibrated (one-time, in SETUP), SCRY MY BOARD reads your whole board from a single Team Planner snapshot — no unit gets tapped — and still picks up gold, level, XP and stage from the same read. Hold the button if you ever want the classic tap-per-unit scan."},
             {"v1.99.61  ·  2026-07-11","Two real scan fixes from your screenshots: the scan could mark scenery at the screen edge as a unit (it now only looks where the board actually is), and small units with short health bars were skipped entirely on wide screens (the size check now scales correctly). Small-unit rounds should now read properly."},
             {"v1.99.60  ·  2026-07-11","Calibration previews now show the actual grid. After AUTO-CALIBRATE or a GRID NUDGE you see all 28 dots plus the bench immediately — previously the preview switched to showing detected units, which hid the grid you were checking and could even mistake the confirmation popup for a unit."},
             {"v1.99.59  ·  2026-07-11","New GRID NUDGE arrows in SETUP: when the dots are aligned but sit a hair off, tap an arrow to shift the whole grid a few pixels in that direction with a live preview. Every tap is saved exactly."},
