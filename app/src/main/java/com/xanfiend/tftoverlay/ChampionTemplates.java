@@ -134,12 +134,23 @@ public class ChampionTemplates {
 
     public static synchronized void saveBoardTemplate(Context ctx, String champName, Bitmap sourceBmp,
                                                       int cx, int cy, int size, boolean opp){
+        int x0 = cx - size/2, y0 = cy - size/2;
+        if(x0 < 0 || y0 < 0 || x0+size > sourceBmp.getWidth() || y0+size > sourceBmp.getHeight()) return;
         try{
-            int x0 = cx - size/2, y0 = cy - size/2;
-            if(x0 < 0 || y0 < 0 || x0+size > sourceBmp.getWidth() || y0+size > sourceBmp.getHeight()) return;
             Bitmap crop = Bitmap.createBitmap(sourceBmp, x0, y0, size, size);
-            Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
+            saveBoardTemplateBitmap(ctx, champName, crop, opp);
             crop.recycle();
+        }catch(Exception e){
+            OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
+        }
+    }
+
+    // Same as saveBoardTemplate but the caller already holds the sprite crop —
+    // used by the planner scan, which learns every named unit's look from the
+    // board shot it took before opening the planner.
+    public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop, boolean opp){
+        try{
+            Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
             File d = dir(ctx);
             if(!d.exists()) d.mkdirs();
             String fn = (opp ? "btplo_" : "btpl_") + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + ".png";

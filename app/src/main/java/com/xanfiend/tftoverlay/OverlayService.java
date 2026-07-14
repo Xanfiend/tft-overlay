@@ -249,6 +249,10 @@ public class OverlayService extends Service {
     // planner scan: reads the whole board in one pass by snapshotting the Team
     // Planner (flat 2D tiles, matched against bundled set icons) — zero unit taps
     private boolean plannerScanPending = false;
+    // sprite crops captured at the planner scan's first board shot, one per
+    // detected unit (same order as plannerUnits) — labeled with the planner's
+    // names at finish so every tap-free scan TEACHES Visual ID
+    private java.util.List<Bitmap> plannerCrops = null;
     private java.util.List<int[]> plannerUnits = null; // health-bar detection from the board shot (positions + stars)
     private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     // planner calibration overlay: records where the planner controls live
@@ -6880,6 +6884,22 @@ public class OverlayService extends Service {
                 // best-effort: unit count + star levels from health bars. Names come
                 // from the planner; this only pairs stars to tiles, so failure is fine.
                 try{ plannerUnits=detectHealthBarUnits(bmp,false); }catch(Exception e){ plannerUnits=null; }
+                // keep a sprite crop per detected unit: once the planner names the
+                // tiles, these get saved as Visual ID templates (crop size mirrors
+                // visualIdPass so learning and matching see the same framing)
+                recyclePlannerCrops();
+                if(plannerUnits!=null && pool.getVisualId()){
+                    plannerCrops=new java.util.ArrayList<>();
+                    int cs=Math.max(48, bmp.getHeight()*9/100);
+                    for(int[] u:plannerUnits){
+                        Bitmap c=null;
+                        int x0=u[0]-cs/2, y0=u[1]-cs/2;
+                        if(x0>=0&&y0>=0&&x0+cs<=bmp.getWidth()&&y0+cs<=bmp.getHeight()){
+                            try{ c=Bitmap.createBitmap(bmp,x0,y0,cs,cs); }catch(Exception e){ c=null; }
+                        }
+                        plannerCrops.add(c);
+                    }
+                }
                 // the same shot carries gold/level/XP/stage — read them in parallel
                 // with the planner steps so the tap-free scan is a full scry
                 // (scanBitmap recycles the bitmap)
@@ -7015,6 +7035,18 @@ public class OverlayService extends Service {
             for(PlannerMerge.BoardUnit u:merge.resolved){
                 matched++;
                 pool.add(u.name,1);
+                // teach Visual ID: the crop at this unit's health-bar position now
+                // has a confirmed name — future scans recognize it from one shot
+                if(plannerCrops!=null && plannerUnits!=null){
+                    for(int ci=0;ci<plannerUnits.size() && ci<plannerCrops.size();ci++){
+                        int[] hb=plannerUnits.get(ci);
+                        if(hb[0]==(int)u.x && hb[1]==(int)u.y){
+                            Bitmap c=plannerCrops.get(ci);
+                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,false);
+                            break;
+                        }
+                    }
+                }
                 StringBuilder e=new StringBuilder(u.name);
                 for(int s=0;s<u.stars;s++) e.append('★');
                 e.append(" ≈");
@@ -7045,14 +7077,23 @@ public class OverlayService extends Service {
         } else if(unknown>0){
             Toast.makeText(this,unknown+" unit"+(unknown==1?"":"s")+" not recognized — run SCRY MY BOARD to read them by popup",Toast.LENGTH_LONG).show();
         }
+        recyclePlannerCrops();
         if(matched>0) buzzDone();
         mode=0; showPanel();
+    }
+
+    private void recyclePlannerCrops(){
+        if(plannerCrops!=null){
+            for(Bitmap c:plannerCrops){ if(c!=null){ try{ c.recycle(); }catch(Exception e){} } }
+            plannerCrops=null;
+        }
     }
 
     private void stopPlannerScan(String why){
         plannerScanPending=false;
         plannerHandler.removeCallbacksAndMessages(null);
         setOverlaysTouchable(true);
+        recyclePlannerCrops();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("planner scan: "+why);
         mode=0; showPanel();
