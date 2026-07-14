@@ -249,6 +249,9 @@ public class OverlayService extends Service {
     // planner scan: reads the whole board in one pass by snapshotting the Team
     // Planner (flat 2D tiles, matched against bundled set icons) — zero unit taps
     private boolean plannerScanPending = false;
+    // last pass-through tap replayed by the planner calibration wizard — the
+    // banner offers RETRY when a step's injected tap got swallowed by the game
+    private float plnCalLastX = -1, plnCalLastY = -1;
     // sprite crops captured at the planner scan's first board shot, one per
     // detected unit (same order as plannerUnits) — labeled with the planner's
     // names at finish so every tap-free scan TEACHES Visual ID
@@ -6259,11 +6262,15 @@ public class OverlayService extends Service {
             android.accessibilityservice.GestureDescription gesture=
                 new android.accessibilityservice.GestureDescription.Builder()
                     .addStroke(stroke).build();
-            svc.dispatchGesture(gesture,
+            boolean accepted=svc.dispatchGesture(gesture,
                 new android.accessibilityservice.AccessibilityService.GestureResultCallback(){
                     @Override public void onCompleted(android.accessibilityservice.GestureDescription d){ finish.run(); }
-                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){ finish.run(); }
+                    @Override public void onCancelled(android.accessibilityservice.GestureDescription d){
+                        addScanLog("tap CANCELLED by system at "+(int)x+","+(int)y);
+                        finish.run();
+                    }
                 }, null);
+            if(!accepted) addScanLog("tap REJECTED (service not ready) at "+(int)x+","+(int)y);
         }catch(Exception e){ addScanLog("ERR dispatchTap: "+e.getMessage()); finish.run(); }
     }
 
@@ -7107,6 +7114,7 @@ public class OverlayService extends Service {
     private void startPlannerCalibration(){
         plnCalStep=1;
         plnCalBusy=false;
+        plnCalLastX=-1; plnCalLastY=-1;
         // If a previous scan left injecting=true (e.g. gesture callback dropped by HyperOS),
         // dispatchTap would silently skip every calibration tap — advancing the wizard without
         // ever opening the planner. Clear it before any calibration tap fires.
@@ -7141,9 +7149,16 @@ public class OverlayService extends Service {
                 if(barTop>H-barH) barTop=H-barH;
                 if(barTop<0) barTop=0;
             }
+            private boolean retryAvail(){ return plnCalLastX>=0 && (plnCalStep==2 || plnCalStep==3 || plnCalStep==5); }
             private android.graphics.RectF cancelRect(){
                 int W=getWidth();
-                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f, left=W*0.5f-w/2f;
+                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f;
+                float left=retryAvail() ? W*0.5f+W*0.01f : W*0.5f-w/2f;
+                return new android.graphics.RectF(left,top,left+w,top+h);
+            }
+            private android.graphics.RectF retryRect(){
+                int W=getWidth();
+                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f, left=W*0.5f-w-W*0.01f;
                 return new android.graphics.RectF(left,top,left+w,top+h);
             }
             @Override protected void onDraw(android.graphics.Canvas canvas){
@@ -7172,7 +7187,7 @@ public class OverlayService extends Service {
                 txtP.setTextSize(9*spx); txtP.setColor(0xFFC9A227);
                 canvas.drawText(plnCalBusy?"replaying your tap into the game":stepSub,
                         W/2f, barTop+barH*0.50f, txtP);
-                // CANCEL pill
+                // CANCEL pill (+ RETRY when the previous replayed tap may have missed)
                 android.graphics.RectF cr=cancelRect();
                 txtP.setColor(0xFF1A0E10); canvas.drawRoundRect(cr,10,10,txtP);
                 txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
@@ -7180,6 +7195,16 @@ public class OverlayService extends Service {
                 txtP.setStyle(android.graphics.Paint.Style.FILL);
                 txtP.setTextSize(11*spx);
                 canvas.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, txtP);
+                if(retryAvail() && !plnCalBusy){
+                    android.graphics.RectF rr=retryRect();
+                    txtP.setColor(0xFF141A0E); canvas.drawRoundRect(rr,10,10,txtP);
+                    txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
+                    txtP.setColor(GOLD); canvas.drawRoundRect(rr,10,10,txtP);
+                    txtP.setStyle(android.graphics.Paint.Style.FILL);
+                    txtP.setColor(GOLD);
+                    canvas.drawText("↻ RETRY LAST TAP", rr.centerX(), rr.centerY()+4*spx, txtP);
+                    txtP.setColor(0xFFE0D5C0);
+                }
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent e){
                 ensureLayout();
@@ -7201,9 +7226,11 @@ public class OverlayService extends Service {
                     return true;
                 } else if(a==android.view.MotionEvent.ACTION_UP){
                     if(downInBar){
-                        // a tap (not a drag) on the CANCEL pill cancels; otherwise the
-                        // banner tap does nothing so it can never be hit by accident
+                        // a tap (not a drag) on the CANCEL pill cancels; RETRY re-fires
+                        // the previous step's tap into the game without advancing —
+                        // for when the injected tap got swallowed (planner didn't open)
                         if(!dragged && cancelRect().contains(vx,vy)) cancelPlnCal();
+                        else if(!dragged && retryAvail() && retryRect().contains(vx,vy)) retryPlnCalTap();
                         return true;
                     }
                     // tap OUTSIDE the banner → record this spot and replay it into the game
@@ -7249,6 +7276,8 @@ public class OverlayService extends Service {
         // intercept the gesture, so tear the overlay down completely first, replay,
         // then rebuild it for the next step.
         final boolean closing = plnCalStep==5;
+        plnCalLastX=vx; plnCalLastY=vy;
+        addScanLog("plnCal: replaying step "+plnCalStep+" tap at "+(int)vx+","+(int)vy);
         hidePlnCalView();              // removes the window; sets plnCalBusy=false
         plnCalBusy=true;              // still mid-replay
         setOverlaysTouchable(false);  // lift the sigil/HUD chips out of the way too
@@ -7264,7 +7293,27 @@ public class OverlayService extends Service {
                     showPlnCalOverlay();
                 }}, closing?500:1500);
             }});
-        }}, 400);
+        }}, 650);   // window removal must reach the input pipeline before the tap fires
+    }
+
+    // Re-fire the previous calibration step's tap into the game without
+    // advancing the wizard — recovers from an injected tap the game swallowed.
+    private void retryPlnCalTap(){
+        if(plnCalLastX<0) return;
+        final float rx=plnCalLastX, ry=plnCalLastY;
+        addScanLog("plnCal: RETRY replay at "+(int)rx+","+(int)ry);
+        hidePlnCalView();
+        plnCalBusy=true;
+        setOverlaysTouchable(false);
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
+            dispatchTap(rx,ry,new Runnable(){ public void run(){
+                plannerHandler.postDelayed(new Runnable(){ public void run(){
+                    setOverlaysTouchable(true);
+                    plnCalBusy=false;
+                    showPlnCalOverlay();   // same step
+                }},1500);
+            }});
+        }}, 500);
     }
 
     private void advancePlnCal(){
