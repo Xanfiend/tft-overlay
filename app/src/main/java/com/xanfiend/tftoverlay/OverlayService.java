@@ -6234,6 +6234,14 @@ public class OverlayService extends Service {
     private void clearInjecting(){ injecting=false; }
 
     private void dispatchTap(float x, float y, final Runnable onDone){
+        dispatchTap(x, y, TAP_STROKE_MS, onDone);
+    }
+    // UI buttons in the game (planner open/snapshot/close, menus) often ignore
+    // ultra-short synthetic taps that board hexes accept — callers hitting game
+    // CHROME pass a longer stroke (UI_TAP_MS) while the fast scan loops keep the
+    // quick one.
+    private static final int UI_TAP_MS = 80;
+    private void dispatchTap(float x, float y, int strokeMs, final Runnable onDone){
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null){ onDone.run(); return; }
         // never let two injected taps overlap — that is what can drop the user's
@@ -6253,12 +6261,12 @@ public class OverlayService extends Service {
             boardHandler.removeCallbacks(this);
             onDone.run();
         }};
-        boardHandler.postDelayed(finish, TAP_STROKE_MS+500L);
+        boardHandler.postDelayed(finish, strokeMs+500L);
         try{
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
             android.accessibilityservice.GestureDescription.StrokeDescription stroke=
-                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,TAP_STROKE_MS);
+                new android.accessibilityservice.GestureDescription.StrokeDescription(path,0,strokeMs);
             android.accessibilityservice.GestureDescription gesture=
                 new android.accessibilityservice.GestureDescription.Builder()
                     .addStroke(stroke).build();
@@ -6936,13 +6944,13 @@ public class OverlayService extends Service {
         // not our sigil or HUD chips which sit on top in the window stack.
         setOverlaysTouchable(false);
         plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, new Runnable(){ public void run(){
+            dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
                 setOverlaysTouchable(true);
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
                     if(!plannerScanPending) return;
                     setOverlaysTouchable(false);
                     plannerHandler.postDelayed(new Runnable(){ public void run(){
-                        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, new Runnable(){ public void run(){
+                        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
                             setOverlaysTouchable(true);
                             plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
                         }});
@@ -6965,7 +6973,7 @@ public class OverlayService extends Service {
             final float closeX=pool.getPln("close_x")*dm.widthPixels/100f;
             final float closeY=pool.getPln("close_y")*dm.heightPixels/100f;
             plannerHandler.postDelayed(new Runnable(){ public void run(){
-                dispatchTap(closeX,closeY,new Runnable(){ public void run(){ setOverlaysTouchable(true); }});
+                dispatchTap(closeX,closeY,UI_TAP_MS,new Runnable(){ public void run(){ setOverlaysTouchable(true); }});
             }},200);
             if(bmp==null){ stopPlannerScan("no planner screenshot"); return; }
             plannerProcess(bmp);
@@ -7282,7 +7290,7 @@ public class OverlayService extends Service {
         plnCalBusy=true;              // still mid-replay
         setOverlaysTouchable(false);  // lift the sigil/HUD chips out of the way too
         plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(vx,vy,new Runnable(){ public void run(){
+            dispatchTap(vx,vy,UI_TAP_MS,new Runnable(){ public void run(){
                 // Allow extra time for TFT to open/close the planner before the next
                 // calibration overlay appears — 1500ms covers slow animation on older devices.
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
@@ -7306,7 +7314,7 @@ public class OverlayService extends Service {
         plnCalBusy=true;
         setOverlaysTouchable(false);
         plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(rx,ry,new Runnable(){ public void run(){
+            dispatchTap(rx,ry,UI_TAP_MS,new Runnable(){ public void run(){
                 plannerHandler.postDelayed(new Runnable(){ public void run(){
                     setOverlaysTouchable(true);
                     plnCalBusy=false;

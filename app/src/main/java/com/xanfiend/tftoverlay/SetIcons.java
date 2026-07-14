@@ -34,21 +34,25 @@ public final class SetIcons {
     public static synchronized void load(Context ctx){
         if(loaded) return;
         loaded = true;
+        // failure-stage counters — surfaced in the scan log when nothing loads,
+        // so a device report can pinpoint WHERE the pipeline died
+        int listed=0, nameMiss=0, decodeFail=0, sigFail=0;
         try{
             String[] files = ctx.getAssets().list("seticons");
-            if(files == null) return;
+            if(files == null){ OverlayService.addScanLog("set icons: assets dir missing"); return; }
             for(String fn : files){
                 if(!fn.endsWith(".png")) continue;
+                listed++;
                 String key = fn.substring(0, fn.length()-4);
                 int us = key.indexOf('_');
                 if(us > 0) key = key.substring(0, us); // strip alternate suffix
                 String champ = findChampName(key);
-                if(champ == null) continue;
+                if(champ == null){ nameMiss++; continue; }
                 try{
                     InputStream is = ctx.getAssets().open("seticons/"+fn);
                     Bitmap bmp = BitmapFactory.decodeStream(is);
                     is.close();
-                    if(bmp == null) continue;
+                    if(bmp == null){ decodeFail++; continue; }
                     Bitmap scaled = Bitmap.createScaledBitmap(bmp, SCALE, SCALE, true);
                     bmp.recycle();
                     float[] s = ChampionTemplates.sig(scaled);
@@ -57,13 +61,16 @@ public final class SetIcons {
                     names.add(champ);
                     sigs.add(s);
                 }catch(Exception e){
+                    sigFail++;
                     android.util.Log.w("TFTSetIcons", "load err "+fn+": "+e.getMessage());
                 }
             }
         }catch(Exception e){
-            android.util.Log.w("TFTSetIcons", "assets list err: "+e.getMessage());
+            OverlayService.addScanLog("set icons: list err "+e.getMessage());
         }
-        OverlayService.addScanLog("set icons: "+champCount()+" champions ("+sigs.size()+" images)");
+        OverlayService.addScanLog("set icons: "+champCount()+" champions ("+sigs.size()+" images)"
+            +(sigs.isEmpty() ? "  [listed="+listed+" nameMiss="+nameMiss
+                +" decodeFail="+decodeFail+" sigFail="+sigFail+"]" : ""));
     }
 
     private static String findChampName(String key){
