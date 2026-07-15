@@ -76,6 +76,14 @@ public class ChampionTemplates {
             else if(fn.startsWith("tpl_")){ prefix="tpl_"; target=sigs; meanCenter=false; }
             else continue;
             String key = fn.substring(prefix.length(), fn.length()-4);
+            // optional per-star variant suffix ("aatrox_s2"): a 1-star and a
+            // 2-star model look different — both are kept, keyed name+bucket
+            String starSuf = "";
+            int sIdx = key.lastIndexOf("_s");
+            if(sIdx > 0 && sIdx == key.length()-3 && Character.isDigit(key.charAt(key.length()-1))){
+                starSuf = key.substring(sIdx);
+                key = key.substring(0, sIdx);
+            }
             // find SetData name that lowercases to this key
             String champName = findChampName(key);
             if(champName == null) continue;
@@ -84,7 +92,7 @@ public class ChampionTemplates {
                 if(bmp == null) continue;
                 float[] s = sig(bmp);
                 if(meanCenter) meanCenter(s);
-                target.put(champName, s);
+                target.put(champName + starSuf, s);
                 bmp.recycle();
             }catch(Exception e){ android.util.Log.w("TFTTemplates","load err "+f.getName()+": "+e.getMessage()); }
         }
@@ -134,11 +142,15 @@ public class ChampionTemplates {
 
     public static synchronized void saveBoardTemplate(Context ctx, String champName, Bitmap sourceBmp,
                                                       int cx, int cy, int size, boolean opp){
+        saveBoardTemplate(ctx, champName, sourceBmp, cx, cy, size, opp, 0);
+    }
+    public static synchronized void saveBoardTemplate(Context ctx, String champName, Bitmap sourceBmp,
+                                                      int cx, int cy, int size, boolean opp, int stars){
         int x0 = cx - size/2, y0 = cy - size/2;
         if(x0 < 0 || y0 < 0 || x0+size > sourceBmp.getWidth() || y0+size > sourceBmp.getHeight()) return;
         try{
             Bitmap crop = Bitmap.createBitmap(sourceBmp, x0, y0, size, size);
-            saveBoardTemplateBitmap(ctx, champName, crop, opp);
+            saveBoardTemplateBitmap(ctx, champName, crop, opp, stars);
             crop.recycle();
         }catch(Exception e){
             OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
@@ -149,23 +161,39 @@ public class ChampionTemplates {
     // used by the planner scan, which learns every named unit's look from the
     // board shot it took before opening the planner.
     public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop, boolean opp){
+        saveBoardTemplateBitmap(ctx, champName, crop, opp, 0);
+    }
+    // stars picks the variant bucket: a 1-star and a 2-star+ model differ in
+    // size/pose, so each star tier keeps its own learned sprite instead of the
+    // last sighting overwriting the other. 0 = unknown tier (legacy bucket).
+    public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop, boolean opp, int stars){
         try{
             Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
             File d = dir(ctx);
             if(!d.exists()) d.mkdirs();
-            String fn = (opp ? "btplo_" : "btpl_") + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + ".png";
+            String starSuf = stars > 0 ? "_s" + Math.min(3, stars) : "";
+            String fn = (opp ? "btplo_" : "btpl_")
+                    + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + starSuf + ".png";
             File out = new File(d, fn);
             FileOutputStream fos = new FileOutputStream(out);
             scaled.compress(Bitmap.CompressFormat.PNG, 100, fos);
             fos.close();
             float[] s = sig(scaled);
             meanCenter(s);
-            (opp ? oppBoardSigs : boardSigs).put(champName, s);
+            (opp ? oppBoardSigs : boardSigs).put(champName + starSuf, s);
             scaled.recycle();
-            OverlayService.addScanLog("sprite learned: "+champName+(opp?" (enemy)":""));
+            OverlayService.addScanLog("sprite learned: "+champName+(stars>0?" "+Math.min(3,stars)+"\u2605":"")+(opp?" (enemy)":""));
         }catch(Exception e){
             OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
         }
+    }
+
+    // map key -> champion name (strips the per-star variant suffix)
+    private static String baseName(String key){
+        int i = key.lastIndexOf("_s");
+        if(i > 0 && i == key.length()-3 && Character.isDigit(key.charAt(key.length()-1)))
+            return key.substring(0, i);
+        return key;
     }
 
     public static class BoardMatch {
@@ -186,13 +214,22 @@ public class ChampionTemplates {
         scaled.recycle();
         meanCenter(s);
         String best = null; float bestSim = -2f, secondSim = -2f;
+        java.util.HashSet<String> champs = new java.util.HashSet<>();
         for(Map.Entry<String,float[]> e : pool.entrySet()){
+            String base = baseName(e.getKey());
+            champs.add(base);
             float sim = cosine(s, e.getValue());
-            if(sim > bestSim){ secondSim = bestSim; bestSim = sim; best = e.getKey(); }
-            else if(sim > secondSim){ secondSim = sim; }
+            if(sim > bestSim){
+                // a different variant of the SAME champion is not a rival —
+                // only track the runner-up across different champions
+                if(best != null && !best.equals(base)) secondSim = bestSim;
+                bestSim = sim; best = base;
+            } else if(best != null && !best.equals(base) && sim > secondSim){
+                secondSim = sim;
+            }
         }
         if(best == null) return null;
-        if(pool.size() == 1){
+        if(champs.size() == 1){
             if(bestSim < BOARD_SOLO_SIM) return null;
             return new BoardMatch(best, bestSim, 1f);
         }

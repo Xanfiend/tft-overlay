@@ -6479,7 +6479,7 @@ public class OverlayService extends Service {
                         popupGrown.inset(-20,-20);
                         if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
                             ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
-                                    probePos[0],probePos[1],spriteSize,oppMode);
+                                    probePos[0],probePos[1],spriteSize,oppMode,stars);
                             // Duplicate-skip: this same screenshot likely shows other
                             // copies of the champion just learned (2★/3★ units, or
                             // multiple 1-cost copies). Check the remaining un-tapped
@@ -7057,7 +7057,7 @@ public class OverlayService extends Service {
                         int[] hb=plannerUnits.get(ci);
                         if(hb[0]==(int)u.x && hb[1]==(int)u.y){
                             Bitmap c=plannerCrops.get(ci);
-                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,false);
+                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,false,u.stars);
                             break;
                         }
                     }
