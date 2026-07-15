@@ -6465,6 +6465,7 @@ public class OverlayService extends Service {
                 final boolean oppMode=autoOppMode;
                 final int spriteSize=Math.max(48, autoTapScreenH*9/100);
                 final int gen=autoScanGeneration;
+                final int tplStars=stars;   // effectively-final capture for the thread
                 new Thread(new Runnable(){ public void run(){
                     // popup-portrait template (legacy board-vision path, own board only)
                     if(!oppMode) ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
@@ -6479,7 +6480,7 @@ public class OverlayService extends Service {
                         popupGrown.inset(-20,-20);
                         if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
                             ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
-                                    probePos[0],probePos[1],spriteSize,oppMode,stars);
+                                    probePos[0],probePos[1],spriteSize,oppMode,tplStars);
                             // Duplicate-skip: this same screenshot likely shows other
                             // copies of the champion just learned (2★/3★ units, or
                             // multiple 1-cost copies). Check the remaining un-tapped
