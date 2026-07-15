@@ -6248,6 +6248,12 @@ public class OverlayService extends Service {
         // own touch on some ROMs; the caller still advances via onDone
         if(injecting){ addScanLog("skip overlapping tap"); onDone.run(); return; }
         injecting=true;
+        // Injected gestures land on whatever TOUCHABLE window is on top — including
+        // our own STOP pill / sigil / HUD. A probe tap that coincided with the STOP
+        // pill "pressed" it and killed the scan instantly (device log: probe at
+        // 1184,549 = the pill's old parked spot -> done in 0.3s). Make our windows
+        // untouchable for the tap's flight; finish() restores them.
+        setOverlaysTouchable(false);
         // onDone MUST run exactly once. Normally the gesture's completion callback
         // fires it, but HyperOS/MIUI frequently DROP that callback — and without a
         // fallback the whole sequence stalls (the hunt buys one champ then freezes;
@@ -6258,6 +6264,7 @@ public class OverlayService extends Service {
             if(fired[0]) return;
             fired[0]=true;
             injecting=false;
+            setOverlaysTouchable(true);
             boardHandler.removeCallbacks(this);
             onDone.run();
         }};
@@ -7408,8 +7415,21 @@ public class OverlayService extends Service {
         // the back row's middle hexes — it appears in accessibility screenshots
         // and hid those units' health bars from the scan entirely. The top strip
         // is outside every scan zone. Still draggable; a moved position is kept.
-        lp.x=pool.getHudPos("stop_x", dm.widthPixels*63/100);
-        lp.y=pool.getHudPos("stop_y", dm.heightPixels*1/100);
+        int sx=pool.getHudPos("stop_x", dm.widthPixels*63/100);
+        int sy=pool.getHudPos("stop_y", dm.heightPixels*1/100);
+        // a SAVED position from an old version can still sit on the board — there
+        // it swallows injected probe taps (killing the scan instantly) and hides
+        // units in detection screenshots. Shove it back to the top strip.
+        if(dm.widthPixels>dm.heightPixels){
+            float[] a=HexGrid.standardAnchors(dm.widthPixels,dm.heightPixels);
+            int bT=Math.round(a[2]-0.16f*dm.heightPixels), bB=Math.round(a[5]+0.06f*dm.heightPixels);
+            int bL=Math.round(a[0]-0.15f*dm.heightPixels)-420, bR=Math.round(a[4]+0.15f*dm.heightPixels);
+            if(sy>bT-100 && sy<bB && sx>bL && sx<bR){
+                addScanLog("stop button was parked over the board — moved to the top strip");
+                sx=dm.widthPixels*63/100; sy=dm.heightPixels*1/100;
+            }
+        }
+        lp.x=sx; lp.y=sy;
         stopBtnView=b; stopBtnLp=lp;
         b.setOnTouchListener(new View.OnTouchListener(){
             int ix,iy; float tx,ty; boolean moved;
