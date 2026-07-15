@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.65");
+        ver.setText("v1.99.66");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.66  ·  2026-07-14","Unit recognition now remembers each star level separately — a 1-star and a 2-star of the same champion look different on the board, and previously the newest sighting overwrote the other. Recognition keeps getting stricter about never guessing: when unsure it simply falls back to the normal read."},
             {"v1.99.65  ·  2026-07-14","Replayed taps on game buttons now press a little longer — some devices and games ignore very short synthetic taps, which is why the planner would not open during calibration. Also added detailed diagnostics for the champion-icon loader after a device reported zero icons despite them being present."},
             {"v1.99.64  ·  2026-07-12","Planner calibration recovers when the game swallows a tap: if the planner did not actually open after step 1, a new RETRY LAST TAP button on the wizard bar re-fires it without restarting. Replayed taps also get a little more settling time, and the debug log now records whether each injected tap was accepted."},
             {"v1.99.63  ·  2026-07-12","The app now learns what each of your units looks like, automatically, from every tap-free scan — no PC, nothing to download. After a game or two the classic scan recognizes your whole board from a single screenshot in about a second, without opening the planner or tapping anything."},
