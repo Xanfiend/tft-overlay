@@ -4846,12 +4846,16 @@ public class OverlayService extends Service {
                 }
                 if(wTop>wBot){ float t=wTop; wTop=wBot; wBot=t;
                                t=wTL; wTL=wBL; wBL=t;  t=wTR; wTR=wBR; wBR=t; }
-                // no explicit bench span saved yet: derive it the same way the scan does
+                // no explicit bench span saved yet: use the measured standard bench
+                // (9 centered slots, pitch 0.141xH) — same values the scan taps
                 if(wBenchL<0 || wBenchR<=wBenchL){
-                    float halfGap=(wBR-wBL)/12f;
-                    float shift=portrait?0:pool.getBenchXOffsetPct();
-                    wBenchL=wBL-halfGap+shift;
-                    wBenchR=wBR+halfGap+shift;
+                    if(!portrait){
+                        float[] bs=HexGrid.standardBench(sw,sh);
+                        wBenchL=bs[0]*100f/sw; wBenchR=bs[1]*100f/sw; wBenchY=bs[2]*100f/sh;
+                    } else {
+                        float halfGap=(wBR-wBL)/12f;
+                        wBenchL=wBL-halfGap; wBenchR=wBR+halfGap;
+                    }
                 }
                 // row spacing on auto (-1): show the projective values so the
                 // handles start where the taps actually land
@@ -5801,11 +5805,18 @@ public class OverlayService extends Service {
         if(savedBenchL>=0 && savedBenchR>savedBenchL){
             benchLeft  = w * savedBenchL / 100;
             benchRight = w * savedBenchR / 100;
+        } else if(!portrait){
+            // measured standard bench (HexGrid.standardBench): 9 slots centered on
+            // the screen, pitch 0.141xH. The old front-row derivation was ~200px
+            // off at the outer slots — bench taps missed in every arena.
+            float[] bs=HexGrid.standardBench(w,h);
+            benchLeft  = Math.round(bs[0]);
+            benchRight = Math.round(bs[1]);
+            benchY     = Math.round(bs[2]);
         } else {
             int benchHalfGap = frontWidth / 12;
-            int benchXShift  = w * (portrait ? 0 : pool.getBenchXOffsetPct()) / 100;
-            benchLeft  = botLeft  - benchHalfGap + benchXShift;
-            benchRight = botRight + benchHalfGap + benchXShift;
+            benchLeft  = botLeft  - benchHalfGap;
+            benchRight = botRight + benchHalfGap;
         }
         for(int col=0;col<benchCols;col++){
             int cx=benchLeft+(int)((col+0.5f)*(benchRight-benchLeft)/benchCols);

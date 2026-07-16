@@ -38,6 +38,22 @@ public final class HexGrid {
     static final float STD_BACK_P  = 0.13098f, STD_FRONT_P = 0.15033f;  // hex pitch
     static final float STD_BACK_C  = 0.00328f, STD_FRONT_C = 0.07705f;  // row-center x − 0.5W, in H units
 
+    /* Bench: 9 flat slots on one row, centered on the screen. Measured from a
+     * screenshot with three bench units standing in slots 1-3: slot centers
+     * 668/843/1012 on a 2712x1220 screen -> pitch 0.1411xH, row center exactly
+     * 0.5xW, slot-center row at 0.9046xH. The old derivation (front board row
+     * widened by half a gap) was ~200px off at the outer slots in every arena —
+     * bench taps missed no matter how the board corners were dragged. */
+    static final float STD_BENCH_P = 0.1411f, STD_BENCH_Y = 0.9046f;
+
+    /* {benchLeft, benchRight, benchY} in pixels: the strip bounds such that
+     * slot k's center = left + (k+0.5) * (right-left)/9 — matching how the
+     * probe grid and the ADJUST GRID editor spread the 9 slots. */
+    public static float[] standardBench(int w, int h){
+        float p = STD_BENCH_P * h;
+        return new float[]{ 0.5f*w - 4.5f*p, 0.5f*w + 4.5f*p, STD_BENCH_Y * h };
+    }
+
     /* Standard anchors {backLeftX, backRightX, backY, frontLeftX, frontRightX,
      * frontY} in pixels for a w x h landscape screen — the same outer-hex-center
      * semantics as calibration, ready to feed player()/opp(). */

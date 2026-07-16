@@ -120,6 +120,18 @@ public class HexGridTest {
         assertEquals(1356.5f, (g[0][0][0] + g[0][6][0]) / 2f, 10f);
     }
 
+    // Bench ground truth: three units standing in slots 1-3 measured at
+    // x = 668 / 843 / 1012 (2712x1220). Slot k center = left + (k+0.5)*span/9.
+    @Test public void standardBenchMatchesMeasuredSlots() {
+        float[] b = HexGrid.standardBench(2712, 1220);
+        float span = b[1] - b[0];
+        assertEquals(668,  b[0] + 0.5f * span / 9f, 8f);
+        assertEquals(843,  b[0] + 1.5f * span / 9f, 8f);
+        assertEquals(1012, b[0] + 2.5f * span / 9f, 8f);
+        // centered on the screen
+        assertEquals(1356, (b[0] + b[1]) / 2f, 2f);
+    }
+
     @Test public void degenerateInputsAreSafe() {
         // zero spans fall back to even fractions and produce finite points
         float[] f = HexGrid.autoRowFractions(0, 0);
