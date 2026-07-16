@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.69");
+        ver.setText("v1.99.70");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.70  ·  2026-07-16","Found it: the BOARD grid was right — the BENCH row was what kept missing. Bench slot positions were derived from the board and sat up to 200px off in every arena; they are now set from real measured slot positions (your screenshot proved slots are centered with their own spacing). Bench dots and taps should finally land on bench units."},
             {"v1.99.69  ·  2026-07-15","All automated taps now press the same way the fixed calibration taps do. On devices that silently ignored the shorter presses this repairs auto-buy (THE HUNT tapping shop cards) and the scan\u2019s unit taps in one go — the same root cause was behind both."},
             {"v1.99.68  ·  2026-07-15","SCRY MY BOARD now decides between the tap-free scan and the tap scan at the moment you press it (previously it could be stuck on a decision made before you calibrated), and it tells you the reason when the tap-free route is unavailable. The icon loader also retries instead of giving up for the whole session after one failure."},
             {"v1.99.67  ·  2026-07-15","Fixed the scan ending instantly with no results: the scan's own automated taps could land on the STOP button if it was parked over the board — pressing it and killing the scan in a third of a second. The overlay now gets out of the way of every automated tap, and a STOP button left over the board is moved to the top strip automatically."},
