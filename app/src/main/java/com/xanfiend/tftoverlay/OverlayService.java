@@ -5109,13 +5109,12 @@ public class OverlayService extends Service {
         }
     }
 
-    @SuppressWarnings({"deprecation","NewApi"})
     // ALIGNMENT REPORT: one screenshot annotated with everything the scan
     // believes — grid dots (red board / blue bench), detected health-bar tap
     // points (green), and a delta line+px label from each detection to its
     // nearest grid dot. Saved as PNG to Pictures/TFTScryer so the image itself
     // is the calibration ground truth instead of eyeballed screenshots.
-    @SuppressWarnings("NewApi")
+    @SuppressWarnings({"deprecation","NewApi"})
     private void saveAlignmentReport(){
         final TFTAccessibilityService svc=TFTAccessibilityService.instance;
         setOverlayShotHidden(true);
