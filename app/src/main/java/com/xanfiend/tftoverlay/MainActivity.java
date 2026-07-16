@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.67");
+        ver.setText("v1.99.68");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.68  ·  2026-07-15","SCRY MY BOARD now decides between the tap-free scan and the tap scan at the moment you press it (previously it could be stuck on a decision made before you calibrated), and it tells you the reason when the tap-free route is unavailable. The icon loader also retries instead of giving up for the whole session after one failure."},
             {"v1.99.67  ·  2026-07-15","Fixed the scan ending instantly with no results: the scan's own automated taps could land on the STOP button if it was parked over the board — pressing it and killing the scan in a third of a second. The overlay now gets out of the way of every automated tap, and a STOP button left over the board is moved to the top strip automatically."},
             {"v1.99.66  ·  2026-07-14","Unit recognition now remembers each star level separately — a 1-star and a 2-star of the same champion look different on the board, and previously the newest sighting overwrote the other. Recognition keeps getting stricter about never guessing: when unsure it simply falls back to the normal read."},
             {"v1.99.65  ·  2026-07-14","Replayed taps on game buttons now press a little longer — some devices and games ignore very short synthetic taps, which is why the planner would not open during calibration. Also added detailed diagnostics for the champion-icon loader after a device reported zero icons despite them being present."},

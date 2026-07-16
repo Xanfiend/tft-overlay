@@ -30,9 +30,18 @@ public final class SetIcons {
     private static final List<String>  names = new ArrayList<>();
     private static final List<float[]> sigs  = new ArrayList<>();
     private static boolean loaded = false;
+    private static long lastAttemptMs = 0;
 
     public static synchronized void load(Context ctx){
-        if(loaded) return;
+        // don't latch a FAILED load: if nothing loaded last time (transient I/O,
+        // roster not applied yet), try again on the next call instead of leaving
+        // the planner scan permanently disabled for the session. Throttled so a
+        // persistent failure doesn't re-run and re-log on every panel rebuild.
+        if(loaded && !sigs.isEmpty()) return;
+        long now = android.os.SystemClock.uptimeMillis();
+        if(loaded && now - lastAttemptMs < 30000) return;
+        lastAttemptMs = now;
+        names.clear(); sigs.clear();
         loaded = true;
         // failure-stage counters — surfaced in the scan log when nothing loads,
         // so a device report can pinpoint WHERE the pipeline died
