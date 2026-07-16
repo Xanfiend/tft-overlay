@@ -1512,7 +1512,14 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ openAccessibilitySettings(); return; }
-                if(plnRoute) startPlannerScan(); else startAutoTapScan();
+                // re-evaluate LIVE (the button may have been built before the user
+                // calibrated), and say WHY when the tap-free route is unavailable
+                SetIcons.load(OverlayService.this);
+                boolean calOk=pool.plannerCalibrated(), iconsOk=SetIcons.champCount()>0;
+                if(calOk && iconsOk){ startPlannerScan(); return; }
+                if(calOk && !iconsOk)
+                    Toast.makeText(OverlayService.this,"Tap-free scan unavailable: champion icons failed to load (see debug log) — using the tap scan",Toast.LENGTH_LONG).show();
+                startAutoTapScan();
             }});
             asBtn.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
                 if(!accAvail) return false;
