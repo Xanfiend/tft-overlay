@@ -4490,6 +4490,21 @@ public class OverlayService extends Service {
         showDots.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ closePanel(); showProbeDots(); }});
         calBtnRow.addView(showDots);
 
+        TextView alignRep=new TextView(this); alignRep.setText("SAVE ALIGNMENT REPORT");
+        alignRep.setTextColor(BONE); alignRep.setTextSize(12); alignRep.setGravity(Gravity.CENTER);
+        alignRep.setPadding(0,11,0,11); alignRep.setBackground(box(CARD,6,GOLD,1));
+        LinearLayout.LayoutParams arl=new LinearLayout.LayoutParams(-1,-2); arl.setMargins(0,4,0,2); alignRep.setLayoutParams(arl);
+        alignRep.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
+                Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
+            }
+            closePanel(); saveAlignmentReport();
+        }});
+        pressFeedback(alignRep); root.addView(alignRep);
+        TextView arHint=new TextView(this);
+        arHint.setText("saves a screenshot with the grid, the detected units and their pixel offsets drawn on it — the ground truth for fixing any misalignment");
+        arHint.setTextColor(DIM); arHint.setTextSize(10); arHint.setPadding(2,0,2,10); root.addView(arHint);
+
         TextView resetCal=new TextView(this); resetCal.setText("RESET");
         resetCal.setTextColor(BONE); resetCal.setTextSize(12); resetCal.setGravity(Gravity.CENTER);
         resetCal.setPadding(0,10,0,10); resetCal.setBackground(box(0xFF1A0C0E,6,BLOOD,1));
@@ -4578,6 +4593,7 @@ public class OverlayService extends Service {
     private void applyStandardGrid(int W,int H,String why){
         pool.clearLandscapeGridCal();
         pool.clearRowSpacing();   // stale explicit spacing would override the projective rows
+        pool.clearBenchCal();     // a hand-dragged bench span otherwise survives every reset
         // save the measured standard anchors at full precision — the fallback
         // model computes the same values, but persisting them keeps every
         // reader (incl. rows top/bot) on the fresh numbers
@@ -5094,6 +5110,128 @@ public class OverlayService extends Service {
     }
 
     @SuppressWarnings({"deprecation","NewApi"})
+    // ALIGNMENT REPORT: one screenshot annotated with everything the scan
+    // believes — grid dots (red board / blue bench), detected health-bar tap
+    // points (green), and a delta line+px label from each detection to its
+    // nearest grid dot. Saved as PNG to Pictures/TFTScryer so the image itself
+    // is the calibration ground truth instead of eyeballed screenshots.
+    @SuppressWarnings("NewApi")
+    private void saveAlignmentReport(){
+        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
+        setOverlayShotHidden(true);
+        boardHandler.postDelayed(new Runnable(){ public void run(){
+        try{
+            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
+                new AccessibilityService.TakeScreenshotCallback(){
+                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                        setOverlayShotHidden(false);
+                        try{
+                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
+                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
+                            Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,true);
+                            hb.close(); hw.recycle();
+                            renderAlignmentReport(bmp);
+                        }catch(Exception e){ addScanLog("ERR align report: "+e.getMessage()); }
+                    }
+                    @Override public void onFailure(int errorCode){
+                        setOverlayShotHidden(false);
+                        addScanLog("ERR align report shot: "+errorCode);
+                    }
+                });
+        }catch(Exception e){ setOverlayShotHidden(false); addScanLog("ERR align report: "+e.getMessage()); }
+        }}, 150);
+    }
+
+    private void renderAlignmentReport(Bitmap bmp){
+        int w=bmp.getWidth(), h=bmp.getHeight();
+        android.graphics.Canvas cv=new android.graphics.Canvas(bmp);
+        android.graphics.Paint pt=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        java.util.List<int[]> grid=buildProbeGrid(w,h);
+        int boardCount=autoTapBoardProbeCount;
+        java.util.List<int[]> det=null;
+        try{ det=detectHealthBarUnits(bmp,false); }catch(Exception e){}
+
+        // grid dots
+        pt.setTextSize(Math.max(18f, h*0.018f));
+        for(int i=0;i<grid.size();i++){
+            int[] g=grid.get(i);
+            boolean bench=i>=boardCount;
+            pt.setStyle(android.graphics.Paint.Style.FILL);
+            pt.setColor(bench?0xB33366FF:0xB3FF3333);
+            cv.drawCircle(g[0],g[1],10,pt);
+            pt.setStyle(android.graphics.Paint.Style.STROKE); pt.setStrokeWidth(3);
+            pt.setColor(0xFFFFFFFF);
+            cv.drawCircle(g[0],g[1],10,pt);
+        }
+        // detected units + deltas
+        StringBuilder deltas=new StringBuilder();
+        if(det!=null){
+            for(int[] u:det){
+                pt.setStyle(android.graphics.Paint.Style.STROKE); pt.setStrokeWidth(5);
+                pt.setColor(0xFF33FF66);
+                cv.drawCircle(u[0],u[1],26,pt);
+                cv.drawLine(u[0]-34,u[1],u[0]+34,u[1],pt);
+                cv.drawLine(u[0],u[1]-34,u[0],u[1]+34,pt);
+                // nearest grid dot
+                int bi=-1; double bd=1e9;
+                for(int i=0;i<boardCount && i<grid.size();i++){
+                    int[] g=grid.get(i);
+                    double d=Math.hypot(g[0]-u[0], g[1]-u[1]);
+                    if(d<bd){ bd=d; bi=i; }
+                }
+                if(bi>=0){
+                    int[] g=grid.get(bi);
+                    pt.setColor(0xFFFFD24A); pt.setStrokeWidth(3);
+                    cv.drawLine(u[0],u[1],g[0],g[1],pt);
+                    pt.setStyle(android.graphics.Paint.Style.FILL);
+                    cv.drawText((int)bd+"px", (u[0]+g[0])/2f+8, (u[1]+g[1])/2f-8, pt);
+                    deltas.append(" (").append(u[0]).append(",").append(u[1])
+                          .append(")->dot").append(bi+1).append("=").append((int)bd).append("px");
+                }
+            }
+        }
+        // header
+        pt.setStyle(android.graphics.Paint.Style.FILL);
+        pt.setColor(0xCC000000); cv.drawRect(0,0,w,Math.max(46f,h*0.05f),pt);
+        pt.setColor(0xFFFFD24A);
+        cv.drawText("ALIGNMENT "+APP_VERSION+"  "+w+"x"+h
+                +"  red=board dots  blue=bench  green=detected units  ("
+                +(det==null?"no detection":det.size()+" detected")+")",
+                16, Math.max(32f,h*0.035f), pt);
+        addScanLog("align report: "+(det==null?0:det.size())+" detected"+deltas);
+
+        // save PNG
+        String name="tft-align-"+System.currentTimeMillis()+".png";
+        try{
+            java.io.OutputStream os;
+            String where;
+            if(Build.VERSION.SDK_INT>=29){
+                android.content.ContentValues cvv=new android.content.ContentValues();
+                cvv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,name);
+                cvv.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png");
+                cvv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/TFTScryer");
+                android.net.Uri uri=getContentResolver().insert(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cvv);
+                os=getContentResolver().openOutputStream(uri);
+                where="Pictures/TFTScryer/"+name;
+            } else {
+                java.io.File d=getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
+                if(d!=null && !d.exists()) d.mkdirs();
+                java.io.File f=new java.io.File(d,name);
+                os=new java.io.FileOutputStream(f);
+                where=f.getAbsolutePath();
+            }
+            bmp.compress(Bitmap.CompressFormat.PNG,100,os);
+            os.close();
+            final String msg="Alignment report saved: "+where;
+            addScanLog(msg);
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(()->
+                Toast.makeText(this,msg+" — send this image",Toast.LENGTH_LONG).show());
+        }catch(Exception e){ addScanLog("ERR align save: "+e.getMessage()); }
+        bmp.recycle();
+    }
+
     // Grid-only dot preview: renders the calibrated 4x7+bench grid directly —
     // no screenshot, no detection. Used by the calibration flows (AUTO-CALIBRATE,
     // GRID NUDGE), where the smart-scan preview would hide exactly the thing

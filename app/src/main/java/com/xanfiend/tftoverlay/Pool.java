@@ -563,6 +563,13 @@ public class Pool {
         p.edit().remove("cal_rowf1").remove("cal_rowf2")
                 .remove("cal_rowf1_f").remove("cal_rowf2_f").apply();
     }
+    // clear the saved bench row/span so the measured standard bench applies —
+    // a hand-dragged bench otherwise survives AUTO-CALIBRATE forever and keeps
+    // blocking the standard model
+    public void clearBenchCal(){
+        p.edit().remove("cal_bench").remove("cal_bench_x")
+                .remove("cal_bench_l").remove("cal_bench_r").apply();
+    }
     public int getBoardTopLeftPct()       { return p.getInt("cal_tl", getBoardLeftPct()); }
     public void setBoardTopLeftPct(int v) { p.edit().putInt("cal_tl", v).apply(); }
     public int getBoardTopRightPct()      { return p.getInt("cal_tr", getBoardRightPct()); }
