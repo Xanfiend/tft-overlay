@@ -301,7 +301,12 @@ public class OverlayService extends Service {
     // Per-probe timing. These three delays run once per probe (37+ per scan), so they
     // dominate the total scan time. Tuned for speed while leaving the popup enough time
     // to animate in before the screenshot.
-    private static final int TAP_STROKE_MS   = 25;  // gesture press duration
+    // Gesture press duration. Was 25ms — the user's device (HyperOS) accepted
+    // those on nothing: planner calibration only started working at 80ms, and
+    // shop-card buys (THE HUNT) and unit-popup taps are the same class of game
+    // UI. 80ms is far below the game's drag/long-press thresholds, and every
+    // tap cycle is screenshot-rate-limited anyway, so nothing gets slower.
+    private static final int TAP_STROKE_MS   = 80;
     private static final int POPUP_WAIT_MS   = 260; // wait for the unit popup to render after the tap
     private static final int PROBE_GAP_MS    = 12;  // gap before moving to the next probe
     // Android rate-limits AccessibilityService.takeScreenshot() to one call per
