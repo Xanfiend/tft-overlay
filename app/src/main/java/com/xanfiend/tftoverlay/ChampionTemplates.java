@@ -181,7 +181,7 @@ public class ChampionTemplates {
             float[] s = sig(scaled);
             meanCenter(s);
             (opp ? oppBoardSigs : boardSigs).put(champName + starSuf, s);
-            scaled.recycle();
+            if(scaled != crop) scaled.recycle();   // same-size input returns the caller's bitmap
             OverlayService.addScanLog("sprite learned: "+champName+(stars>0?" "+Math.min(3,stars)+"\u2605":"")+(opp?" (enemy)":""));
         }catch(Exception e){
             OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
