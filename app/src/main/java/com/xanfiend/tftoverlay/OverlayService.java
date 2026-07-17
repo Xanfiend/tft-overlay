@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.73";
+    private static final String APP_VERSION = "v1.99.74";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -208,6 +208,11 @@ public class OverlayService extends Service {
     // an injected tap landing while the user's own finger is mid-drag can drop the
     // real touch's release, leaving the game feeling "stuck" until it is re-touched
     private boolean injecting = false;
+
+    // While true, dispatchTap's finish() leaves the overlays NOT_TOUCHABLE instead
+    // of restoring them — set by flows that fire several taps back-to-back (planner
+    // scan) so the async updateViewLayout flag flip isn't raced once per tap.
+    private boolean overlayTouchHold = false;
 
     // opponent scan mode: same polling but routes into opponent tracking + records star levels
     private boolean oppScanMode = false;
@@ -6431,7 +6436,7 @@ public class OverlayService extends Service {
             if(fired[0]) return;
             fired[0]=true;
             injecting=false;
-            setOverlaysTouchable(true);
+            if(!overlayTouchHold) setOverlaysTouchable(true);
             boardHandler.removeCallbacks(this);
             onDone.run();
         }};
@@ -7141,40 +7146,105 @@ public class OverlayService extends Service {
         android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(dm);
         final int sw=dm.widthPixels, sh=dm.heightPixels;
-        // Make all our overlay views NOT_TOUCHABLE so the injected gestures reach TFT,
-        // not our sigil or HUD chips which sit on top in the window stack.
+        // Hold every overlay window NOT_TOUCHABLE (and invisible) for the WHOLE
+        // open→snapshot→close choreography. The old per-tap flag flip gave the
+        // async updateViewLayout only 200ms to land — the same race that made the
+        // calibration wizard's replayed taps hit our own still-touchable windows
+        // (see handlePlnCalTap), which is why the wizard waits 650ms. The hold
+        // also stops dispatchTap's finish() from flipping the windows back
+        // touchable between steps, so no per-tap re-flip is ever raced again.
+        overlayTouchHold=true;
         setOverlaysTouchable(false);
+        setOverlayShotHidden(true);
         plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
-                setOverlaysTouchable(true);
-                plannerHandler.postDelayed(new Runnable(){ public void run(){
-                    if(!plannerScanPending) return;
-                    setOverlaysTouchable(false);
-                    plannerHandler.postDelayed(new Runnable(){ public void run(){
-                        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
-                            setOverlaysTouchable(true);
-                            plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
-                        }});
-                    }}, 200);
-                }}, PLN_OPEN_WAIT_MS);
+            if(!plannerScanPending) return;
+            // reference frame from BEFORE the open tap — compared after the tap
+            // so a swallowed/ignored tap is detected and re-fired instead of
+            // blindly snapshotting a planner that never opened
+            plannerShot(new ShotCb(){ public void onShot(Bitmap ref){
+                if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
+                plannerOpenTap(ref, sw, sh, 0);
             }});
-        }}, 200);
+        }}, 650);   // flag propagation gets the same margin the calibration replays use
+    }
+
+    // tap the planner button, wait out the open animation, then check the screen
+    // actually changed; a tap the game ignored is re-fired (3 tries total)
+    private void plannerOpenTap(final Bitmap ref, final int sw, final int sh, final int attempt){
+        if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
+        dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
+            plannerHandler.postDelayed(new Runnable(){ public void run(){
+                if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
+                if(ref==null){ plannerSnapPhase(sw,sh); return; }  // nothing to compare — proceed on faith
+                plannerShot(new ShotCb(){ public void onShot(Bitmap now){
+                    if(!plannerScanPending){ if(now!=null) now.recycle(); ref.recycle(); return; }
+                    boolean opened = now!=null && framesDiffer(ref, now);
+                    if(now!=null) now.recycle();
+                    if(opened){ ref.recycle(); plannerSnapPhase(sw,sh); return; }
+                    if(attempt<2){
+                        addScanLog("planner scan: planner didn't open — retapping ("+(attempt+2)+"/3)");
+                        plannerOpenTap(ref, sw, sh, attempt+1);
+                    } else {
+                        ref.recycle();
+                        stopPlannerScan("open tap not registering — recalibrate PLANNER in SETUP");
+                    }
+                }});
+            }}, PLN_OPEN_WAIT_MS);
+        }});
+    }
+
+    private void plannerSnapPhase(final int sw, final int sh){
+        if(!plannerScanPending) return;
+        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
+            plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
+        }});
+    }
+
+    // Coarse "did the screen change" check for tap verification: sample a grid
+    // across the middle of both frames and count samples whose brightness moved.
+    // The planner dialog covers most of the screen, so a successful open flips
+    // far more samples than idle unit animation on the board ever does.
+    private static boolean framesDiffer(Bitmap a, Bitmap b){
+        try{
+            int changed=0, total=0;
+            for(int gy=0; gy<12; gy++){
+                for(int gx=0; gx<20; gx++){
+                    float fx=0.20f+0.60f*gx/19f, fy=0.15f+0.70f*gy/11f;
+                    int pa=a.getPixel((int)(fx*a.getWidth()),(int)(fy*a.getHeight()));
+                    int pb=b.getPixel((int)(fx*b.getWidth()),(int)(fy*b.getHeight()));
+                    int la=((pa>>16&255)*3+(pa>>8&255)*6+(pa&255))/10;
+                    int lb=((pb>>16&255)*3+(pb>>8&255)*6+(pb&255))/10;
+                    total++;
+                    if(Math.abs(la-lb)>28) changed++;
+                }
+            }
+            return changed*100/total > 18;   // >18% of samples moved = new UI on screen
+        }catch(Exception e){ return true; }  // can't verify — assume the tap worked
     }
 
     private void plannerReadPhase(){
         if(!plannerScanPending) return;
         addScanLog("planner scan: reading snapshot tiles");
+        setOverlayShotHidden(true);   // re-arm: a pill/sigil over the slot row would corrupt the tiles
         plannerShot(new ShotCb(){ public void onShot(final Bitmap bmp){
             if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
             // close the planner right away — nothing was confirmed, so the
             // snapshot is discarded and the board is exactly as it was
             android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
             wm.getDefaultDisplay().getRealMetrics(dm);
-            setOverlaysTouchable(false);
             final float closeX=pool.getPln("close_x")*dm.widthPixels/100f;
             final float closeY=pool.getPln("close_y")*dm.heightPixels/100f;
-            plannerHandler.postDelayed(new Runnable(){ public void run(){
-                dispatchTap(closeX,closeY,UI_TAP_MS,new Runnable(){ public void run(){ setOverlaysTouchable(true); }});
+            // boardHandler, NOT plannerHandler: plannerProcess can finish inside
+            // this 200ms and plannerFinish clears plannerHandler's queue — which
+            // silently cancelled the close tap and left the planner open in game
+            boardHandler.postDelayed(new Runnable(){ public void run(){
+                // the hold from plannerOpenPhase is still active — overlays have
+                // been untouchable the whole time, so this tap needs no lead-in
+                dispatchTap(closeX,closeY,UI_TAP_MS,new Runnable(){ public void run(){
+                    overlayTouchHold=false;
+                    setOverlaysTouchable(true);
+                    setOverlayShotHidden(false);
+                }});
             }},200);
             if(bmp==null){ stopPlannerScan("no planner screenshot"); return; }
             plannerProcess(bmp);
@@ -7230,7 +7300,15 @@ public class OverlayService extends Service {
         if(!plannerScanPending) return;
         plannerScanPending=false;
         plannerHandler.removeCallbacksAndMessages(null);
-        setOverlaysTouchable(true);
+        // the close tap (on boardHandler) is usually still in flight — it releases
+        // the hold itself when it lands. Restoring here immediately would flip the
+        // overlays touchable underneath that tap; this delayed release is only the
+        // failsafe for a dropped tap callback.
+        boardHandler.postDelayed(new Runnable(){ public void run(){
+            overlayTouchHold=false;
+            setOverlaysTouchable(true);
+            setOverlayShotHidden(false);
+        }}, 1200);
         if(btnLabel!=null) btnLabel.setText("SCRY");
         int occupied=slotNames.size();
         int matched=0, unknown=0;
@@ -7308,7 +7386,9 @@ public class OverlayService extends Service {
     private void stopPlannerScan(String why){
         plannerScanPending=false;
         plannerHandler.removeCallbacksAndMessages(null);
+        overlayTouchHold=false;
         setOverlaysTouchable(true);
+        setOverlayShotHidden(false);
         recyclePlannerCrops();
         if(btnLabel!=null) btnLabel.setText("SCRY");
         addScanLog("planner scan: "+why);
@@ -7669,6 +7749,7 @@ public class OverlayService extends Service {
         hideOppCalView();
         hideProbeDots();
         clearInjecting();
+        overlayTouchHold=false;
         setOverlaysTouchable(true);
     }
 
@@ -7847,7 +7928,7 @@ public class OverlayService extends Service {
             releaseHuntCapture();
         }
         addScanLog("hunt: started (runs until stopped), marks="+pool.getHunt()
-                +(huntFast?" (fast capture, ~3 checks/sec)":" (1/sec fallback)"));
+                +(huntFast?" (fast capture, OCR-paced)":" (1/sec fallback)"));
         Toast.makeText(this,"⛧ The hunt begins"+(huntFast?" — swift eyes":"")
                 +" — reroll freely, marked champs are bought for you. Tap STOP to end.",Toast.LENGTH_LONG).show();
 
@@ -7858,10 +7939,12 @@ public class OverlayService extends Service {
             huntPollRunnable=new Runnable(){ public void run(){
                 if(!huntMode) return;
                 huntFastPoll();
-                boardHandler.postDelayed(this, 200);
+                // 100ms tick: OCR latency is the real pace (huntOcrBusy gates), so
+                // this just trims dead time between one read finishing and the next
+                boardHandler.postDelayed(this, 100);
             }};
             // give TFT a moment to settle back in front after the capture dialog
-            boardHandler.postDelayed(huntPollRunnable, 900);
+            boardHandler.postDelayed(huntPollRunnable, 400);
         } else {
             huntPollRunnable=new Runnable(){ public void run(){
                 if(!huntMode) return;
@@ -7937,6 +8020,9 @@ public class OverlayService extends Service {
                 });
         }catch(Exception e){
             if(img!=null){ try{ img.close(); }catch(Exception e2){} }
+            // a throw between huntOcrBusy=true and the OCR call would wedge the
+            // gate shut and silently kill the hunt — always reopen it here
+            huntOcrBusy=false;
             addScanLog("hunt frame err: "+e.getMessage());
         }
     }
@@ -8060,9 +8146,11 @@ public class OverlayService extends Service {
         int[] pt=pos.get(idx);
         addScanLog("hunt: buying "+name+" @"+pt[0]+","+(cropTop+pt[1]));
         dispatchTap(pt[0], cropTop+pt[1], new Runnable(){ public void run(){
-            // fast capture sees the next shop within ~0.5s, so a short cooldown is
-            // enough to outlive the stale frame; the 1/sec path needs more margin
-            huntCooldown.put(name, System.currentTimeMillis()+(huntFast?800:2500));
+            // fast capture sees the next shop within ~0.4s, so a short cooldown is
+            // enough to outlive the stale frame; the 1/sec path needs more margin.
+            // A premature re-tap is harmless anyway — the slot is empty once bought
+            // and TFT ignores taps on empty slots.
+            huntCooldown.put(name, System.currentTimeMillis()+(huntFast?550:2500));
             // don't count yet — wait until the next frame confirms the card left the
             // shop (handleHuntResult). This prevents counting taps that did nothing
             // because the champ was unaffordable.
@@ -8076,7 +8164,7 @@ public class OverlayService extends Service {
             }
             boardHandler.postDelayed(new Runnable(){ public void run(){
                 huntBuyNext(names,pos,idx+1,cropTop);
-            }},120);
+            }},70);
         }});
     }
 
