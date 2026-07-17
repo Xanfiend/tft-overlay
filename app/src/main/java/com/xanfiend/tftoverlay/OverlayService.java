@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.75";
+    private static final String APP_VERSION = "v1.99.76";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -7259,48 +7259,113 @@ public class OverlayService extends Service {
     }
 
     // crop each snapshot slot along the calibrated first→last line, skip empties
-    // by detail (flat empty hexes have almost no texture), and name the rest
+    // by detail (flat empty hexes have almost no texture), and name the rest.
+    // Naming is two-layered: the 2D icon match on the tile art first, then the
+    // champion NAME text printed on the card (line OCR + fuzzy match) — the text
+    // survives art/frame/scale differences that break a cosine match.
     private void plannerProcess(final Bitmap shot){
-        new Thread(new Runnable(){ public void run(){
-            final java.util.List<String> slotNames=new java.util.ArrayList<>(); // one entry per OCCUPIED slot, null = unknown
-            try{
-                int w=shot.getWidth(), h=shot.getHeight();
-                float x1=pool.getPln("s1_x")*w/100f, y1=pool.getPln("s1_y")*h/100f;
-                float xN=pool.getPln("sn_x")*w/100f, yN=pool.getPln("sn_y")*h/100f;
-                float dxs=(xN-x1)/(PLN_SLOTS-1), dys=(yN-y1)/(PLN_SLOTS-1);
-                float spacing=(float)Math.hypot(dxs,dys);
-                if(spacing<8f){
-                    shot.recycle();
-                    plannerHandler.post(new Runnable(){ public void run(){
-                        stopPlannerScan("slot calibration too narrow — recalibrate in SETUP");
-                    }});
-                    return;
-                }
-                int cs=Math.max(24,(int)(spacing*0.80f));
-                for(int i=0;i<PLN_SLOTS;i++){
-                    int cx=(int)(x1+dxs*i), cy=(int)(y1+dys*i);
-                    float detail=hexDetail(shot,cx,cy,cs/2,w,h);
-                    if(detail<11f){ addScanLog("planner slot "+(i+1)+": empty (detail "+(int)detail+")"); continue; }
-                    int inset=cs*12/100;
-                    int tx=Math.max(0,cx-cs/2+inset), ty=Math.max(0,cy-cs/2+inset);
-                    int ts=Math.min(cs-2*inset, Math.min(w-tx,h-ty));
-                    if(ts<16){ slotNames.add(null); continue; }
-                    Bitmap tile=Bitmap.createBitmap(shot,tx,ty,ts,ts);
-                    SetIcons.IconMatch m=SetIcons.match(tile);
-                    if(m!=null){
-                        slotNames.add(m.name);
-                        addScanLog("planner slot "+(i+1)+": "+m.name+" "+(int)(m.sim*100)
-                                +"% (+"+(int)(m.margin*100)+"%)");
+        new ScreenScanner(this,null).scanLines(shot, new ScreenScanner.LinesCallback(){
+            public void onLines(final java.util.List<ScreenScanner.OcrLine> lines){
+                new Thread(new Runnable(){ public void run(){ plannerProcessSlots(shot, lines); }}).start();
+            }
+        });
+    }
+
+    private void plannerProcessSlots(final Bitmap shot, java.util.List<ScreenScanner.OcrLine> lines){
+        final java.util.List<String> slotNames=new java.util.ArrayList<>(); // one entry per OCCUPIED slot, null = unknown
+        try{
+            int w=shot.getWidth(), h=shot.getHeight();
+            float x1=pool.getPln("s1_x")*w/100f, y1=pool.getPln("s1_y")*h/100f;
+            float xN=pool.getPln("sn_x")*w/100f, yN=pool.getPln("sn_y")*h/100f;
+            float dxs=(xN-x1)/(PLN_SLOTS-1), dys=(yN-y1)/(PLN_SLOTS-1);
+            float spacing=(float)Math.hypot(dxs,dys);
+            if(spacing<8f){
+                shot.recycle();
+                plannerHandler.post(new Runnable(){ public void run(){
+                    stopPlannerScan("slot calibration too narrow — recalibrate in SETUP");
+                }});
+                return;
+            }
+            // roster arrays for the fuzzy card-name fallback (parallel names/norms)
+            java.util.List<String> all=new java.util.ArrayList<>();
+            for(String[] tier:SetData.CHAMPS) for(String c:tier) all.add(c);
+            String[] cn=all.toArray(new String[0]);
+            String[] cnorm=new String[cn.length];
+            for(int i=0;i<cn.length;i++) cnorm[i]=NameMatch.norm(cn[i]);
+            int cs=Math.max(24,(int)(spacing*0.80f));
+            int occupied=0, named=0;
+            for(int i=0;i<PLN_SLOTS;i++){
+                int cx=(int)(x1+dxs*i), cy=(int)(y1+dys*i);
+                float detail=hexDetail(shot,cx,cy,cs/2,w,h);
+                if(detail<11f){ addScanLog("planner slot "+(i+1)+": empty (detail "+(int)detail+")"); continue; }
+                occupied++;
+                int inset=cs*12/100;
+                int tx=Math.max(0,cx-cs/2+inset), ty=Math.max(0,cy-cs/2+inset);
+                int ts=Math.min(cs-2*inset, Math.min(w-tx,h-ty));
+                if(ts<16){ slotNames.add(null); continue; }
+                Bitmap tile=Bitmap.createBitmap(shot,tx,ty,ts,ts);
+                SetIcons.IconMatch m=SetIcons.match(tile);
+                if(m!=null){
+                    slotNames.add(m.name); named++;
+                    addScanLog("planner slot "+(i+1)+": "+m.name+" "+(int)(m.sim*100)
+                            +"% (+"+(int)(m.margin*100)+"%)");
+                } else {
+                    // fallback: nearest OCR line within reach of this slot that
+                    // fuzzy-resolves to a champion name (the card prints one)
+                    String byText=null; float bestD=Float.MAX_VALUE;
+                    float reach=spacing*1.15f;
+                    for(ScreenScanner.OcrLine l:lines){
+                        float d=(float)Math.hypot(l.cx-cx, l.cy-cy);
+                        if(d>reach||d>=bestD) continue;
+                        String nm=NameMatch.bestMatch(l.text, cn, cnorm);
+                        if(nm!=null){ byText=nm; bestD=d; }
+                    }
+                    if(byText!=null){
+                        slotNames.add(byText); named++;
+                        addScanLog("planner slot "+(i+1)+": "+byText+" (card name text)");
                     } else {
                         slotNames.add(null);
                         addScanLog("planner slot "+(i+1)+": unknown — closest "+SetIcons.debugBest(tile));
                     }
-                    tile.recycle();
                 }
-            }catch(Exception e){ addScanLog("ERR planner process: "+e.getMessage()); }
-            shot.recycle();
-            plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
-        }}).start();
+                tile.recycle();
+            }
+            // total recognition failure (or dev mode): save the snapshot so the
+            // slot line and tile art can be inspected instead of guessed at
+            if(pool.isDevMode() || (occupied>0 && named==0)) saveDebugPng(shot,"tft-planner");
+        }catch(Exception e){ addScanLog("ERR planner process: "+e.getMessage()); }
+        shot.recycle();
+        plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
+    }
+
+    // Save a bitmap to Pictures/TFTScryer (API 29+) or the app pictures dir —
+    // debugging aid; the scan log records where it landed.
+    @SuppressWarnings({"deprecation","NewApi"})
+    private void saveDebugPng(Bitmap bmp, String prefix){
+        String name=prefix+"-"+System.currentTimeMillis()+".png";
+        try{
+            java.io.OutputStream os;
+            String where;
+            if(Build.VERSION.SDK_INT>=29){
+                android.content.ContentValues cvv=new android.content.ContentValues();
+                cvv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,name);
+                cvv.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png");
+                cvv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/TFTScryer");
+                android.net.Uri uri=getContentResolver().insert(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cvv);
+                os=getContentResolver().openOutputStream(uri);
+                where="Pictures/TFTScryer/"+name;
+            } else {
+                java.io.File d=getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
+                if(d!=null && !d.exists()) d.mkdirs();
+                java.io.File f=new java.io.File(d,name);
+                os=new java.io.FileOutputStream(f);
+                where=f.getAbsolutePath();
+            }
+            bmp.compress(Bitmap.CompressFormat.PNG,100,os);
+            os.close();
+            addScanLog("debug shot saved: "+where);
+        }catch(Exception e){ addScanLog("ERR debug save: "+e.getMessage()); }
     }
 
     private void plannerFinish(java.util.List<String> slotNames){

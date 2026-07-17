@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.75");
+        ver.setText("v1.99.76");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.76  ·  2026-07-17","The tap-free scan now reads each snapshot card TWO ways: by its art, and by the champion name written on the card — so a card the art matcher can't identify still gets named. When recognition fails completely, the scan saves the snapshot image to Pictures/TFTScryer so the problem can be seen and fixed instead of guessed at."},
             {"v1.99.75  ·  2026-07-17","Likely found why calibrated taps kept missing: on phones with a camera notch, every point you tapped during calibration could be recorded shifted by the notch inset — so the automated tap aimed next to the button, not at it. Calibration now records exact screen positions (planner buttons AND enemy portraits). PLEASE RE-RUN the planner calibration in SETUP once after updating. The background gold reader also now stays quiet during calibrations and scans instead of competing with them."},
             {"v1.99.74  ·  2026-07-17","Planner scan taps made stubborn: the scan now checks the planner actually opened after its tap and automatically re-taps up to two more times if the game ignored it — and the overlay stays fully out of the way for the entire open→snapshot→close sequence instead of ducking per tap. Also fixed a case where the planner could be left open after a very fast scan. Auto-buy is snappier: it checks the shop more often and fires follow-up buys with less delay."},
             {"v1.99.73  ·  2026-07-17","THE BIG ONE: found and fixed why the champion icons never loaded on real devices (a subtle image-handling bug that only your diagnostic counters could reveal) — the tap-free planner scan should finally unlock. Also: the \u201cscan unavailable\u201d popup no longer photobombs the scan itself, and auto-buy no longer reads champion names off the overlay\u2019s own open panel."},
