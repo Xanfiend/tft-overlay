@@ -303,6 +303,33 @@ public class ScreenScanner {
                 });
     }
 
+    // Generic line-level OCR: every recognized text LINE with its center point,
+    // no game-specific parsing. The planner scan reads the champion name printed
+    // on each snapshot card with this — a fallback for tiles whose art the icon
+    // matcher can't name. Does NOT recycle the bitmap (the caller keeps cropping
+    // tiles from it).
+    public static class OcrLine {
+        public final String text; public final int cx, cy;
+        OcrLine(String t, int x, int y){ text=t; cx=x; cy=y; }
+    }
+    public interface LinesCallback { void onLines(List<OcrLine> lines); }
+    void scanLines(Bitmap bmp, LinesCallback cb) {
+        InputImage image = InputImage.fromBitmap(bmp, 0);
+        recognizer().process(image)
+                .addOnSuccessListener(text -> {
+                    List<OcrLine> out = new ArrayList<>();
+                    for (Text.TextBlock block : text.getTextBlocks())
+                        for (Text.Line line : block.getLines()) {
+                            android.graphics.Rect b = line.getBoundingBox();
+                            String t = line.getText().trim();
+                            if (b != null && !t.isEmpty())
+                                out.add(new OcrLine(t, b.centerX(), b.centerY()));
+                        }
+                    cb.onLines(out);
+                })
+                .addOnFailureListener(e -> cb.onLines(new ArrayList<>()));
+    }
+
     private ScanResult parseShopStrip(Text text, int fullW, float scale) {
         ScanResult r = new ScanResult();
         ensureChampArrays();
