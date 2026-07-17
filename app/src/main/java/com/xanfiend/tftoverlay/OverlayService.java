@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.74";
+    private static final String APP_VERSION = "v1.99.75";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -6432,15 +6432,22 @@ public class OverlayService extends Service {
         // planner steps never advance). So a timeout fires onDone if the callback
         // never arrives, and a one-shot guard stops it running twice.
         final boolean[] fired={false};
+        final Runnable[] fallbackRef=new Runnable[1];
         final Runnable finish=new Runnable(){ public void run(){
             if(fired[0]) return;
             fired[0]=true;
             injecting=false;
             if(!overlayTouchHold) setOverlaysTouchable(true);
-            boardHandler.removeCallbacks(this);
+            if(fallbackRef[0]!=null) boardHandler.removeCallbacks(fallbackRef[0]);
             onDone.run();
         }};
-        boardHandler.postDelayed(finish, strokeMs+500L);
+        // the fallback logs when it has to fire — a dropped completion callback is
+        // the fingerprint of the ROM eating the gesture, worth seeing in a report
+        fallbackRef[0]=new Runnable(){ public void run(){
+            if(!fired[0]) addScanLog("tap @"+(int)x+","+(int)y+": no gesture callback — assumed landed");
+            finish.run();
+        }};
+        boardHandler.postDelayed(fallbackRef[0], strokeMs+500L);
         try{
             android.graphics.Path path=new android.graphics.Path();
             path.moveTo(x,y);
@@ -7522,8 +7529,11 @@ public class OverlayService extends Service {
                         else if(!dragged && retryAvail() && retryRect().contains(vx,vy)) retryPlnCalTap();
                         return true;
                     }
-                    // tap OUTSIDE the banner → record this spot and replay it into the game
-                    handlePlnCalTap(vx,vy);
+                    // record in RAW (screen) coordinates, not view-local: this window
+                    // can sit inset from the screen origin (camera cutout / system
+                    // bars), and dispatchGesture uses screen coordinates — local
+                    // coords made every replayed tap miss by the window offset
+                    handlePlnCalTap(e.getRawX(),e.getRawY());
                     return true;
                 }
                 return true;
@@ -7536,8 +7546,14 @@ public class OverlayService extends Service {
                 ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 :WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                |WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT);
+        // let the window extend into the camera cutout — without this it gets
+        // shifted off the screen origin in landscape and taps record offset
+        if(Build.VERSION.SDK_INT>=28)
+            clp.layoutInDisplayCutoutMode=
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         clp.gravity=Gravity.TOP|Gravity.LEFT;
         try{ wm.addView(plnCalView,clp); }catch(Exception ex){ plnCalView=null; plnCalStep=0; }
     }
@@ -7545,7 +7561,14 @@ public class OverlayService extends Service {
     private void handlePlnCalTap(final float vx, final float vy){
         final View v=plnCalView;
         if(v==null) return;
-        int W=v.getWidth(), H=v.getHeight();
+        // vx,vy are RAW screen coordinates — normalize against the real display,
+        // never the view (the window can be inset from the screen origin)
+        android.util.DisplayMetrics pdm=new android.util.DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(pdm);
+        int W=pdm.widthPixels, H=pdm.heightPixels;
+        int[] wloc=new int[2]; v.getLocationOnScreen(wloc);
+        if(wloc[0]!=0||wloc[1]!=0)
+            addScanLog("plnCal: overlay sits at +"+wloc[0]+","+wloc[1]+" — raw coords compensate");
         plnCalPts[plnCalStep][0]=Math.round(vx*100/W);
         plnCalPts[plnCalStep][1]=Math.round(vy*100/H);
         boolean passThrough = plnCalStep==1 || plnCalStep==2 || plnCalStep==5;
@@ -7803,8 +7826,11 @@ public class OverlayService extends Service {
     @SuppressWarnings("NewApi")
     private void goldWatchTick(){
         // yield while any capture-heavy mode is running so we don't fight the
-        // screenshot rate limit or interrupt a hunt/scan
-        if(goldWatchBusy||huntMode||boardScanMode||oppScanMode||autoScanPending) return;
+        // screenshot rate limit or interrupt a hunt/scan — INCLUDING the planner
+        // scan and both calibration wizards (a gold-watch screenshot mid-replay
+        // steals the 1/sec shot budget the wizard's own steps need)
+        if(goldWatchBusy||huntMode||boardScanMode||oppScanMode||autoScanPending
+                ||plannerScanPending||scanAllMode||plnCalView!=null||oppCalView!=null) return;
         if(panel!=null) return; // panel covers the game — nothing useful to read
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null) return;
@@ -8313,12 +8339,15 @@ public class OverlayService extends Service {
                 c.drawText("Tap each ENEMY PORTRAIT  ·  "+oppCalCount+"/7", W/2f, H*0.865f, p);
                 p.setTypeface(android.graphics.Typeface.DEFAULT); p.setTextSize(9*spx); p.setColor(0xFFC9A227);
                 c.drawText("tap the player health icons in turn, then DONE", W/2f, H*0.885f, p);
-                // recorded points
+                // recorded points are SCREEN coordinates — shift by the window's
+                // own screen offset to draw them where the user actually tapped
+                int[] wloc=new int[2]; getLocationOnScreen(wloc);
                 for(int i=1;i<=oppCalCount;i++){
                     int[] pt=pool.getOppPortrait(i); if(pt==null) continue;
+                    float px=pt[0]-wloc[0], py=pt[1]-wloc[1];
                     p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(BLOODL);
-                    c.drawCircle(pt[0],pt[1],14,p);
-                    p.setColor(0xFFE0D5C0); p.setTextSize(11*spx); c.drawText(""+i, pt[0], pt[1]+4*spx, p);
+                    c.drawCircle(px,py,14,p);
+                    p.setColor(0xFFE0D5C0); p.setTextSize(11*spx); c.drawText(""+i, px, py+4*spx, p);
                 }
                 android.graphics.RectF dr=doneRect(), cr=cancelRect();
                 p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A1400); c.drawRoundRect(dr,12,12,p);
@@ -8337,14 +8366,21 @@ public class OverlayService extends Service {
                 if(cancelRect().contains(x,y)){ cancelOppCal(); return true; }
                 if(oppCalCount>=7) return true;
                 oppCalCount++;
-                pool.setOppPortrait(oppCalCount,(int)x,(int)y);
+                // RAW screen coordinates: these get replayed via dispatchGesture
+                // (screen space) — view-local coords miss by the window offset
+                pool.setOppPortrait(oppCalCount,(int)e.getRawX(),(int)e.getRawY());
                 invalidate();
                 return true;
             }
         };
         WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-1,-1,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
+        if(Build.VERSION.SDK_INT>=28)
+            lp.layoutInDisplayCutoutMode=
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         try{ wm.addView(oppCalView,lp); }catch(Exception e){ oppCalView=null; }
     }
 
