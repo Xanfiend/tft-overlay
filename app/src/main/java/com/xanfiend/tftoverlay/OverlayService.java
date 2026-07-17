@@ -40,9 +40,10 @@ public class OverlayService extends Service {
     // (permissions + scan test); the ~17 tuning/calibration sections stay behind
     // one expander. Session-only — reopens collapsed.
     private boolean setupAdvanced = false;
+    private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.72";
+    private static final String APP_VERSION = "v1.99.73";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -1523,8 +1524,13 @@ public class OverlayService extends Service {
                 SetIcons.load(OverlayService.this);
                 boolean calOk=pool.plannerCalibrated(), iconsOk=SetIcons.champCount()>0;
                 if(calOk && iconsOk){ startPlannerScan(); return; }
-                if(calOk && !iconsOk)
-                    Toast.makeText(OverlayService.this,"Tap-free scan unavailable: champion icons failed to load (see debug log) — using the tap scan",Toast.LENGTH_LONG).show();
+                // toast once per session only: this toast fired right before the
+                // scan's screenshots and sat INSIDE the popup OCR zone, polluting
+                // (and covering) the popup name reads
+                if(calOk && !iconsOk && !iconsToastShown){
+                    iconsToastShown=true;
+                    Toast.makeText(OverlayService.this,"Tap-free scan unavailable: champion icons failed to load (see debug log) — using the tap scan",Toast.LENGTH_SHORT).show();
+                }
                 startAutoTapScan();
             }});
             asBtn.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
@@ -7901,6 +7907,9 @@ public class OverlayService extends Service {
     // OCR pass is still in flight — OCR latency is the only pacing left.
     private void huntFastPoll(){
         if(!huntMode||huntBusy||huntOcrBusy||huntReader==null) return;
+        // our own open panel covers the shop band and its champion-name chips get
+        // read as shop cards ("Jinx" in the pool grid -> phantom buy) — wait
+        if(panel!=null) return;
         android.media.Image img=null;
         try{
             img=huntReader.acquireLatestImage();
@@ -7950,6 +7959,7 @@ public class OverlayService extends Service {
     private void huntShopScan(){
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null){ stopHuntMode(); return; }
+        if(panel!=null) return; // panel covers the shop band — its chips read as shop cards
         long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
         if(sinceShot<MIN_SHOT_GAP_MS) return; // poll loop will come back around
         try{

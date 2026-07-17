@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.72");
+        ver.setText("v1.99.73");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.73  ·  2026-07-17","THE BIG ONE: found and fixed why the champion icons never loaded on real devices (a subtle image-handling bug that only your diagnostic counters could reveal) — the tap-free planner scan should finally unlock. Also: the \u201cscan unavailable\u201d popup no longer photobombs the scan itself, and auto-buy no longer reads champion names off the overlay\u2019s own open panel."},
             {"v1.99.72  ·  2026-07-16","Gold and level no longer reset when you leave the game (the auto-reader now pauses outside landscape). A unit whose popup opened but read blurry gets one automatic re-read — fixes one of two identical units going missing. With FAST SCAN on, board scans now run about 2.5x faster (no screenshot rate limit) and auto-buy reacts noticeably quicker."},
             {"v1.99.71  ·  2026-07-16","AUTO-CALIBRATE now truly resets everything — a hand-dragged bench previously survived every reset and silently kept blocking the corrected positions. New SAVE ALIGNMENT REPORT button (SETUP): saves a screenshot with the grid, the detected units and their exact pixel offsets drawn on it, so any remaining misalignment can be measured instead of guessed."},
             {"v1.99.70  ·  2026-07-16","Found it: the BOARD grid was right — the BENCH row was what kept missing. Bench slot positions were derived from the board and sat up to 200px off in every arena; they are now set from real measured slot positions (your screenshot proved slots are centered with their own spacing). Bench dots and taps should finally land on bench units."},

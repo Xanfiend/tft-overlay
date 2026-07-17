@@ -62,8 +62,13 @@ public final class SetIcons {
                     Bitmap bmp = BitmapFactory.decodeStream(is);
                     is.close();
                     if(bmp == null){ decodeFail++; continue; }
+                    // createScaledBitmap returns the SAME bitmap when the size
+                    // already matches (the bundled icons are exactly 48x48) —
+                    // recycling "bmp" then killed "scaled" too and sig() threw on
+                    // every file. This was the device-only sigFail=122 mystery
+                    // (Robolectric bitmaps don't enforce recycle()).
                     Bitmap scaled = Bitmap.createScaledBitmap(bmp, SCALE, SCALE, true);
-                    bmp.recycle();
+                    if(scaled != bmp) bmp.recycle();
                     float[] s = ChampionTemplates.sig(scaled);
                     scaled.recycle();
                     ChampionTemplates.meanCenter(s);
@@ -109,7 +114,7 @@ public final class SetIcons {
         if(sigs.isEmpty()) return null;
         Bitmap scaled = Bitmap.createScaledBitmap(tile, SCALE, SCALE, true);
         float[] s = ChampionTemplates.sig(scaled);
-        scaled.recycle();
+        if(scaled != tile) scaled.recycle();   // same-size input returns the caller's bitmap
         ChampionTemplates.meanCenter(s);
         String best = null; float bestSim = -2f;
         String second = null; float secondSim = -2f;
@@ -136,7 +141,7 @@ public final class SetIcons {
         if(sigs.isEmpty()) return "no icons";
         Bitmap scaled = Bitmap.createScaledBitmap(tile, SCALE, SCALE, true);
         float[] s = ChampionTemplates.sig(scaled);
-        scaled.recycle();
+        if(scaled != tile) scaled.recycle();
         ChampionTemplates.meanCenter(s);
         String best = null; float bestSim = -2f;
         for(int i=0;i<sigs.size();i++){
