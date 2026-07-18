@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.79";
+    private static final String APP_VERSION = "v1.99.80";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -269,6 +269,12 @@ public class OverlayService extends Service {
     private java.util.List<Bitmap> plannerCrops = null;
     private java.util.List<int[]> plannerUnits = null; // health-bar detection from the board shot (positions + stars)
     private java.util.List<String> plannerBenchNames = null; // bench units recognized by Visual ID on the board shot
+    private java.util.List<int[]> plannerBenchTapTargets = null; // occupied bench slots Visual ID could NOT name — popup-tapped after the planner read
+    private int benchTapIdx = 0, benchTapResults = 0;
+    private int plannerWrapMatched = 0, plannerWrapUnknown = 0, plannerWrapOccupied = 0;
+    private long plannerWrapTookMs = 0;
+    private boolean setupShowAll = false; // SETUP tab: advanced sections folded away by default
+    private static final String[] GAME_MODES = {"STANDARD","HYPER ROLL","DOUBLE UP","TOCKER'S"};
     private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     // planner calibration overlay: records where the planner controls live
     private int plnCalStep = 0; // 0=idle, 1=planner btn, 2=snapshot btn, 3=first slot, 4=last slot, 5=close
@@ -1843,6 +1849,18 @@ public class OverlayService extends Service {
             root.addView(hint);
         }
 
+        // game-mode context: the pool itself is the same shared pool everywhere,
+        // but what pressure applies to it differs per mode
+        int gmPool=pool.getGameMode();
+        if(gmPool!=0){
+            TextView gmTv=new TextView(this);
+            gmTv.setText(gmPool==1?"⚔ HYPER ROLL — same shared pool · no interest, XP is automatic"
+                    :gmPool==2?"⚔ DOUBLE UP — pool shared by all 8 players; your partner's copies drain it too"
+                    :"⚔ TOCKER'S TRIALS — PvE: no enemy players contest this pool");
+            gmTv.setTextColor(GOLD); gmTv.setTextSize(ts(9)); gmTv.setPadding(4,4,0,6);
+            root.addView(gmTv);
+        }
+
         for(int cost=1;cost<=5;cost++){
         if(poolFilter!=0 && poolFilter!=cost) continue;
         java.util.List<String> tierList=new java.util.ArrayList<>();
@@ -2625,6 +2643,20 @@ public class OverlayService extends Service {
 
     // ---- ECONOMY TAB ----
     private void buildEconomy(LinearLayout root){
+        // modes without the standard economy get a banner instead of surgically
+        // different cards — the numbers below still track, the ADVICE differs
+        int gmode=pool.getGameMode();
+        if(gmode==1||gmode==3){
+            TextView gmb=new TextView(this);
+            gmb.setText(gmode==1
+                ?"⚔ HYPER ROLL — no interest or streak gold and XP is automatic: ignore the interest & leveling advice below, gold is for rolling"
+                :"⚔ TOCKER'S TRIALS — PvE co-op: streak, HP and elimination advice below doesn't apply");
+            gmb.setTextColor(GOLD); gmb.setTextSize(ts(10)); gmb.setPadding(10,8,10,8);
+            gmb.setBackground(box(0xFF1A1400,6,GOLD,1));
+            LinearLayout.LayoutParams gmbl=new LinearLayout.LayoutParams(-1,-2);
+            gmbl.setMargins(0,0,0,8); gmb.setLayoutParams(gmbl);
+            root.addView(gmb);
+        }
         int gold=pool.getGold(); int streak=pool.getStreak();
         int intr=Pool.interest(gold); int toNext=Pool.toNextBracket(gold);
         int sBonus=Pool.streakBonus(streak); int income=Pool.expectedIncome(gold,streak);
@@ -4035,6 +4067,36 @@ public class OverlayService extends Service {
         }
 
         // ◇ TEMPLATES
+        // ◇ GAME MODE — same shared champion pool in every PvP mode; the advice
+        // panels adapt (Hyper Roll has no interest/streak econ, Tocker's is PvE)
+        addSecHdr(root, "GAME MODE", GOLD);
+        pickRow(root, GAME_MODES, new int[]{0,1,2,3}, pool.getGameMode(), 9,
+            new PickSetter(){ public void pick(int v){ pool.setGameMode(v); buzz(); showPanel(); }});
+        TextView gmHint=new TextView(this);
+        gmHint.setText("adjusts the econ & pool advice to the mode you queue — the champion pool itself is the same everywhere");
+        gmHint.setTextColor(DIM); gmHint.setTextSize(10); gmHint.setPadding(2,0,2,8); root.addView(gmHint);
+
+        // ◇ MORE SETTINGS — the long tail of tweakables folds away so first-time
+        // SETUP is just permissions + scan + calibration
+        final TextView moreTv=new TextView(this);
+        moreTv.setText(setupShowAll?"▾ MORE SETTINGS — tap to hide"
+                :"▸ MORE SETTINGS — display, HUD, automation, templates…");
+        moreTv.setTextColor(setupShowAll?BONE:ASH); moreTv.setTextSize(ts(11));
+        moreTv.setTypeface(null,android.graphics.Typeface.BOLD);
+        moreTv.setPadding(14,12,14,12);
+        moreTv.setBackground(box(CARD,6,EDGE,1));
+        LinearLayout.LayoutParams morelp=new LinearLayout.LayoutParams(-1,-2);
+        morelp.setMargins(0,10,0,6); moreTv.setLayoutParams(morelp);
+        moreTv.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+            setupShowAll=!setupShowAll; showPanel();
+        }});
+        root.addView(moreTv);
+        final LinearLayout setupOuter=root;
+        final LinearLayout advBox=new LinearLayout(this); advBox.setOrientation(LinearLayout.VERTICAL);
+        advBox.setVisibility(setupShowAll?View.VISIBLE:View.GONE);
+        root.addView(advBox);
+        root=advBox;   // sections below the fold add themselves in here
+
         addSecHdr(root, "TEMPLATES", GOLD);
         int tplCount=ChampionTemplates.templateCount();
         TextView tplCountTv=new TextView(this);
@@ -4277,6 +4339,8 @@ public class OverlayService extends Service {
         pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getSmartScan()?1:0, 0,
             new PickSetter(){ public void pick(int v){ pool.setSmartScan(v==1); showPanel(); }});
 
+        root=setupOuter;   // back above the fold — scan essentials stay visible
+
         addSecHdr(root, "FAST SCAN", GOLD);
 
         TextView fsInfo=new TextView(this);
@@ -4394,6 +4458,8 @@ public class OverlayService extends Service {
             }}));
         }
 
+        root=advBox;   // Visual ID toggle is a tweakable — below the fold
+
         addSecHdr(root, "INSTANT VISUAL ID", GOLD);
 
         TextView vidInfo=new TextView(this);
@@ -4403,6 +4469,8 @@ public class OverlayService extends Service {
 
         pickRow(root, new String[]{"ON","OFF"}, new int[]{1,0}, pool.getVisualId()?1:0, 0,
             new PickSetter(){ public void pick(int v){ pool.setVisualId(v==1); showPanel(); }});
+
+        root=setupOuter;   // calibration + everything after stays above the fold
 
         // ◇ CALIBRATE SCAN
         TextView calDiv=new TextView(this); calDiv.setText("────────────────────");
@@ -7167,6 +7235,7 @@ public class OverlayService extends Service {
         plannerScanPending=true;
         plannerUnits=null;
         plannerBenchNames=null;
+        plannerBenchTapTargets=null;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1; autoScanLevel=-1;
         autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
@@ -7244,27 +7313,38 @@ public class OverlayService extends Service {
                         plannerCrops.add(c);
                     }
                 }
-                // tap-free BENCH read: the planner snapshot never includes bench
-                // units, but sprites learned in earlier scans can be recognized
-                // straight off this same shot at the 9 standard bench slots.
-                // Grows with every game — an unknown bench sprite is just skipped.
+                // BENCH read: the planner snapshot never includes bench units.
+                // Each of the 9 standard bench slots gets an occupancy check
+                // (texture detail — empty strip is flat); occupied slots are
+                // named by Visual ID when a learned sprite matches, and every
+                // occupied slot Visual ID can't name is queued for a quick
+                // popup tap AFTER the planner read (benchTapNext).
                 plannerBenchNames=new java.util.ArrayList<>();
+                plannerBenchTapTargets=new java.util.ArrayList<>();
                 try{
-                    if(ChampionTemplates.boardTemplateCount()>0 && bmp.getWidth()>bmp.getHeight()){
+                    if(bmp.getWidth()>bmp.getHeight()){
                         float[] bch=HexGrid.standardBench(bmp.getWidth(), bmp.getHeight());
                         float slotW=(bch[1]-bch[0])/9f;
                         int cs2=Math.max(48, bmp.getHeight()*9/100);
+                        boolean haveTpl=ChampionTemplates.boardTemplateCount()>0;
                         for(int s=0;s<9;s++){
                             int bx=(int)(bch[0]+(s+0.5f)*slotW), by=(int)bch[2];
                             int x0=bx-cs2/2, y0=by-cs2/2;
                             if(x0<0||y0<0||x0+cs2>bmp.getWidth()||y0+cs2>bmp.getHeight()) continue;
-                            Bitmap bc=Bitmap.createBitmap(bmp,x0,y0,cs2,cs2);
-                            ChampionTemplates.BoardMatch bm=ChampionTemplates.matchBoardSprite(bc,false);
-                            bc.recycle();
+                            float bd=hexDetail(bmp,bx,by,cs2/2,bmp.getWidth(),bmp.getHeight());
+                            if(bd<11f) continue; // flat texture = empty slot
+                            ChampionTemplates.BoardMatch bm=null;
+                            if(haveTpl){
+                                Bitmap bc=Bitmap.createBitmap(bmp,x0,y0,cs2,cs2);
+                                bm=ChampionTemplates.matchBoardSprite(bc,false);
+                                bc.recycle();
+                            }
                             if(bm!=null){
                                 plannerBenchNames.add(bm.name);
                                 addScanLog("planner bench: "+bm.name+" (visual ID, slot "+(s+1)
                                         +", "+(int)(bm.sim*100)+"%)");
+                            } else {
+                                plannerBenchTapTargets.add(new int[]{bx,by});
                             }
                         }
                     }
@@ -7645,13 +7725,76 @@ public class OverlayService extends Service {
             plannerBenchNames=null;
         }
 
+        // stash the summary numbers, then either run the bench popup pass
+        // (async — finishes in plannerWrapUp) or wrap up immediately
+        plannerWrapMatched=matched; plannerWrapUnknown=unknown;
+        plannerWrapOccupied=occupied; plannerWrapTookMs=tookMs;
+        if(plannerBenchTapTargets!=null && !plannerBenchTapTargets.isEmpty()
+                && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
+            benchTapIdx=0; benchTapResults=0;
+            if(btnLabel!=null) btnLabel.setText("BENCH");
+            addScanLog("bench: popup-reading "+plannerBenchTapTargets.size()+" unrecognized slot(s)");
+            benchTapNext();
+            return;
+        }
+        plannerWrapUp();
+    }
+
+    // Bench completion pass: the planner named the board tap-free; the occupied
+    // bench slots Visual ID couldn't name get one quick popup tap each. Every
+    // popup also becomes Visual ID knowledge via the normal popup-template path,
+    // so these taps disappear over time.
+    @SuppressWarnings("NewApi")
+    private void benchTapNext(){
+        final java.util.List<int[]> targets=plannerBenchTapTargets;
+        if(targets==null || benchTapIdx>=targets.size()){ plannerWrapUp(); return; }
+        int[] t=targets.get(benchTapIdx);
+        final float bx=t[0], by=t[1];
+        dispatchTap(bx, by, new Runnable(){ public void run(){
+            long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
+            long wait=scanFastReady ? (POPUP_WAIT_MS+140)
+                                    : Math.max(POPUP_WAIT_MS, MIN_SHOT_GAP_MS-sinceShot);
+            plannerHandler.postDelayed(new Runnable(){ public void run(){
+                plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
+                    if(bmp==null){ benchTapIdx++; benchTapNext(); return; }
+                    new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
+                        new ScreenScanner.ScanCallback(){
+                            public void onResult(ScreenScanner.ScanResult r){
+                                String nm=r.detectedBoardUnit;
+                                if(nm!=null && !nm.isEmpty()){
+                                    int st=Math.max(1,r.detectedBoardStars);
+                                    pool.add(nm,1);
+                                    if(!r.popupTraits.isEmpty()) pool.learnTraits(nm, r.popupTraits);
+                                    StringBuilder e=new StringBuilder(nm);
+                                    for(int s=0;s<st;s++) e.append('★');
+                                    e.append(" bench");
+                                    autoScanResults.add(e.toString());
+                                    addScanLog("bench: "+nm+" "+st+"★ (popup)");
+                                    benchTapResults++;
+                                } else {
+                                    addScanLog("bench slot @"+(int)bx+": no popup name — skipped");
+                                }
+                                benchTapIdx++; benchTapNext();
+                            }
+                            public void onError(String msg){ benchTapIdx++; benchTapNext(); }
+                        }, ScreenScanner.MODE_POPUP);
+                }});
+            }}, wait);
+        }});
+    }
+
+    private void plannerWrapUp(){
+        int matched=plannerWrapMatched+benchTapResults, unknown=plannerWrapUnknown, occupied=plannerWrapOccupied;
+        long tookMs=plannerWrapTookMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
+        plannerBenchTapTargets=null; benchTapResults=0;
+        if(btnLabel!=null) btnLabel.setText("SCRY");
         applyScanGold(autoScanGold);
         if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
         if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
         if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
         refreshHud();
         addScanLog("planner scan: done, "+matched+" named, "+unknown+" unknown of "+occupied
-                +" tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s"
+                +" board tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s"
                 +(autoScanGold>=0?(" · gold="+autoScanGold):"")
                 +(autoScanLevel>=0?(" · lv"+autoScanLevel):""));
         if(occupied==0){
