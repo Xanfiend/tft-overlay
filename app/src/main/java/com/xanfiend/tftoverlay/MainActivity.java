@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.76");
+        ver.setText("v1.99.77");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.77  ·  2026-07-18","Tap-free scan, third round of fixes from your screenshots: the planner can open as two different screens, so the scan now finds the SNAPSHOT button by reading the screen each time instead of trusting one calibrated spot. Units are read from the name labels on the snapshot cards (the old slot-position method never lined up with the real card grid). And bench units the app has already learned to recognize by sight get counted in the same scan — recognition grows every game."},
             {"v1.99.76  ·  2026-07-17","The tap-free scan now reads each snapshot card TWO ways: by its art, and by the champion name written on the card — so a card the art matcher can't identify still gets named. When recognition fails completely, the scan saves the snapshot image to Pictures/TFTScryer so the problem can be seen and fixed instead of guessed at."},
             {"v1.99.75  ·  2026-07-17","Likely found why calibrated taps kept missing: on phones with a camera notch, every point you tapped during calibration could be recorded shifted by the notch inset — so the automated tap aimed next to the button, not at it. Calibration now records exact screen positions (planner buttons AND enemy portraits). PLEASE RE-RUN the planner calibration in SETUP once after updating. The background gold reader also now stays quiet during calibrations and scans instead of competing with them."},
             {"v1.99.74  ·  2026-07-17","Planner scan taps made stubborn: the scan now checks the planner actually opened after its tap and automatically re-taps up to two more times if the game ignored it — and the overlay stays fully out of the way for the entire open→snapshot→close sequence instead of ducking per tap. Also fixed a case where the planner could be left open after a very fast scan. Auto-buy is snappier: it checks the shop more often and fires follow-up buys with less delay."},
