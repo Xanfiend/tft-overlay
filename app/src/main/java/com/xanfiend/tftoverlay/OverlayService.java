@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.77";
+    private static final String APP_VERSION = "v1.99.78";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -105,6 +105,11 @@ public class OverlayService extends Service {
     private Runnable econUndoAction; private String econUndoLabel;
     private TextView econUndoChip;
     private int poolFilter = 0; // 0=all, 1-5=cost tier
+    private String poolTraitFilter = null; // null=all; else a TraitData trait name (learned via Pool.learnTraits)
+    // Last time the gold watch successfully read the pinned HUD band. A fresh
+    // watch read outranks any full-screen scan's gold guess — the scan zone can
+    // latch a wrong number (device log: scan wrote 951 while the watch read 51).
+    private long lastGoldWatchOkMs = 0;
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
     private java.util.List<String> augCompare = new java.util.ArrayList<>();
     private boolean trackingByScarcity = false;
@@ -1785,19 +1790,72 @@ public class OverlayService extends Service {
             poolFilter, 10,
             new PickSetter(){ public void pick(int v){ poolFilter=v; showPanel(); }});
 
+        // TRAIT browser: chips for every trait the overlay has LEARNED from unit
+        // popups (Pool.learnTraits) — tap one to show only that trait's champions.
+        // Knowledge grows organically: a trait's chip appears once any of its
+        // champions has been scried.
+        java.util.Map<String,java.util.List<String>> champTraits=new java.util.HashMap<>();
+        java.util.HashSet<String> knownTraits=new java.util.HashSet<>();
+        for(int c=1;c<=5;c++) for(String n:SetData.CHAMPS[c]){
+            java.util.List<String> tl=pool.traitsOf(n);
+            champTraits.put(n,tl);
+            knownTraits.addAll(tl);
+        }
+        if(poolTraitFilter!=null && !knownTraits.contains(poolTraitFilter)) poolTraitFilter=null;
+        if(!knownTraits.isEmpty()){
+            android.widget.HorizontalScrollView hs=new android.widget.HorizontalScrollView(this);
+            hs.setHorizontalScrollBarEnabled(false);
+            LinearLayout trow=new LinearLayout(this);
+            trow.setPadding(0,8,0,4);
+            hs.addView(trow);
+            java.util.List<String> chips=new java.util.ArrayList<>();
+            chips.add(null); // ALL
+            for(String[] tr:TraitData.TRAITS) if(knownTraits.contains(tr[0])) chips.add(tr[0]);
+            for(final String tr:chips){
+                boolean sel = tr==null ? poolTraitFilter==null : tr.equals(poolTraitFilter);
+                TextView ch=new TextView(this);
+                ch.setText(tr==null?"ALL":tr);
+                ch.setTextSize(ts(10));
+                ch.setTextColor(sel?BONE:ASH);
+                ch.setTypeface(null, sel?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+                ch.setPadding(26,10,26,10);
+                ch.setBackground(box(sel?BLOOD:CARD,14,sel?BLOODL:EDGE,sel?2:1));
+                LinearLayout.LayoutParams chl=new LinearLayout.LayoutParams(-2,-2);
+                chl.setMargins(0,0,10,0); ch.setLayoutParams(chl);
+                ch.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
+                    poolTraitFilter=tr; showPanel();
+                }});
+                trow.addView(ch);
+            }
+            root.addView(hs);
+        } else {
+            TextView hint=new TextView(this);
+            hint.setText("☆ scry champions to unlock trait filters here");
+            hint.setTextColor(DIM); hint.setTextSize(ts(9)); hint.setPadding(4,6,0,4);
+            root.addView(hint);
+        }
+
         for(int cost=1;cost<=5;cost++){
         if(poolFilter!=0 && poolFilter!=cost) continue;
-        int tierLeft=0; for(String n:SetData.CHAMPS[cost]) tierLeft+=pool.remaining(n);
+        java.util.List<String> tierList=new java.util.ArrayList<>();
+        for(String n:SetData.CHAMPS[cost]){
+            java.util.List<String> tl=champTraits.get(n);
+            if(poolTraitFilter==null || (tl!=null && tl.contains(poolTraitFilter))) tierList.add(n);
+        }
+        if(tierList.isEmpty()) continue;
+        int tierLeft=0; for(String n:tierList) tierLeft+=pool.remaining(n);
         addSecHdr(root, cost+"-COST  ·  "+tierLeft+" left", COSTC[cost]);
 
-            LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
-            for(int j=0;j<arr.length;j++){
+            LinearLayout row=null;
+            for(int j=0;j<tierList.size();j++){
                 if(j%3==0){ row=new LinearLayout(this); root.addView(row); }
-                final String name=arr[j]; final int fc=cost;
+                final String name=tierList.get(j); final int fc=cost;
                 if(idx<chipNames.length){ chipNames[idx]=name; idx++; }
                 LinearLayout cell=buildChipCell(name, fc);
                 row.addView(cell);
             }
+            // pad the last row so cells keep even width when a filter thins a tier
+            if(row!=null){ int fillN=(3-(tierList.size()%3))%3; for(int k=0;k<fillN;k++){ View sp=new View(this); sp.setLayoutParams(new LinearLayout.LayoutParams(0,1,1f)); row.addView(sp);} }
         }
         // reset pool: clears seen/opp tracking only — keeps gold, HP, streak, stage
         final TextView rp=new TextView(this); rp.setText("RESET POOL");
@@ -5599,7 +5657,7 @@ public class OverlayService extends Service {
     }
 
     private void applyScanResult(ScreenScanner.ScanResult r){
-        if(r.gold>=0) pool.setGold(r.gold);
+        applyScanGold(r.gold);
         if(r.level>=0){ level=r.level; pool.setLevel(r.level); }
         if(!r.stageRound.isEmpty()) pool.setStageRound(r.stageRound);
         if(r.xpNeed>0) pool.setXp(r.xpCur, r.xpNeed);
@@ -6838,7 +6896,7 @@ public class OverlayService extends Service {
         if(!autoOppMode){
             // one self-scry commits everything: gold, level, XP, stage (champs
             // were committed per probe as they were identified)
-            if(autoScanGold>=0) pool.setGold(autoScanGold);
+            applyScanGold(autoScanGold);
             if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
             if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
             if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
@@ -7043,11 +7101,16 @@ public class OverlayService extends Service {
     // one full-screen shot via the fast capture when available, else the
     // accessibility screenshot (waits out the 1/sec limit, retries once on it)
     @SuppressWarnings("NewApi")
-    private void plannerShot(final ShotCb cb){ plannerShotAttempt(cb, 0); }
+    private void plannerShot(final ShotCb cb){ plannerShotAttempt(cb, 0, false); }
+
+    // accessibility-screenshot-only variant: used when a fast-capture frame gave
+    // a suspect read (health-bar colors) and the other capture path should judge
+    @SuppressWarnings("NewApi")
+    private void plannerShotAcc(final ShotCb cb){ plannerShotAttempt(cb, 0, true); }
 
     @SuppressWarnings("NewApi")
-    private void plannerShotAttempt(final ShotCb cb, final int attempt){
-        if(scanFastReady){
+    private void plannerShotAttempt(final ShotCb cb, final int attempt, final boolean forceAcc){
+        if(!forceAcc && scanFastReady){
             Bitmap fast=captureScanFrame();
             if(fast!=null){ cb.onShot(fast); return; }
         }
@@ -7073,7 +7136,7 @@ public class OverlayService extends Service {
                         @Override public void onFailure(int errorCode){
                             if(errorCode==3 && attempt<2){
                                 plannerHandler.postDelayed(new Runnable(){ public void run(){
-                                    plannerShotAttempt(cb, attempt+1);
+                                    plannerShotAttempt(cb, attempt+1, forceAcc);
                                 }}, MIN_SHOT_GAP_MS);
                             } else cb.onShot(null);
                         }
@@ -7108,12 +7171,55 @@ public class OverlayService extends Service {
         setOverlayShotHidden(true);
         plannerHandler.postDelayed(new Runnable(){ public void run(){
         plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
-            setOverlayShotHidden(false);
-            if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
+            if(!plannerScanPending){ setOverlayShotHidden(false); if(bmp!=null) bmp.recycle(); return; }
             if(bmp!=null){
                 // best-effort: unit count + star levels from health bars. Names come
                 // from the planner; this only pairs stars to tiles, so failure is fine.
                 try{ plannerUnits=detectHealthBarUnits(bmp,false); }catch(Exception e){ plannerUnits=null; }
+                // fast-capture frames have repeatedly produced 'no health bars'
+                // where the accessibility screenshot detected fine (color/profile
+                // differences in the mirrored surface) — retry once on the other
+                // capture path before giving up on star levels for this scan
+                if((plannerUnits==null||plannerUnits.isEmpty()) && scanFastReady){
+                    final Bitmap fastBmp=bmp;
+                    plannerShotAcc(new ShotCb(){ public void onShot(Bitmap acc){
+                        setOverlayShotHidden(false);
+                        if(!plannerScanPending){ if(acc!=null) acc.recycle(); fastBmp.recycle(); return; }
+                        Bitmap use=fastBmp;
+                        if(acc!=null){
+                            try{ plannerUnits=detectHealthBarUnits(acc,false); }catch(Exception e){ plannerUnits=null; }
+                            if(plannerUnits!=null && !plannerUnits.isEmpty()){
+                                addScanLog("planner: health bars found on screenshot retry");
+                                use=acc; fastBmp.recycle();
+                            } else acc.recycle();
+                        }
+                        plannerBoardReady(use);
+                    }});
+                    return;
+                }
+            }
+            setOverlayShotHidden(false);
+            plannerBoardReady(bmp);
+        }});
+        }}, 120);
+    }
+
+    // continuation of startPlannerScan once the board shot (and its health-bar
+    // read) is settled: sprite crops for Visual ID teaching, tap-free bench
+    // recognition, HUD OCR, then the planner choreography
+    private void plannerBoardReady(Bitmap bmp){
+        if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
+            if(bmp!=null){
+                // no health bars even after the retry — in dev mode keep the frame
+                // so the detector can be tuned against the real pixels
+                if((plannerUnits==null||plannerUnits.isEmpty()) && pool.isDevMode()){
+                    try{
+                        final Bitmap dump=bmp.copy(Bitmap.Config.ARGB_8888,false);
+                        new Thread(new Runnable(){ public void run(){
+                            saveDebugPng(dump,"tft-board"); dump.recycle();
+                        }}).start();
+                    }catch(Exception e){}
+                }
                 // keep a sprite crop per detected unit: once the planner names the
                 // tiles, these get saved as Visual ID templates (crop size mirrors
                 // visualIdPass so learning and matching see the same framing)
@@ -7168,11 +7274,9 @@ public class OverlayService extends Service {
                         public void onError(String msg){}
                     }, ScreenScanner.MODE_FULL);
             }
-            addScanLog("planner scan: "+(plannerUnits==null?"no health-bar read"
+            addScanLog("planner scan: "+(plannerUnits==null||plannerUnits.isEmpty()?"no health-bar read"
                     :plannerUnits.size()+" units (health bar)")+", opening planner");
             plannerOpenPhase();
-        }});
-        }}, 120);
     }
 
     private void plannerOpenPhase(){
@@ -7450,6 +7554,18 @@ public class OverlayService extends Service {
         }catch(Exception e){ addScanLog("ERR debug save: "+e.getMessage()); }
     }
 
+    // A scan's full-screen gold parse yields to the gold watch when the watch has
+    // read the pinned HUD band recently — the watch zone is verified per-device,
+    // the scan zone is a whole-screen guess that has latched wrong numbers.
+    private void applyScanGold(int scanGold){
+        if(scanGold<0) return;
+        if(android.os.SystemClock.uptimeMillis()-lastGoldWatchOkMs<15000){
+            addScanLog("scan gold "+scanGold+" ignored — gold watch has a fresher read");
+            return;
+        }
+        pool.setGold(scanGold);
+    }
+
     private void plannerFinish(java.util.List<String> slotNames){
         if(!plannerScanPending) return;
         plannerScanPending=false;
@@ -7521,7 +7637,7 @@ public class OverlayService extends Service {
             plannerBenchNames=null;
         }
 
-        if(autoScanGold>=0) pool.setGold(autoScanGold);
+        applyScanGold(autoScanGold);
         if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
         if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
         if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
@@ -8037,6 +8153,7 @@ public class OverlayService extends Service {
         boolean changed=false;
         // only write + repaint when a value actually moved — saves a SharedPreferences
         // commit and a HUD redraw on every static frame, and drives the idle backoff
+        if(r.gold>=0) lastGoldWatchOkMs=android.os.SystemClock.uptimeMillis();
         if(r.gold>=0 && r.gold!=pool.getGold()){ pool.setGold(r.gold); changed=true; }
         if(r.level>=0 && r.level!=level){ level=r.level; pool.setLevel(r.level); changed=true; }
         if(r.xpNeed>0 && (r.xpCur!=pool.getXpCur() || r.xpNeed!=pool.getXpNeed())){ pool.setXp(r.xpCur, r.xpNeed); changed=true; }
