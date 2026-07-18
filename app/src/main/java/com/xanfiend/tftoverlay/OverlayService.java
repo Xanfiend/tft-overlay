@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.76";
+    private static final String APP_VERSION = "v1.99.77";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -263,6 +263,7 @@ public class OverlayService extends Service {
     // names at finish so every tap-free scan TEACHES Visual ID
     private java.util.List<Bitmap> plannerCrops = null;
     private java.util.List<int[]> plannerUnits = null; // health-bar detection from the board shot (positions + stars)
+    private java.util.List<String> plannerBenchNames = null; // bench units recognized by Visual ID on the board shot
     private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     // planner calibration overlay: records where the planner controls live
     private int plnCalStep = 0; // 0=idle, 1=planner btn, 2=snapshot btn, 3=first slot, 4=last slot, 5=close
@@ -7094,6 +7095,7 @@ public class OverlayService extends Service {
         clearInjecting();
         plannerScanPending=true;
         plannerUnits=null;
+        plannerBenchNames=null;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1; autoScanLevel=-1;
         autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
@@ -7128,6 +7130,31 @@ public class OverlayService extends Service {
                         plannerCrops.add(c);
                     }
                 }
+                // tap-free BENCH read: the planner snapshot never includes bench
+                // units, but sprites learned in earlier scans can be recognized
+                // straight off this same shot at the 9 standard bench slots.
+                // Grows with every game — an unknown bench sprite is just skipped.
+                plannerBenchNames=new java.util.ArrayList<>();
+                try{
+                    if(ChampionTemplates.boardTemplateCount()>0 && bmp.getWidth()>bmp.getHeight()){
+                        float[] bch=HexGrid.standardBench(bmp.getWidth(), bmp.getHeight());
+                        float slotW=(bch[1]-bch[0])/9f;
+                        int cs2=Math.max(48, bmp.getHeight()*9/100);
+                        for(int s=0;s<9;s++){
+                            int bx=(int)(bch[0]+(s+0.5f)*slotW), by=(int)bch[2];
+                            int x0=bx-cs2/2, y0=by-cs2/2;
+                            if(x0<0||y0<0||x0+cs2>bmp.getWidth()||y0+cs2>bmp.getHeight()) continue;
+                            Bitmap bc=Bitmap.createBitmap(bmp,x0,y0,cs2,cs2);
+                            ChampionTemplates.BoardMatch bm=ChampionTemplates.matchBoardSprite(bc,false);
+                            bc.recycle();
+                            if(bm!=null){
+                                plannerBenchNames.add(bm.name);
+                                addScanLog("planner bench: "+bm.name+" (visual ID, slot "+(s+1)
+                                        +", "+(int)(bm.sim*100)+"%)");
+                            }
+                        }
+                    }
+                }catch(Exception e){}
                 // the same shot carries gold/level/XP/stage — read them in parallel
                 // with the planner steps so the tap-free scan is a full scry
                 // (scanBitmap recycles the bitmap)
@@ -7182,12 +7209,35 @@ public class OverlayService extends Service {
         dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
             plannerHandler.postDelayed(new Runnable(){ public void run(){
                 if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
-                if(ref==null){ plannerSnapPhase(sw,sh); return; }  // nothing to compare — proceed on faith
-                plannerShot(new ShotCb(){ public void onShot(Bitmap now){
+                if(ref==null){ plannerSnapPhase(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f); return; }
+                plannerShot(new ShotCb(){ public void onShot(final Bitmap now){
                     if(!plannerScanPending){ if(now!=null) now.recycle(); ref.recycle(); return; }
                     boolean opened = now!=null && framesDiffer(ref, now);
+                    if(opened){
+                        ref.recycle();
+                        // The planner opens as one of TWO screens — the MY TEAMS
+                        // list (SNAPSHOT pill at the top) or the team editor
+                        // (SNAPSHOT at the bottom) — so one calibrated point
+                        // misses half the time. Both screens print the literal
+                        // word SNAPSHOT on the button: find it in this same
+                        // verify frame and tap THAT, calibrated point only as
+                        // the fallback when OCR can't see it.
+                        new ScreenScanner(OverlayService.this,null).scanLines(now,
+                            new ScreenScanner.LinesCallback(){ public void onLines(java.util.List<ScreenScanner.OcrLine> lines){
+                                now.recycle();
+                                if(!plannerScanPending) return;
+                                float tx=pool.getPln("snap_x")*sw/100f, ty=pool.getPln("snap_y")*sh/100f;
+                                boolean located=false;
+                                for(ScreenScanner.OcrLine l:lines){
+                                    if(l.text.toUpperCase().contains("SNAPSHOT")){ tx=l.cx; ty=l.cy; located=true; break; }
+                                }
+                                addScanLog(located ? "planner: SNAPSHOT button found at "+(int)tx+","+(int)ty
+                                                   : "planner: SNAPSHOT text not seen — using calibrated point");
+                                plannerSnapPhase(tx,ty);
+                            }});
+                        return;
+                    }
                     if(now!=null) now.recycle();
-                    if(opened){ ref.recycle(); plannerSnapPhase(sw,sh); return; }
                     if(attempt<2){
                         addScanLog("planner scan: planner didn't open — retapping ("+(attempt+2)+"/3)");
                         plannerOpenTap(ref, sw, sh, attempt+1);
@@ -7200,9 +7250,9 @@ public class OverlayService extends Service {
         }});
     }
 
-    private void plannerSnapPhase(final int sw, final int sh){
+    private void plannerSnapPhase(final float x, final float y){
         if(!plannerScanPending) return;
-        dispatchTap(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
+        dispatchTap(x, y, UI_TAP_MS, new Runnable(){ public void run(){
             plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
         }});
     }
@@ -7279,19 +7329,51 @@ public class OverlayService extends Service {
             float xN=pool.getPln("sn_x")*w/100f, yN=pool.getPln("sn_y")*h/100f;
             float dxs=(xN-x1)/(PLN_SLOTS-1), dys=(yN-y1)/(PLN_SLOTS-1);
             float spacing=(float)Math.hypot(dxs,dys);
-            if(spacing<8f){
-                shot.recycle();
-                plannerHandler.post(new Runnable(){ public void run(){
-                    stopPlannerScan("slot calibration too narrow — recalibrate in SETUP");
-                }});
-                return;
-            }
             // roster arrays for the fuzzy card-name fallback (parallel names/norms)
             java.util.List<String> all=new java.util.ArrayList<>();
             for(String[] tier:SetData.CHAMPS) for(String c:tier) all.add(c);
             String[] cn=all.toArray(new String[0]);
             String[] cnorm=new String[cn.length];
             for(int i=0;i<cn.length;i++) cnorm[i]=NameMatch.norm(cn[i]);
+            // PRIMARY read — the champion NAME LABELS printed under the team
+            // cards. The team area is the right half of the planner dialog (the
+            // left half is the full roster list, which must NOT count); the
+            // vertical band keeps out the dialog title and game HUD around the
+            // dialog. This needs no slot geometry at all, so it survives the
+            // 5x2 card grid the old first→last slot line never matched.
+            java.util.List<ScreenScanner.OcrLine> labels=new java.util.ArrayList<>();
+            for(ScreenScanner.OcrLine l:lines){
+                if(l.cx < w*45/100 || l.cx > w*91/100) continue;
+                if(l.cy < h*20/100 || l.cy > h*88/100) continue;
+                String nm=NameMatch.bestMatch(l.text, cn, cnorm);
+                if(nm!=null) labels.add(new ScreenScanner.OcrLine(nm, l.cx, l.cy));
+            }
+            if(!labels.isEmpty()){
+                final int rowH=Math.max(1,h*12/100);
+                java.util.Collections.sort(labels, new java.util.Comparator<ScreenScanner.OcrLine>(){
+                    public int compare(ScreenScanner.OcrLine a, ScreenScanner.OcrLine b){
+                        int ra=a.cy/rowH, rb=b.cy/rowH;
+                        return ra!=rb ? ra-rb : a.cx-b.cx;
+                    }
+                });
+                for(ScreenScanner.OcrLine l:labels){
+                    slotNames.add(l.text);
+                    addScanLog("planner card: "+l.text+" (label)");
+                }
+                if(pool.isDevMode()) saveDebugPng(shot,"tft-planner");
+                shot.recycle();
+                plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
+                return;
+            }
+            // LEGACY fallback — the calibrated slot-line icon walk (only viable
+            // when the slot calibration exists and is sane)
+            if(spacing<8f){
+                addScanLog("planner: no card labels read and slot line uncalibrated — nothing to name");
+                saveDebugPng(shot,"tft-planner");
+                shot.recycle();
+                plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
+                return;
+            }
             int cs=Math.max(24,(int)(spacing*0.80f));
             int occupied=0, named=0;
             for(int i=0;i<PLN_SLOTS;i++){
@@ -7427,6 +7509,16 @@ public class OverlayService extends Service {
             unknown=merge.unresolvedCount();
             if(!floating.isEmpty())
                 addScanLog("planner: "+floating.size()+" floating (no health-bar match): "+floating);
+        }
+        // bench units the board shot recognized by Visual ID (the snapshot never
+        // shows bench) — counted like any other copy
+        if(plannerBenchNames!=null){
+            for(String bn:plannerBenchNames){
+                matched++;
+                pool.add(bn,1);
+                autoScanResults.add(bn+" ≈ bench");
+            }
+            plannerBenchNames=null;
         }
 
         if(autoScanGold>=0) pool.setGold(autoScanGold);
