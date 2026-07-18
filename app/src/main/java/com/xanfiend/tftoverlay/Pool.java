@@ -274,6 +274,14 @@ public class Pool {
     public boolean isDevMode()        { return p.getBoolean("cfg_devmode", false); }
     public void setDevMode(boolean d) { p.edit().putBoolean("cfg_devmode", d).apply(); }
 
+    // Game mode: 0=Standard/Ranked, 1=Hyper Roll, 2=Double Up, 3=Tocker's Trials.
+    // The champion pool is the same shared pool in every PvP mode — what changes
+    // is the ECONOMY (Hyper Roll has no interest/streak gold, XP is automatic)
+    // and whether opponent pressure applies (Tocker's is PvE). The advice panels
+    // read this to hide/replace guidance that doesn't apply.
+    public int getGameMode()          { return p.getInt("cfg_gamemode", 0); }
+    public void setGameMode(int m)    { p.edit().putInt("cfg_gamemode", m).apply(); }
+
     // ---- XP / leveling ----
     public static int xpToNext(int level){
         if (level < 1 || level >= SetData.XP_TO_NEXT.length) return 0;
