@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.78");
+        ver.setText("v1.99.79");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.79  ·  2026-07-18","Root cause of gold misreads found (thanks to your report): rotating to portrait or leaving the game permanently shoved the draggable gold/XP chips to a different spot, and the gold reader is anchored to the gold chip. Chip positions are now remembered separately per orientation and snap back to your dragged spot when you return to the game. Same fix for the STOP button."},
             {"v1.99.78  ·  2026-07-18","POOL tab now has a TRAIT browser: filter champions by the traits the overlay has learned from your scans (Brawler, Arbiter, Mecha…) — chips appear as champions get scried. Star levels: when the fast capture can't see health bars the scan now retries on the other capture path, and dev mode saves the frame for tuning. Fixed the scan occasionally overwriting your gold with a wrong number — the always-on gold reader's fresher value now wins."},
             {"v1.99.77  ·  2026-07-18","Tap-free scan, third round of fixes from your screenshots: the planner can open as two different screens, so the scan now finds the SNAPSHOT button by reading the screen each time instead of trusting one calibrated spot. Units are read from the name labels on the snapshot cards (the old slot-position method never lined up with the real card grid). And bench units the app has already learned to recognize by sight get counted in the same scan — recognition grows every game."},
             {"v1.99.76  ·  2026-07-17","The tap-free scan now reads each snapshot card TWO ways: by its art, and by the champion name written on the card — so a card the art matcher can't identify still gets named. When recognition fails completely, the scan saves the snapshot image to Pictures/TFTScryer so the problem can be seen and fixed instead of guessed at."},

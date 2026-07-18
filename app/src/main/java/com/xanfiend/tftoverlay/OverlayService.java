@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.78";
+    private static final String APP_VERSION = "v1.99.79";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -775,12 +775,20 @@ public class OverlayService extends Service {
         }};
         hudHandler.postDelayed(hudTick, 3000);
     }
+    // HUD positions are stored PER ORIENTATION ("_p" suffix in portrait). One
+    // shared key let the portrait clamp overwrite the landscape spot on every
+    // rotation/app-exit — and the gold watch's read band is pinned to the gold
+    // chip, so the band drifted mid-screen and read junk (user report).
+    private String hudKey(String base){
+        android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
+        return dm.heightPixels>dm.widthPixels ? base+"_p" : base;
+    }
     private WindowManager.LayoutParams makeHudLp(String kx, String ky, int defX, int defY){
         WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-2,-2,wtype(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
         lp.gravity=Gravity.TOP|Gravity.START;
-        lp.x=pool.getHudPos(kx,defX); lp.y=pool.getHudPos(ky,defY);
+        lp.x=pool.getHudPos(hudKey(kx),defX); lp.y=pool.getHudPos(hudKey(ky),defY);
         return lp;
     }
     private TextView makeHudMini(int color, final WindowManager.LayoutParams lp,
@@ -818,7 +826,7 @@ public class OverlayService extends Service {
                     try{ wm.updateViewLayout(t,lp); }catch(Exception ex){}
                     return true;
                 } else if(a==MotionEvent.ACTION_UP){
-                    pool.setHudPos(kx,lp.x); pool.setHudPos(ky,lp.y);
+                    pool.setHudPos(hudKey(kx),lp.x); pool.setHudPos(hudKey(ky),lp.y);
                     return true;
                 }
                 return false;
@@ -7984,8 +7992,8 @@ public class OverlayService extends Service {
         // the back row's middle hexes — it appears in accessibility screenshots
         // and hid those units' health bars from the scan entirely. The top strip
         // is outside every scan zone. Still draggable; a moved position is kept.
-        int sx=pool.getHudPos("stop_x", dm.widthPixels*63/100);
-        int sy=pool.getHudPos("stop_y", dm.heightPixels*1/100);
+        int sx=pool.getHudPos(hudKey("stop_x"), dm.widthPixels*63/100);
+        int sy=pool.getHudPos(hudKey("stop_y"), dm.heightPixels*1/100);
         // a SAVED position from an old version can still sit on the board — there
         // it swallows injected probe taps (killing the scan instantly) and hides
         // units in detection screenshots. Shove it back to the top strip.
@@ -8011,7 +8019,7 @@ public class OverlayService extends Service {
                     lp.x=ix+dx; lp.y=iy+dy; try{ wm.updateViewLayout(v,lp); }catch(Exception ex){}
                     return true;
                 } else if(a==MotionEvent.ACTION_UP){
-                    pool.setHudPos("stop_x",lp.x); pool.setHudPos("stop_y",lp.y);
+                    pool.setHudPos(hudKey("stop_x"),lp.x); pool.setHudPos(hudKey("stop_y"),lp.y);
                     if(!moved) stopActiveMode();
                     return true;
                 }
@@ -8738,10 +8746,15 @@ public class OverlayService extends Service {
         }
         if(hudGoldView != null){
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-            hudGoldLp.x = Math.min(hudGoldLp.x, dm.widthPixels - 100);
-            hudGoldLp.y = Math.min(hudGoldLp.y, dm.heightPixels - 100);
-            hudXpLp.x = Math.min(hudXpLp.x, dm.widthPixels - 100);
-            hudXpLp.y = Math.min(hudXpLp.y, dm.heightPixels - 100);
+            // reload each chip's SAVED position for this orientation instead of
+            // clamping the other orientation's live values — the clamp squashed
+            // the landscape spot on every portrait trip and never restored it,
+            // dragging the pinned gold-read band with it (gold misreads after
+            // rotating or exiting the game)
+            hudGoldLp.x=pool.getHudPos(hudKey("hud_gx"), dm.widthPixels*84/100);
+            hudGoldLp.y=pool.getHudPos(hudKey("hud_gy"), dm.heightPixels*85/100);
+            hudXpLp.x=pool.getHudPos(hudKey("hud_xx"), dm.widthPixels*4/100);
+            hudXpLp.y=pool.getHudPos(hudKey("hud_xy"), dm.heightPixels*85/100);
             try{ wm.updateViewLayout(hudGoldView, hudGoldLp); }catch(Exception e){}
             try{ wm.updateViewLayout(hudXpView, hudXpLp); }catch(Exception e){}
         }
