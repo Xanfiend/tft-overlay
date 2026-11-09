@@ -67,6 +67,46 @@ public final class SetData {
         "Ahri","AurelionSol","Ekko","Evelynn","Kayle","Soraka","Thresh","Varus","Yasuo"
     };
 
+    // ---- EVENT MODE roster (optional, from remote setdata.json "event") ----
+    // A live event queue can run a COMPLETELY different champion pool alongside
+    // the standard set. RemoteData fills these when the payload carries an
+    // "event" object; null means no event data. The GAME MODE switch swaps the
+    // ACTIVE roster via applyEventRoster — standard fields are backed up on the
+    // first swap and restored when switching back.
+    public static String EVENT_NAME = null;
+    public static int[] EVENT_SIZE = null;
+    public static String[][] EVENT_CHAMPS = null;
+    public static String[] EVENT_GODS = null;
+
+    private static String stdName; private static int[] stdSize;
+    private static String[][] stdChamps; private static String[] stdGods;
+    private static boolean eventActive = false;
+
+    public static synchronized boolean eventAvailable(){ return EVENT_CHAMPS != null; }
+    public static synchronized boolean isEventActive(){ return eventActive; }
+
+    /** Swap the active roster; returns true when the requested state is in effect. */
+    public static synchronized boolean applyEventRoster(boolean on){
+        if(on == eventActive) return true;
+        if(on){
+            if(EVENT_CHAMPS == null) return false;
+            stdName=SET_NAME; stdSize=SIZE; stdChamps=CHAMPS; stdGods=GODS;
+            if(EVENT_NAME != null) SET_NAME = EVENT_NAME;
+            if(EVENT_SIZE != null) SIZE = EVENT_SIZE;
+            CHAMPS = EVENT_CHAMPS;
+            GODS = EVENT_GODS != null ? EVENT_GODS : new String[0];
+            eventActive = true;
+        } else {
+            if(stdChamps != null){ SET_NAME=stdName; SIZE=stdSize; CHAMPS=stdChamps; GODS=stdGods; }
+            eventActive = false;
+        }
+        // every roster-derived cache must rebuild against the new list
+        Pool.invalidateData();
+        ScreenScanner.invalidateRosterCaches();
+        SetIcons.reset();
+        return true;
+    }
+
     // Champions grouped by cost. Index 0 stays empty.
     public static String[][] CHAMPS = {
         {}, // index 0 unused

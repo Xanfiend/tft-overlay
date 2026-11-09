@@ -95,6 +95,13 @@ public final class SetIcons {
         return null;
     }
 
+    // Forget everything so the next load() rebuilds against the CURRENT
+    // SetData roster — called when the event-mode switch swaps the active pool.
+    public static synchronized void reset(){
+        names.clear(); sigs.clear();
+        loaded = false; lastAttemptMs = 0;
+    }
+
     public static synchronized int champCount(){
         java.util.HashSet<String> u = new java.util.HashSet<>(names);
         return u.size();

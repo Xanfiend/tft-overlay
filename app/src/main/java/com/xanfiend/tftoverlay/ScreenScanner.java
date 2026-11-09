@@ -947,6 +947,15 @@ public class ScreenScanner {
         return champListCache;
     }
 
+    // Drop every roster-derived cache so the next scan rebuilds against the
+    // CURRENT SetData.CHAMPS — required when the event-mode switch swaps the
+    // active roster mid-session (startup swaps happen before first build).
+    static synchronized void invalidateRosterCaches() {
+        champNames = null; champNorms = null; champWords = null;
+        champWordsLower = null; champWordSplit = null;
+        champListCache = null;
+    }
+
     private static synchronized void ensureChampArrays() {
         if (champNames != null) return;
         List<String> list = buildChampList();
