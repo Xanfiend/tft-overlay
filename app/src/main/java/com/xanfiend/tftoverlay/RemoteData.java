@@ -122,7 +122,51 @@ public final class RemoteData {
             for(int i=0;i<g.length;i++) g[i] = gods.getString(i);
             SetData.GODS = g;
         }
+
+        // Optional EVENT roster — a live event queue with a different champion
+        // pool. Malformed/absent event data clears the fields; it can never
+        // corrupt the primary set (validated separately).
+        JSONObject ev = o.optJSONObject("event");
+        if(ev != null && validRosterShape(ev)){
+            SetData.EVENT_NAME = ev.optString("name", "Event");
+            JSONArray esize = ev.optJSONArray("size");
+            if(esize != null && esize.length() == 6){
+                int[] es = new int[6];
+                for(int i=0;i<6;i++) es[i] = esize.getInt(i);
+                SetData.EVENT_SIZE = es;
+            } else SetData.EVENT_SIZE = null;
+            JSONArray ech = ev.getJSONArray("champs");
+            String[][] ecc = new String[ech.length()][];
+            for(int c=0;c<ech.length();c++){
+                JSONArray tier = ech.getJSONArray(c);
+                String[] arr = new String[tier.length()];
+                for(int i=0;i<arr.length;i++) arr[i] = tier.getString(i);
+                ecc[c] = arr;
+            }
+            SetData.EVENT_CHAMPS = ecc;
+            JSONArray eg = ev.optJSONArray("gods");
+            if(eg != null){
+                String[] g2 = new String[eg.length()];
+                for(int i=0;i<g2.length;i++) g2[i] = eg.getString(i);
+                SetData.EVENT_GODS = g2;
+            } else SetData.EVENT_GODS = null;
+        } else {
+            SetData.EVENT_NAME=null; SetData.EVENT_SIZE=null;
+            SetData.EVENT_CHAMPS=null; SetData.EVENT_GODS=null;
+        }
+
         Pool.invalidateData();   // rebuild the cost cache against the new list
+        return true;
+    }
+
+    // Same 6-row / non-empty-tier shape check the primary payload gets.
+    static boolean validRosterShape(JSONObject o){
+        JSONArray champs = o.optJSONArray("champs");
+        if(champs == null || champs.length() != 6) return false;
+        for(int c=1;c<=5;c++){
+            JSONArray tier = champs.optJSONArray(c);
+            if(tier == null || tier.length() == 0) return false;
+        }
         return true;
     }
 

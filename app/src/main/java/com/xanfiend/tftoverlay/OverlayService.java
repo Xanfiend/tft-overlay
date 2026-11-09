@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.80";
+    private static final String APP_VERSION = "v1.99.81";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -274,7 +274,7 @@ public class OverlayService extends Service {
     private int plannerWrapMatched = 0, plannerWrapUnknown = 0, plannerWrapOccupied = 0;
     private long plannerWrapTookMs = 0;
     private boolean setupShowAll = false; // SETUP tab: advanced sections folded away by default
-    private static final String[] GAME_MODES = {"STANDARD","HYPER ROLL","DOUBLE UP","TOCKER'S"};
+    private static final String[] GAME_MODES = {"STANDARD","HYPER ROLL","DOUBLE UP","TOCKER'S","EVENT"};
     private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     // planner calibration overlay: records where the planner controls live
     private int plnCalStep = 0; // 0=idle, 1=planner btn, 2=snapshot btn, 3=first slot, 4=last slot, 5=close
@@ -388,6 +388,9 @@ public class OverlayService extends Service {
         goForeground(); // keep the process alive so the accessibility service isn't killed with it
         RemoteData.loadCachedOrBundled(this); // overlay synced set data before anything reads it
         pool = new Pool(this);
+        // saved mode = EVENT → swap to the event roster before anything reads
+        // SetData (falls back to standard silently when no event data is cached)
+        if(pool.getGameMode()==4 && !SetData.applyEventRoster(true)) pool.setGameMode(0);
         applyTheme();   // set the accent colors before the button/panel are built
         level = pool.getLevel();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -1537,7 +1540,7 @@ public class OverlayService extends Service {
             // bundled, SCRY MY BOARD reads the whole board from one Team Planner
             // snapshot — zero unit taps. Long-press forces the classic tap read.
             SetIcons.load(this);
-            final boolean plnRoute = accAvail && pool.plannerCalibrated() && SetIcons.champCount()>0;
+            final boolean plnRoute = accAvail && pool.plannerCalibrated();
             LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD",
                     plnRoute ? "no unit taps \u00b7 hold for tap scan" : "level \u00b7 gold \u00b7 every unit",
                     accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
@@ -1546,16 +1549,9 @@ public class OverlayService extends Service {
                 if(!accAvail){ openAccessibilitySettings(); return; }
                 // re-evaluate LIVE (the button may have been built before the user
                 // calibrated), and say WHY when the tap-free route is unavailable
-                SetIcons.load(OverlayService.this);
-                boolean calOk=pool.plannerCalibrated(), iconsOk=SetIcons.champCount()>0;
-                if(calOk && iconsOk){ startPlannerScan(); return; }
-                // toast once per session only: this toast fired right before the
-                // scan's screenshots and sat INSIDE the popup OCR zone, polluting
-                // (and covering) the popup name reads
-                if(calOk && !iconsOk && !iconsToastShown){
-                    iconsToastShown=true;
-                    Toast.makeText(OverlayService.this,"Tap-free scan unavailable: champion icons failed to load (see debug log) — using the tap scan",Toast.LENGTH_SHORT).show();
-                }
+                // card-label OCR is the primary read now, so missing icons no
+                // longer force the tap scan — calibration is the only gate
+                if(pool.plannerCalibrated()){ startPlannerScan(); return; }
                 startAutoTapScan();
             }});
             asBtn.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
@@ -1856,7 +1852,8 @@ public class OverlayService extends Service {
             TextView gmTv=new TextView(this);
             gmTv.setText(gmPool==1?"⚔ HYPER ROLL — same shared pool · no interest, XP is automatic"
                     :gmPool==2?"⚔ DOUBLE UP — pool shared by all 8 players; your partner's copies drain it too"
-                    :"⚔ TOCKER'S TRIALS — PvE: no enemy players contest this pool");
+                    :gmPool==3?"⚔ TOCKER'S TRIALS — PvE: no enemy players contest this pool"
+                    :"⚔ EVENT — this mode's own champion pool ("+SetData.SET_NAME+")");
             gmTv.setTextColor(GOLD); gmTv.setTextSize(ts(9)); gmTv.setPadding(4,4,0,6);
             root.addView(gmTv);
         }
@@ -4070,10 +4067,20 @@ public class OverlayService extends Service {
         // ◇ GAME MODE — same shared champion pool in every PvP mode; the advice
         // panels adapt (Hyper Roll has no interest/streak econ, Tocker's is PvE)
         addSecHdr(root, "GAME MODE", GOLD);
-        pickRow(root, GAME_MODES, new int[]{0,1,2,3}, pool.getGameMode(), 9,
-            new PickSetter(){ public void pick(int v){ pool.setGameMode(v); buzz(); showPanel(); }});
+        pickRow(root, GAME_MODES, new int[]{0,1,2,3,4}, pool.getGameMode(), 9,
+            new PickSetter(){ public void pick(int v){
+                if(v==4 && !SetData.eventAvailable()){
+                    Toast.makeText(OverlayService.this,
+                        "No event-pool data yet — it arrives automatically via data sync once the event roster is published",
+                        Toast.LENGTH_LONG).show();
+                    return;
+                }
+                pool.setGameMode(v);
+                SetData.applyEventRoster(v==4);
+                buzz(); showPanel();
+            }});
         TextView gmHint=new TextView(this);
-        gmHint.setText("adjusts the econ & pool advice to the mode you queue — the champion pool itself is the same everywhere");
+        gmHint.setText("adjusts the econ & pool advice to the mode you queue — EVENT swaps to the event queue's own champion pool when its roster is published");
         gmHint.setTextColor(DIM); gmHint.setTextSize(10); gmHint.setPadding(2,0,2,8); root.addView(gmHint);
 
         // ◇ MORE SETTINGS — the long tail of tweakables folds away so first-time
@@ -7227,10 +7234,10 @@ public class OverlayService extends Service {
             return;
         }
         SetIcons.load(this);
-        if(SetIcons.champCount()==0){
-            Toast.makeText(this,"No set icons in this build — Planner Scan needs an app update",Toast.LENGTH_LONG).show();
-            return;
-        }
+        // no icons (event roster, or icons not bundled yet) is no longer fatal —
+        // the card NAME labels are the primary read; icons only assist
+        if(SetIcons.champCount()==0)
+            addScanLog("planner scan: no icons for this roster — card labels only");
         clearInjecting();
         plannerScanPending=true;
         plannerUnits=null;
@@ -7734,10 +7741,45 @@ public class OverlayService extends Service {
             benchTapIdx=0; benchTapResults=0;
             if(btnLabel!=null) btnLabel.setText("BENCH");
             addScanLog("bench: popup-reading "+plannerBenchTapTargets.size()+" unrecognized slot(s)");
-            benchTapNext();
+            benchAfterPlannerClose(0);
             return;
         }
         plannerWrapUp();
+    }
+
+    // The close tap is dispatched ~200ms after the read shot and the dialog
+    // takes a moment to animate out — bench taps fired under the still-open
+    // planner landed on planner content (user report: tapping champions INSIDE
+    // the planner, polluting the planned team). Wait, then OCR-check the frame
+    // for planner UI text; if it's still there, re-tap close (2 retries) before
+    // letting the bench taps loose. Never taps the bench under an open dialog.
+    private void benchAfterPlannerClose(final int attempt){
+        plannerHandler.postDelayed(new Runnable(){ public void run(){
+            plannerShot(new ShotCb(){ public void onShot(final Bitmap frame){
+                if(frame==null){ benchTapNext(); return; }
+                new ScreenScanner(OverlayService.this,null).scanLines(frame,
+                    new ScreenScanner.LinesCallback(){ public void onLines(java.util.List<ScreenScanner.OcrLine> lines){
+                        frame.recycle();
+                        boolean open=false;
+                        for(ScreenScanner.OcrLine l:lines){
+                            String u=l.text.toUpperCase();
+                            if(u.contains("SNAPSHOT")||u.contains("TEAM PLANNER")||u.contains("MY TEAMS")){ open=true; break; }
+                        }
+                        if(!open){ benchTapNext(); return; }
+                        if(attempt>=2){
+                            addScanLog("bench: planner would not close — skipping bench taps");
+                            plannerWrapUp();
+                            return;
+                        }
+                        addScanLog("bench: planner still open — re-tapping close");
+                        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+                        wm.getDefaultDisplay().getRealMetrics(dm);
+                        dispatchTap(pool.getPln("close_x")*dm.widthPixels/100f,
+                                    pool.getPln("close_y")*dm.heightPixels/100f, UI_TAP_MS,
+                            new Runnable(){ public void run(){ benchAfterPlannerClose(attempt+1); }});
+                    }});
+            }});
+        }}, 900);
     }
 
     // Bench completion pass: the planner named the board tap-free; the occupied

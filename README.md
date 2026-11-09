@@ -1,3 +1,5 @@
+> **⚠ No longer maintained.** This project is archived. The last release (v1.99.81) still works, but it won't get updates for new TFT sets or patches.
+
 <div align="center">
 
 # ⦿ TFT SCRYER
