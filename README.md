@@ -25,7 +25,7 @@
 >
 > The last release (**v1.99.81**) still works, but it won't get updates for new sets or patches.
 >
-> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or message **[@xanfiend](https://instagram.com/xanfiend)**.
+> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or message **[@ravriks](https://instagram.com/ravriks)**.
 
 <br>
 
@@ -95,6 +95,6 @@ Yes. The full source code is right here. No accounts, no ads, no tracking — ev
 
 Version history on the **[Releases](https://github.com/Xanfiend/tft-overlay/releases)** page
 
-Made by **[@xanfiend](https://instagram.com/xanfiend)**
+Made by **[@ravriks](https://instagram.com/ravriks)**
 
 </div>
