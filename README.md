@@ -25,7 +25,7 @@
 >
 > The last release (**v1.99.81**) still works, but it won't get updates for new sets or patches.
 >
-> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or message **[@ravriks](https://instagram.com/ravriks)**.
+> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or message raivoharkovs@gmail.com)**.
 
 <br>
 
