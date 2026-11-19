@@ -13,21 +13,10 @@
 [![Latest release](https://img.shields.io/github/v/release/Xanfiend/tft-overlay?style=flat-square&label=version&color=8B1A1A)](https://github.com/Xanfiend/tft-overlay/releases)
 [![Android](https://img.shields.io/badge/Android-7%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-install)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
-[![Status](https://img.shields.io/badge/status-on_hold-6B6B6B?style=flat-square)](#-project-status)
 
 `❦ · ⋆ · ❦ · ⋆ · ❦ · ⋆ · ❦`
 
 </div>
-
-> [!NOTE]
-> ### ⏸ Project status: on hold
-> Development has stopped. Most TFT players are on PC, so a mobile-only overlay just doesn't reach enough people to be worth maintaining.
->
-> The latest release (**v1.99.82**) is updated for **Set 18: Enchanted Wilds**. New features are not planned.
->
-> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or email **raivoharkovs@gmail.com**.
-
-<br>
 
 ## ✦ What it does
 
