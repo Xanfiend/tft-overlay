@@ -35,8 +35,9 @@ public class SetDataTest {
         }
     }
 
-    @Test public void godsPresent(){
-        assertTrue(SetData.GODS.length > 0);
+    @Test public void godsArrayNeverNull(){
+        // sets without a Realm of Gods ship an empty list, never null
+        assertNotNull(SetData.GODS);
     }
 
     @Test public void noChampionAppearsInTwoTiers(){

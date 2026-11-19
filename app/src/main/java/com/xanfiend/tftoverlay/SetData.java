@@ -32,18 +32,17 @@ package com.xanfiend.tftoverlay;
 public final class SetData {
 
     // Display name of the current set
-    public static String SET_NAME = "Set 17 - Space Gods";
+    public static String SET_NAME = "Set 18 - Enchanted Wilds";
 
     // Patch the bundled/synced data corresponds to (for the staleness banner).
     public static String PATCH = "";
 
     // Pool sizes by cost: [unused, 1-cost, 2-cost, 3-cost, 4-cost, 5-cost]
-    // Set 17 bag sizes: 29 / 22 / 18 / 10 / 9 (smaller 1c/2c bags than the
-    // classic 30/25). Verify against the patch notes when a new set drops.
-    public static int[] SIZE = {0, 29, 22, 18, 10, 9};
+    // Set 18 bag sizes (copies of EACH champion): 30 / 25 / 18 / 10 / 9.
+    public static int[] SIZE = {0, 30, 25, 18, 10, 9};
 
     // Shop odds per level: row = player level (0-10), columns = 1c..5c, percent.
-    // Set 17 values; verify rows 7-10 each set, Riot tunes these often.
+    // Carried over from Set 17 — sources disagreed on Set 18 level 7; verify rows 7-10.
     public static final int[][] ODDS = {
         {0,0,0,0,0},{100,0,0,0,0},{100,0,0,0,0},{75,25,0,0,0},
         {55,30,15,0,0},{45,33,20,2,0},{30,40,25,5,0},{19,30,40,10,1},
@@ -60,12 +59,9 @@ public final class SetData {
     // the last entry). Total damage = base + 1 per surviving enemy unit.
     public static final int[] STAGE_BASE_DMG = {0, 0, 2, 5, 8, 10, 12, 17};
 
-    // Set 17 mechanic: 2 of these 9 gods appear per game in the Realm (replaces
-    // carousels at 2-4 / 3-4 / 4-4). Picking one god's offerings 2+ times earns
-    // their Boon armory at 4-7 plus recurring loot afterwards.
-    public static String[] GODS = {
-        "Ahri","AurelionSol","Ekko","Evelynn","Kayle","Soraka","Thresh","Varus","Yasuo"
-    };
+    // Realm of Gods picks (a Set 17 mechanic). Empty when the live set has no
+    // gods; the GOLD tab hides the tracker then. Remote data can refill it.
+    public static String[] GODS = {};
 
     // ---- EVENT MODE roster (optional, from remote setdata.json "event") ----
     // A live event queue can run a COMPLETELY different champion pool alongside
@@ -112,23 +108,24 @@ public final class SetData {
         {}, // index 0 unused
 
         // 1-cost
-        {"Aatrox","Briar","Caitlyn","Chogath","Ezreal","Leona","Lissandra",
-         "Nasus","Poppy","RekSai","Talon","Teemo","TwistedFate","Veigar"},
+        {"Akali","Camille","Cinderling","Karma","Kobuko","Leona","Ornn",
+         "Pebbles","Rakan","RekSai","Varus","Veigar","Xayah","Yorick"},
 
         // 2-cost
-        {"Akali","Belveth","Gnar","Gragas","Gwen","Jax","Jinx",
-         "Meepsie","Milio","Mordekaiser","Pantheon","Pyke","Zoe"},
+        {"Alistar","Caitlyn","Elise","Gromp","Kayle","Leblanc","Murkwolf",
+         "Scuttlecrab","Sejuani","Shen","Teemo","Warwick","Yunara"},
 
         // 3-cost
-        {"Aurora","Diana","Fizz","Illaoi","Kaisa","Lulu","Maokai",
-         "MissFortune","Ornn","Rhaast","Samira","Urgot","Viktor"},
+        {"Azir","Cassiopeia","Diana","Fiddlesticks","Hecarim","Khazix","Kogmaw",
+         "Krug","MamaBeak","MasterYi","Rammus","Rengar","Tristana","Vi"},
 
         // 4-cost
-        {"AurelionSol","Corki","Karma","Kindred","Leblanc","MasterYi","Morgana",
-         "Nami","Nunu","Rammus","Riven","TahmKench","MightyMech","Xayah"},
+        {"Ahri","Amumu","Aphelios","Brambleback","Ezreal","Lillia","Malphite",
+         "Morgana","Nidalee","Sentinel","Sett","Sivir","Soraka","Zyra"},
 
         // 5-cost
-        {"Bard","Blitzcrank","Fiora","Graves","Jhin","Shen","Sona","Vex"}
+        {"Alune","Ashe","Draven","ElderDragon","Gnar","Ivern","Kennen",
+         "Lux","Maokai","Taric"}
     };
 
     private SetData() {} // no instances

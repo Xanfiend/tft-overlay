@@ -60,6 +60,23 @@ public final class ThreatData {
         // ---- FLANK: assassins / divers / blink that hunt the enemy backline ----
         r("Talon",FLANK); r("Akali",FLANK); r("Pyke",FLANK); r("Diana",FLANK);
         r("Fizz",FLANK); r("Leblanc",FLANK); r("MasterYi",FLANK); r("Fiora",FLANK);
+
+        // ---- Set 18 "Enchanted Wilds": melee FRONT, ranged BACK, assassins/divers FLANK.
+        // Later r() calls win, so these override any Set 17 entry with the same name. ----
+        r("Alistar",FRONT); r("Amumu",FRONT); r("Brambleback",FRONT); r("Diana",FRONT); r("ElderDragon",FRONT);
+        r("Elise",FRONT); r("Fiddlesticks",FRONT); r("Gnar",FRONT); r("Hecarim",FRONT); r("Kennen",FRONT);
+        r("Kobuko",FRONT); r("Krug",FRONT); r("Leona",FRONT); r("Lillia",FRONT); r("Malphite",FRONT);
+        r("Maokai",FRONT); r("Murkwolf",FRONT); r("Ornn",FRONT); r("Rakan",FRONT); r("Rammus",FRONT);
+        r("RekSai",FRONT); r("Scuttlecrab",FRONT); r("Sejuani",FRONT); r("Sentinel",FRONT); r("Sett",FRONT);
+        r("Shen",FRONT); r("Taric",FRONT); r("Vi",FRONT); r("Warwick",FRONT); r("Yorick",FRONT);
+        r("Ahri",BACK); r("Alune",BACK); r("Aphelios",BACK); r("Ashe",BACK); r("Azir",BACK);
+        r("Caitlyn",BACK); r("Cassiopeia",BACK); r("Cinderling",BACK); r("Draven",BACK); r("Ezreal",BACK);
+        r("Gromp",BACK); r("Ivern",BACK); r("Karma",BACK); r("Kayle",BACK); r("Kogmaw",BACK);
+        r("Leblanc",BACK); r("Lux",BACK); r("MamaBeak",BACK); r("Morgana",BACK); r("Pebbles",BACK);
+        r("Sivir",BACK); r("Soraka",BACK); r("Teemo",BACK); r("Tristana",BACK); r("Varus",BACK);
+        r("Veigar",BACK); r("Xayah",BACK); r("Yunara",BACK); r("Zyra",BACK);
+        r("Akali",FLANK); r("Camille",FLANK); r("Khazix",FLANK); r("MasterYi",FLANK); r("Nidalee",FLANK);
+        r("Rengar",FLANK);
     }
 
     // ---- threat archetypes (orthogonal to role) — drive counter-positioning ----

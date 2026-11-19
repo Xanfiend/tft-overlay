@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.81";
+    private static final String APP_VERSION = "v1.99.82";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -3390,7 +3390,7 @@ public class OverlayService extends Service {
 
     // ---- GUIDE TAB: sub-tabs for Augments and Items reference ----
     private void buildGuide(LinearLayout root){
-        buildGodTracker(root);
+        if(SetData.GODS.length>0) buildGodTracker(root); // Realm of Gods only exists in sets that have gods
         // sub-tab row
         LinearLayout gtRow=new LinearLayout(this); gtRow.setPadding(0,0,0,10);
         String[] gtNames={"COACH","POSITION","OPENER","AUGMENTS","ITEMS"};
