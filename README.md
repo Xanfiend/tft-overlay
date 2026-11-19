@@ -23,9 +23,9 @@
 > ### ⏸ Project status: on hold
 > Development has stopped. Most TFT players are on PC, so a mobile-only overlay just doesn't reach enough people to be worth maintaining.
 >
-> The last release (**v1.99.81**) still works, but it won't get updates for new sets or patches.
+> The latest release (**v1.99.82**) is updated for **Set 18: Enchanted Wilds**. New features are not planned.
 >
-> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or message raivoharkovs@gmail.com)**.
+> **Want it back?** If enough people ask, I'll restart development. ⭐ **Star the repo** or email **raivoharkovs@gmail.com**.
 
 <br>
 
