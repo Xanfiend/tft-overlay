@@ -63,6 +63,21 @@ Augment tiers, item chart, traits and positioning tips.
 </tr>
 </table>
 
+## ✦ Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/tab-pool.png" alt="POOL tab: copies left, contest pressure and 2-star progress"><br><sub><b>POOL</b> — copies left, who's contesting, 2★ progress</sub></td>
+<td width="50%"><img src="docs/screenshots/tab-odds.png" alt="ODDS tab: real hit chance for your pinned carry"><br><sub><b>ODDS</b> — your real chance to hit your carry</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/tab-gold.png" alt="GOLD tab: interest, brackets and roll budget"><br><sub><b>GOLD</b> — interest, brackets and roll budget</sub></td>
+<td width="50%"><img src="docs/screenshots/tab-builds.png" alt="BUILDS tab: items for each champion"><br><sub><b>BUILDS</b> — items for every champion</sub></td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/screenshots/launch.png" width="280" alt="TFT Scryer launch screen"></p>
+
 ## ✦ Install
 
 1. **[Download the APK](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)** on your Android phone.
