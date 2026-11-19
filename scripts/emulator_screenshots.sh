@@ -94,22 +94,23 @@ PY
 
 python3 -m pip install -q pillow 2>/dev/null || true
 
-# overlay tabs, landscape like the game. The home screen is portrait-only, so
-# Android Settings (which rotates) is the backdrop behind the overlay.
+# overlay tabs, landscape like the game. Android Settings hides third-party
+# overlays and the home screen won't rotate, so: open the panel over the home
+# screen in portrait, then rotate with the app's own (dark) launch screen in
+# front as the backdrop — the overlay rebuilds the open panel for landscape.
 i=0
 for name in pool odds guide gold setup builds; do
-  adb shell settings put system user_rotation 0   # Start Overlay is only on-screen in portrait
+  adb shell settings put system user_rotation 0
   prefs $i
   adb shell am start -n $PKG/.MainActivity
   sleep 4
   tap_text "Start Overlay"          # starts the overlay, app goes to the background
-  sleep 3
-  [ $i -eq 0 ] && shot dbg-1-after-start
-  adb shell settings put system user_rotation 1
-  adb shell am start -a android.settings.SETTINGS
   sleep 4
-  [ $i -eq 0 ] && { shot dbg-2-landscape; adb shell dumpsys activity services $PKG > "$OUT/dbg-services.txt" 2>&1; }
   tap_sigil                         # opens the panel on the tab saved in the prefs
+  sleep 2
+  adb shell settings put system user_rotation 1
+  adb shell am start -n $PKG/.MainActivity
+  sleep 5
   shot "tab-$name"
   i=$((i+1))
 done
