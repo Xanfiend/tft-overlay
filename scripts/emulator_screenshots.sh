@@ -96,14 +96,15 @@ python3 -m pip install -q pillow 2>/dev/null || true
 
 # overlay tabs, landscape like the game. The home screen is portrait-only, so
 # Android Settings (which rotates) is the backdrop behind the overlay.
-adb shell settings put system user_rotation 1
 i=0
 for name in pool odds guide gold setup builds; do
+  adb shell settings put system user_rotation 0   # Start Overlay is only on-screen in portrait
   prefs $i
   adb shell am start -n $PKG/.MainActivity
   sleep 4
   tap_text "Start Overlay"          # starts the overlay, app goes to the background
   sleep 3
+  adb shell settings put system user_rotation 1
   adb shell am start -a android.settings.SETTINGS
   sleep 4
   tap_sigil                         # opens the panel on the tab saved in the prefs
