@@ -73,7 +73,29 @@ adb shell am start -n $PKG/.MainActivity
 sleep 4
 shot launch
 
-# overlay tabs, landscape like the game
+# find the floating sigil by its red ring (top-left area, above the HUD chips)
+# in a fresh screenshot, and tap its center
+tap_sigil(){
+  adb exec-out screencap -p > /tmp/s.png
+  local xy
+  xy=$(python3 - <<'PY'
+from PIL import Image
+im=Image.open('/tmp/s.png').convert('RGB'); w,h=im.size; px=im.load()
+xs=[];ys=[]
+for y in range(0,int(h*0.7),2):
+    for x in range(0,int(w*0.3),2):
+        r,g,b=px[x,y]
+        if r>150 and g<60 and b<70: xs.append(x); ys.append(y)
+if xs: print(sum(xs)//len(xs), sum(ys)//len(ys))
+PY
+)
+  if [ -n "$xy" ]; then echo "sigil at $xy"; adb shell input tap $xy; else echo "sigil not found"; fi
+}
+
+python3 -m pip install -q pillow 2>/dev/null || true
+
+# overlay tabs, landscape like the game. The home screen is portrait-only, so
+# Android Settings (which rotates) is the backdrop behind the overlay.
 adb shell settings put system user_rotation 1
 i=0
 for name in pool odds guide gold setup builds; do
@@ -81,8 +103,10 @@ for name in pool odds guide gold setup builds; do
   adb shell am start -n $PKG/.MainActivity
   sleep 4
   tap_text "Start Overlay"          # starts the overlay, app goes to the background
+  sleep 3
+  adb shell am start -a android.settings.SETTINGS
   sleep 4
-  adb shell input tap 75 355        # the floating sigil's default spot opens the panel
+  tap_sigil                         # opens the panel on the tab saved in the prefs
   shot "tab-$name"
   i=$((i+1))
 done
