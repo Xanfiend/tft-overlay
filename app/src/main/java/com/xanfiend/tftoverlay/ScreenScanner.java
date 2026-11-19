@@ -37,7 +37,6 @@ public class ScreenScanner {
     // scan mode constants
     static final int MODE_FULL  = 0; // normal scan: gold, level, augments, shop, bench
     static final int MODE_POPUP = 1; // board scan mode: read champion name from unit popup zone only
-    static final int MODE_BOARD = 2; // auto board scan: full-screen sweep, very low minH, returns all champion matches
 
     public static class ScanResult {
         public int gold = -1;
@@ -53,16 +52,7 @@ public class ScreenScanner {
         public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
         public List<String> popupTraits = new ArrayList<>(); // trait names visible in the unit popup
         public android.graphics.Rect detectedPopupBounds = null; // popup scan: bounding rect of all popup-zone blocks
-        public List<String> autoChampions = new ArrayList<>(); // auto board scan: all champion names found
-        public List<BoardUnit> boardUnits = new ArrayList<>();  // board vision: template-matched units
         public String status = "";
-    }
-
-    public static class BoardUnit {
-        public final String name;
-        public final float confidence;
-        public final int probeX, probeY;
-        public BoardUnit(String n, float c, int x, int y){ name=n; confidence=c; probeX=x; probeY=y; }
     }
 
     public interface ScanCallback {
@@ -97,56 +87,6 @@ public class ScreenScanner {
     // Full scan from bitmap (accessibility screenshot path).
     void scanBitmap(Bitmap bmp, ScanCallback cb) {
         scanBitmap(bmp, cb, MODE_FULL);
-    }
-
-    // Board vision: match board hex crops against saved templates. No OCR — pure image signatures.
-    // Runs on a background thread; callback fires on main thread.
-    void scanBoardVision(Bitmap bmp, Context ctx, ScanCallback cb) {
-        new Thread(() -> {
-            log("scanBoardVision " + bmp.getWidth() + "x" + bmp.getHeight());
-            ChampionTemplates.load(ctx);
-            if (ChampionTemplates.templateCount() == 0) {
-                log("boardVision: no templates — run My Board scan first");
-                ScanResult r = new ScanResult();
-                r.status = "no templates — tap My Board and scan each unit first";
-                bmp.recycle();
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> cb.onResult(r));
-                return;
-            }
-            int w = bmp.getWidth(), h = bmp.getHeight();
-            int boardTop = h * 10 / 100;
-            int boardBot = h * 68 / 100;
-            int cropSize = Math.max(60, h / 14);
-            int cols = 7, rows = 4;
-            ScanResult r = new ScanResult();
-            log("boardVision: " + ChampionTemplates.templateCount() + " templates, " + cols + "x" + rows + " grid, crop=" + cropSize);
-            for (int row = 0; row < rows; row++) {
-                for (int col = 0; col < cols; col++) {
-                    int cx = (int) ((col + 0.5f) * w / cols);
-                    int cy = boardTop + (int) ((row + 0.5f) * (boardBot - boardTop) / rows);
-                    int x0 = Math.max(0, cx - cropSize / 2);
-                    int y0 = Math.max(0, cy - cropSize / 2);
-                    int cw = Math.min(cropSize, w - x0);
-                    int ch = Math.min(cropSize, h - y0);
-                    if (cw <= 0 || ch <= 0) continue;
-                    Bitmap crop = Bitmap.createBitmap(bmp, x0, y0, cw, ch);
-                    ChampionTemplates.Match m = ChampionTemplates.match(crop);
-                    crop.recycle();
-                    if (m != null) {
-                        boolean dup = false;
-                        for (BoardUnit bu : r.boardUnits) { if (bu.name.equals(m.name)) { dup = true; break; } }
-                        if (!dup) {
-                            r.boardUnits.add(new BoardUnit(m.name, m.sim, cx, cy));
-                            log("boardVision: " + m.name + " sim=" + (int)(m.sim*100) + "% at " + cx + "," + cy);
-                        }
-                    }
-                }
-            }
-            r.status = r.boardUnits.size() + " unit" + (r.boardUnits.size() == 1 ? "" : "s") + " found";
-            log("boardVision done: " + r.boardUnits.size() + " units");
-            bmp.recycle();
-            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> cb.onResult(r));
-        }).start();
     }
 
     // Scan from bitmap with explicit mode (MODE_FULL or MODE_POPUP).
@@ -560,9 +500,6 @@ public class ScreenScanner {
                     if (mode == MODE_POPUP) {
                         r = parsePopup(text, bmp.getWidth(), bmp.getHeight());
                         log("popup parse: unit=" + (r.detectedBoardUnit.isEmpty() ? "none" : r.detectedBoardUnit));
-                    } else if (mode == MODE_BOARD) {
-                        r = parseBoard(text, bmp.getWidth(), bmp.getHeight());
-                        log("auto-scan: " + r.autoChampions.size() + " champs found");
                     } else {
                         r = parse(text, bmp.getWidth(), bmp.getHeight());
                         log("parse: gold=" + r.gold + " lv=" + r.level
@@ -864,49 +801,6 @@ public class ScreenScanner {
             }
             if (!r.popupTraits.isEmpty())
                 log("popup traits: " + r.popupTraits + " for " + r.detectedBoardUnit);
-        }
-        return r;
-    }
-
-    // Auto board scan: sweep the entire screen with a very low height filter.
-    // Catches small name labels on bench units, shop cards, and any popup visible.
-    // Returns every champion name found anywhere on screen.
-    private ScanResult parseBoard(Text text, int bmpW, int bmpH) {
-        ScanResult r = new ScanResult();
-        int minH = 8;
-        ensureChampArrays();
-        log("auto-scan: full screen minH=" + minH + " bmp=" + bmpW + "x" + bmpH + " blocks=" + text.getTextBlocks().size());
-        for (Text.TextBlock block : text.getTextBlocks()) {
-            android.graphics.Rect box = block.getBoundingBox();
-            if (box == null) continue;
-            String raw = block.getText().trim();
-            if (raw.isEmpty()) continue;
-            String rawLog = raw.replace("\n", "|");
-            if (box.height() < minH) {
-                log("skip h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
-                continue;
-            }
-            log("cand h=" + box.height() + " x=" + box.centerX() + " y=" + box.centerY() + " \"" + rawLog + "\"");
-            String rawNorm = norm(raw); String rawLower = raw.toLowerCase();
-            for (int i = 0; i < champNames.length; i++) {
-                String name = champNames[i];
-                if (!r.autoChampions.contains(name) && matchChampIdx(rawNorm, rawLower, i)) {
-                    r.autoChampions.add(name);
-                    log("auto match: " + name + " from \"" + rawLog + "\"");
-                    break;
-                }
-            }
-        }
-        // Fuzzy fallback: blocks the containment loop missed due to single-letter OCR slips
-        for (Text.TextBlock block : text.getTextBlocks()) {
-            android.graphics.Rect box = block.getBoundingBox();
-            if (box == null || box.height() < minH) continue;
-            String btxt = block.getText().trim();
-            String cand = NameMatch.bestMatch(btxt, champNames, champNorms);
-            if (cand != null && !r.autoChampions.contains(cand)) {
-                r.autoChampions.add(cand);
-                log("auto match (fuzzy): " + cand + " from \"" + btxt + "\"");
-            }
         }
         return r;
     }

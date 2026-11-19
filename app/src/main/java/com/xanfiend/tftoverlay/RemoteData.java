@@ -98,6 +98,9 @@ public final class RemoteData {
     /** Overlay validated JSON onto SetData. Returns true if applied. */
     private static boolean apply(JSONObject o) throws Exception {
         if(!validate(o)) return false;
+        // the SetData statics outlive the service: restore the standard roster
+        // first so a restart while in EVENT mode can't leave the two out of sync
+        SetData.applyEventRoster(false);
         SetData.SET_NAME = o.getString("setName");
         SetData.PATCH    = o.optString("patch", SetData.PATCH);
 
@@ -155,7 +158,9 @@ public final class RemoteData {
             SetData.EVENT_CHAMPS=null; SetData.EVENT_GODS=null;
         }
 
-        Pool.invalidateData();   // rebuild the cost cache against the new list
+        Pool.invalidateData();   // rebuild every roster-derived cache against the new list
+        ScreenScanner.invalidateRosterCaches();
+        SetIcons.reset();
         return true;
     }
 

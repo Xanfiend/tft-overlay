@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         root.addView(sub);
 
         TextView ver = new TextView(this);
-        ver.setText("v1.99.82");
+        ver.setText("v1.99.83");
         ver.setTextColor(DIM); ver.setTextSize(10); ver.setGravity(Gravity.CENTER);
         root.addView(ver);
 
@@ -181,7 +181,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean autoCheckedUpdate = false;
+    private static boolean autoCheckedUpdate = false; // once per process, not once per screen rotation
 
     @Override protected void onResume(){
         super.onResume();
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.83  ·  2026-11-19","Reliability fixes: the bench read can no longer tap into your panel or a still-open planner, SCRY THE ENEMY gets a STOP button, switching game modes keeps unit recognition in sync, the update prompt no longer appears twice after rotating, and a few rare crashes and stuck states are gone. Leaner code under the hood."},
             {"v1.99.82  ·  2026-11-19","Updated for Set 18: Enchanted Wilds — new champion roster, pool sizes, traits, positioning roles and champion portraits."},
             {"v1.99.81  ·  2026-11-09","New EVENT option under GAME MODE for event queues that use their own champion pool. Bench reading now waits for the Team Planner to close first."},
             {"v1.99.80  ·  2026-07-18","GAME MODE switch in SETUP (Standard, Hyper Roll, Double Up, Tocker's Trials) adapts the economy and pool advice. SCRY MY BOARD now reads the bench as well as the board. SETUP is simpler: advanced options fold away behind MORE SETTINGS."},

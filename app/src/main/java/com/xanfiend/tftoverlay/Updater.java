@@ -72,6 +72,7 @@ public final class Updater {
 
     /** Ask the user, then download + install. */
     public static void promptAndInstall(final Activity act, final String latestVersion){
+        if(gone(act)) return;   // the check can return after the screen was closed or rotated
         new AlertDialog.Builder(act)
             .setTitle("Update available")
             .setMessage("TFT Scryer v"+latestVersion+" is available (you have v"
@@ -83,7 +84,10 @@ public final class Updater {
             .show();
     }
 
+    private static boolean gone(Activity a){ return a==null || a.isFinishing() || a.isDestroyed(); }
+
     private static void download(final Activity act, final String latestVersion){
+        if(gone(act)) return;
         final ProgressDialog pd = new ProgressDialog(act);
         pd.setTitle("Downloading v"+latestVersion);
         pd.setMessage("Fetching the latest APK…");

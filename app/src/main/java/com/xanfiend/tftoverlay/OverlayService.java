@@ -43,7 +43,7 @@ public class OverlayService extends Service {
     private boolean iconsToastShown = false; // the icons-unavailable toast pollutes scan OCR — once per session
     private Vibrator vib;
     // bump this each release so the footer shows the current version
-    private static final String APP_VERSION = "v1.99.82";
+    private static final String APP_VERSION = "v1.99.83";
     // item builder: index of selected components (1-9), -1 = none
     private int itemA = -1, itemB = -1;
     private boolean[] itemsHeld = new boolean[11]; // my-components multi-select (index 1-10)
@@ -144,16 +144,11 @@ public class OverlayService extends Service {
     private TextView scanStatusTv;
     private static OverlayService _instance;
 
-    // floating button label — promoted for board scan countdown updates
+    // floating button label (scan progress, hunt status)
     private TextView btnLabel;
 
-    // board scan mode: accessibility screenshot polls popup zone while user taps units
-    private boolean boardScanMode = false;
-    private long boardScanDeadline = 0;
-    private java.util.List<String> boardScanResults = new java.util.ArrayList<>();
+    // main-thread handler for scan, hunt and tap timers
     private final android.os.Handler boardHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private Runnable boardPollRunnable;
-    private Runnable boardCountdownRunnable;
 
     // hunt mode: polls the shop strip ~once a second (screenshot rate limit) and
     // auto-buys any marked champion the moment it appears in the shop
@@ -219,12 +214,8 @@ public class OverlayService extends Service {
     // scan) so the async updateViewLayout flag flip isn't raced once per tap.
     private boolean overlayTouchHold = false;
 
-    // opponent scan mode: same polling but routes into opponent tracking + records star levels
-    private boolean oppScanMode = false;
-    private long oppScanDeadline = 0;
+    // enemy units found by the current SCRY THE ENEMY pass (name -> stars)
     private java.util.Map<String, Integer> oppScanResults = new java.util.LinkedHashMap<>();
-    private Runnable oppPollRunnable;
-    private Runnable oppCountdownRunnable;
 
     // SCRY THE LOBBY (REAPER): one-pass scan of every calibrated enemy portrait.
     // Wraps the existing auto-opp board sweep; taps portrait i, sweeps that board,
@@ -271,6 +262,8 @@ public class OverlayService extends Service {
     private java.util.List<String> plannerBenchNames = null; // bench units recognized by Visual ID on the board shot
     private java.util.List<int[]> plannerBenchTapTargets = null; // occupied bench slots Visual ID could NOT name — popup-tapped after the planner read
     private int benchTapIdx = 0, benchTapResults = 0;
+    private final Runnable shotHiddenWatchdog = new Runnable(){ public void run(){ setOverlayShotHidden(false); }};
+    private boolean plannerBenchPending = false; // bench popup pass running after the planner read
     private int plannerWrapMatched = 0, plannerWrapUnknown = 0, plannerWrapOccupied = 0;
     private long plannerWrapTookMs = 0;
     private boolean setupShowAll = false; // SETUP tab: advanced sections folded away by default
@@ -724,7 +717,7 @@ public class OverlayService extends Service {
                         // All long-running modes (scans, hunt) are stopped ONLY by the
                         // on-screen STOP button. The sigil just opens the panel so the
                         // user can check their pool without killing the active scan.
-                        if(oppScanMode||boardScanMode||plannerScanPending||autoScanPending){
+                        if(plannerScanPending||plannerBenchPending||autoScanPending){
                             mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel(); return true;
                         }
                         long held=System.currentTimeMillis()-down;
@@ -1524,8 +1517,8 @@ public class OverlayService extends Service {
             int total=autoTapProbes.size(); int done=autoTapIndex;
             String prog=total>0?(done+"/"+total+" hexes"):"starting...";
             String label=autoOppMode
-                    ? ("\u25C9 Scrying the enemy: "+prog+" \u00b7 tap sigil to stop")
-                    : ("\u29bf Scrying your board: "+prog+" \u00b7 tap sigil to stop");
+                    ? ("\u25C9 Scrying the enemy: "+prog+" \u00b7 tap STOP to end")
+                    : ("\u29bf Scrying your board: "+prog+" \u00b7 tap STOP to end");
             TextView asActive=new TextView(this); asActive.setText(label);
             asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
             asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
@@ -3466,13 +3459,11 @@ public class OverlayService extends Service {
     }
 
     // Champion names on your board right now, from the most recent scan (auto scan
-    // preferred, else the manual board scan). Stars are stripped.
+    // Stars are stripped.
     private java.util.List<String> currentBoardNames(){
         java.util.List<String> names=new java.util.ArrayList<>();
         if(!autoScanResults.isEmpty()){
             for(String e:autoScanResults) names.add(scanEntryName(e));
-        } else if(!boardScanResults.isEmpty()){
-            names.addAll(boardScanResults);
         }
         return names;
     }
@@ -4076,7 +4067,11 @@ public class OverlayService extends Service {
                     return;
                 }
                 pool.setGameMode(v);
-                SetData.applyEventRoster(v==4);
+                if(SetData.isEventActive()!=(v==4)){
+                    SetData.applyEventRoster(v==4);
+                    // learned sprites were reset with the roster — reload them for the new pool
+                    new Thread(new Runnable(){ public void run(){ ChampionTemplates.load(OverlayService.this); }}).start();
+                }
                 buzz(); showPanel();
             }});
         TextView gmHint=new TextView(this);
@@ -4105,15 +4100,15 @@ public class OverlayService extends Service {
         root=advBox;   // sections below the fold add themselves in here
 
         addSecHdr(root, "TEMPLATES", GOLD);
-        int tplCount=ChampionTemplates.templateCount();
+        int tplCount=ChampionTemplates.boardTemplateCount();
         TextView tplCountTv=new TextView(this);
         tplCountTv.setText(tplCount==0
-            ?"No templates yet (auto-captured during board scans, not required for Auto Scan)"
-            :tplCount+" template"+(tplCount==1?"":"s")+" saved (auto-captured during board scans)");
+            ?"No champion sprites learned yet (they're learned automatically during scans)"
+            :tplCount+" champion sprite"+(tplCount==1?"":"s")+" learned (used to recognise units without tapping)");
         tplCountTv.setTextColor(tplCount>0?ASH:DIM); tplCountTv.setTextSize(11); tplCountTv.setPadding(2,0,0,6);
         root.addView(tplCountTv);
         if(tplCount>0){
-            TextView clearTpl=new TextView(this); clearTpl.setText("Clear all templates");
+            TextView clearTpl=new TextView(this); clearTpl.setText("Forget learned sprites");
             clearTpl.setTextColor(BONE); clearTpl.setTextSize(12); clearTpl.setGravity(Gravity.CENTER);
             clearTpl.setPadding(0,10,0,10); clearTpl.setBackground(box(0xFF1A0C0E,6,BLOOD,2));
             LinearLayout.LayoutParams ctll=new LinearLayout.LayoutParams(-1,-2); ctll.setMargins(0,0,0,6); clearTpl.setLayoutParams(ctll);
@@ -5773,51 +5768,6 @@ public class OverlayService extends Service {
         showPanel();
     }
 
-    // ---- board scan mode ----
-
-    private void startBoardScanMode(){
-        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
-            return;
-        }
-        boardScanMode=true;
-        boardScanDeadline=System.currentTimeMillis()+25000;
-        boardScanResults=new java.util.ArrayList<>();
-        closePanel();
-        teardownStrayOverlays();
-        showStopButton("✦ STOP SCAN");
-        addScanLog("board scan: started 25s window");
-
-        boardCountdownRunnable=new Runnable(){ public void run(){
-            if(!boardScanMode) return;
-            long rem=boardScanDeadline-System.currentTimeMillis();
-            if(rem<=0){ stopBoardScanMode(); return; }
-            if(btnLabel!=null) btnLabel.setText(((int)((rem+999)/1000))+"s");
-            boardHandler.postDelayed(this,500);
-        }};
-        boardHandler.post(boardCountdownRunnable);
-
-        boardPollRunnable=new Runnable(){ public void run(){
-            if(!boardScanMode) return;
-            if(System.currentTimeMillis()>=boardScanDeadline){ stopBoardScanMode(); return; }
-            triggerPopupScan();
-            boardHandler.postDelayed(this,scanFastReady?900:2500);
-        }};
-        boardHandler.postDelayed(boardPollRunnable,600);
-    }
-
-    private void stopBoardScanMode(){
-        boardScanMode=false;
-        if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
-        if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
-        hideStopButton();
-        teardownStrayOverlays();
-        setOverlaysTouchable(true);
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("board scan: stopped, found "+boardScanResults.size()+" champs");
-        mode=0; showPanel();
-    }
-
     @SuppressWarnings("NewApi")
     private void startAutoTapScan(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
@@ -5927,16 +5877,27 @@ public class OverlayService extends Service {
                         }catch(Exception e){
                             // scanBitmap never registered, so recycle the copy ourselves
                             if(goldTmp!=null) goldTmp.recycle();
-                            autoScanPending=false; addScanLog("ERR auto-tap init: "+e.getMessage()); mode=0; showPanel();
+                            autoScanInitFailed("ERR auto-tap init: "+e.getMessage());
                         }
                     }
-                    @Override public void onFailure(int errorCode){ setOverlayShotHidden(false); autoScanPending=false; addScanLog("ERR auto-tap init shot: "+errorCode); mode=0; showPanel(); }
+                    @Override public void onFailure(int errorCode){ autoScanInitFailed("ERR auto-tap init shot: "+errorCode); }
                 });
-        }catch(Exception e){ setOverlayShotHidden(false); autoScanPending=false; addScanLog("ERR startAutoTapScan: "+e.getMessage()); mode=0; showPanel(); }
+        }catch(Exception e){ autoScanInitFailed("ERR startAutoTapScan: "+e.getMessage()); }
         }}, 120);
     }
 
     @SuppressWarnings("NewApi")
+    // A scan that fails before its first probe: undo every bit of start-up state.
+    // In a lobby pass, move on to the next opponent instead of stalling there.
+    private void autoScanInitFailed(String msg){
+        setOverlayShotHidden(false);
+        autoScanPending=false; autoOppMode=false;
+        hideStopButton();
+        addScanLog(msg);
+        if(scanAllMode){ scanAllAdvance(); return; }
+        mode=0; showPanel();
+    }
+
     private void startAutoOppScan(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
@@ -5959,6 +5920,7 @@ public class OverlayService extends Service {
         closePanel();
         if(btnLabel!=null) btnLabel.setText("...");
         addScanLog("auto-opp: starting");
+        showStopButton("✦ STOP SCAN");   // the sigil only opens the panel; STOP is the way out
         final TFTAccessibilityService svc=TFTAccessibilityService.instance;
         // hide our overlays for the detection shot (see startAutoTapScan)
         setOverlayShotHidden(true);
@@ -6013,12 +5975,12 @@ public class OverlayService extends Service {
                                 }, ScreenScanner.MODE_FULL);
                         }catch(Exception e){
                             if(bmpTmp!=null) bmpTmp.recycle();
-                            autoScanPending=false; addScanLog("ERR auto-opp init: "+e.getMessage()); mode=0; showPanel();
+                            autoScanInitFailed("ERR auto-opp init: "+e.getMessage());
                         }
                     }
-                    @Override public void onFailure(int errorCode){ setOverlayShotHidden(false); autoScanPending=false; autoOppMode=false; addScanLog("ERR auto-opp shot: "+errorCode); mode=0; showPanel(); }
+                    @Override public void onFailure(int errorCode){ autoScanInitFailed("ERR auto-opp shot: "+errorCode); }
                 });
-        }catch(Exception e){ setOverlayShotHidden(false); autoScanPending=false; autoOppMode=false; addScanLog("ERR startAutoOppScan: "+e.getMessage()); mode=0; showPanel(); }
+        }catch(Exception e){ autoScanInitFailed("ERR startAutoOppScan: "+e.getMessage()); }
         }}, 120);
     }
 
@@ -6812,8 +6774,7 @@ public class OverlayService extends Service {
                 final int gen=autoScanGeneration;
                 final int tplStars=stars;   // effectively-final capture for the thread
                 new Thread(new Runnable(){ public void run(){
-                    // popup-portrait template (legacy board-vision path, own board only)
-                    if(!oppMode) ChampionTemplates.saveTemplate(OverlayService.this,name,sourceBmp,bounds);
+                  try{
                     // board-sprite template for Instant Visual ID — only from board
                     // probes (bench sprites are framed differently), and only when
                     // the popup isn't covering the unit
@@ -6834,7 +6795,8 @@ public class OverlayService extends Service {
                             checkDuplicateProbes(sourceBmp,spriteSize,oppMode,gen);
                         }
                     }
-                    sourceBmp.recycle();
+                  }catch(Exception e){ addScanLog("ERR sprite learning: "+e.getMessage()); }
+                  finally{ sourceBmp.recycle(); }   // an uncaught error here would crash the app
                 }}).start();
             }
         } else {
@@ -6934,7 +6896,9 @@ public class OverlayService extends Service {
             if(dm!=null){ dupIdx.add(i); dupMatch.add(dm); }
         }
         if(dupIdx.isEmpty()) return;
-        autoTapHandler.post(new Runnable(){ public void run(){
+        // boardHandler, not autoTapHandler: finishing the scan clears autoTapHandler,
+        // which silently dropped results queued just before the finish
+        boardHandler.post(new Runnable(){ public void run(){
             if(gen!=autoScanGeneration) return; // a new scan started; these results are stale
             boolean any=false;
             for(int k=0;k<dupIdx.size();k++){
@@ -7043,49 +7007,17 @@ public class OverlayService extends Service {
     // shared by the accessibility-screenshot and fast-capture paths: OCR the
     // popup zone and route the result into whichever scan mode is active
     private void processPopupBitmap(Bitmap bmp){
-        final Bitmap bmpForTemplate=bmp.copy(Bitmap.Config.ARGB_8888,false);
         new ScreenScanner(this,null).scanBitmap(bmp,
             new ScreenScanner.ScanCallback(){
                 public void onResult(ScreenScanner.ScanResult r){
-                    if(oppScanMode) applyOppPopupScanResult(r,bmpForTemplate);
-                    else if(boardScanMode) applyPopupScanResult(r,bmpForTemplate);
-                    else { bmpForTemplate.recycle(); if(debugScanPending){
-                        debugScanPending=false;
-                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
-                            mode=4; showPanel();
-                        }}, 500);
-                    }}
+                    if(!debugScanPending) return;
+                    debugScanPending=false;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable(){ public void run(){
+                        mode=4; showPanel();
+                    }}, 500);
                 }
-                public void onError(String msg){ bmpForTemplate.recycle(); addScanLog("board scan OCR err: "+msg); }
+                public void onError(String msg){ addScanLog("board scan OCR err: "+msg); }
             }, ScreenScanner.MODE_POPUP);
-    }
-
-    private void applyPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
-        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()){ sourceBmp.recycle(); return; }
-        final String name=r.detectedBoardUnit;
-        if(boardScanResults.contains(name)){ sourceBmp.recycle(); return; }
-        boardScanResults.add(name);
-        pool.add(name,1);
-        buzz();
-        if(r.detectedPopupBounds!=null){
-            final android.graphics.Rect bounds=r.detectedPopupBounds;
-            new Thread(new Runnable(){ public void run(){
-                ChampionTemplates.saveTemplate(OverlayService.this, name, sourceBmp, bounds);
-                sourceBmp.recycle();
-            }}).start();
-        } else {
-            sourceBmp.recycle();
-        }
-        addScanLog("board scan: added "+name+(r.detectedPopupBounds!=null?" (template saved)":""));
-        if(btnLabel!=null){
-            btnLabel.setText("+"+name.split(" ")[0]);
-            boardHandler.postDelayed(new Runnable(){ public void run(){
-                if(boardScanMode&&btnLabel!=null){
-                    long rem=boardScanDeadline-System.currentTimeMillis();
-                    if(rem>0) btnLabel.setText(((int)((rem+999)/1000))+"s");
-                }
-            }},1200);
-        }
     }
 
     // ---- fast scan: optional persistent screen-recording capture for Board/Opp Scan ----
@@ -7207,14 +7139,17 @@ public class OverlayService extends Service {
                 svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
                     new AccessibilityService.TakeScreenshotCallback(){
                         @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
+                            // convert first, call back once: an error thrown further down the
+                            // callback chain must not re-enter it with null (double scan)
+                            Bitmap bmp=null;
                             try{
                                 android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
                                 Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
                                 hb.close();
-                                Bitmap bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
+                                bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                                 hw.recycle();
-                                cb.onShot(bmp);
-                            }catch(Exception e){ cb.onShot(null); }
+                            }catch(Exception e){ bmp=null; }
+                            cb.onShot(bmp);
                         }
                         @Override public void onFailure(int errorCode){
                             if(errorCode==3 && attempt<2){
@@ -7229,6 +7164,7 @@ public class OverlayService extends Service {
     }
 
     private void startPlannerScan(){
+        if(plannerScanPending||plannerBenchPending) return; // a scan is already running
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
@@ -7670,6 +7606,7 @@ public class OverlayService extends Service {
         // overlays touchable underneath that tap; this delayed release is only the
         // failsafe for a dropped tap callback.
         boardHandler.postDelayed(new Runnable(){ public void run(){
+            if(plannerBenchPending) return; // the bench pass releases the hold itself
             overlayTouchHold=false;
             setOverlaysTouchable(true);
             setOverlayShotHidden(false);
@@ -7741,6 +7678,7 @@ public class OverlayService extends Service {
             benchTapIdx=0; benchTapResults=0;
             if(btnLabel!=null) btnLabel.setText("BENCH");
             addScanLog("bench: popup-reading "+plannerBenchTapTargets.size()+" unrecognized slot(s)");
+            plannerBenchPending=true;
             benchAfterPlannerClose(0);
             return;
         }
@@ -7755,8 +7693,15 @@ public class OverlayService extends Service {
     // letting the bench taps loose. Never taps the bench under an open dialog.
     private void benchAfterPlannerClose(final int attempt){
         plannerHandler.postDelayed(new Runnable(){ public void run(){
+            if(!plannerBenchPending) return;
             plannerShot(new ShotCb(){ public void onShot(final Bitmap frame){
-                if(frame==null){ benchTapNext(); return; }
+                if(!plannerBenchPending){ if(frame!=null) frame.recycle(); return; }
+                // no frame = can't confirm the planner closed: retry, never tap blind
+                if(frame==null){
+                    if(attempt>=2){ addScanLog("bench: no frame to confirm the planner closed — skipping bench taps"); plannerWrapUp(); }
+                    else benchAfterPlannerClose(attempt+1);
+                    return;
+                }
                 new ScreenScanner(OverlayService.this,null).scanLines(frame,
                     new ScreenScanner.LinesCallback(){ public void onLines(java.util.List<ScreenScanner.OcrLine> lines){
                         frame.recycle();
@@ -7788,6 +7733,9 @@ public class OverlayService extends Service {
     // so these taps disappear over time.
     @SuppressWarnings("NewApi")
     private void benchTapNext(){
+        if(!plannerBenchPending) return;
+        // our panel isn't covered by the touch hold — wait until it's closed
+        if(panel!=null){ plannerHandler.postDelayed(new Runnable(){ public void run(){ benchTapNext(); }}, 400); return; }
         final java.util.List<int[]> targets=plannerBenchTapTargets;
         if(targets==null || benchTapIdx>=targets.size()){ plannerWrapUp(); return; }
         int[] t=targets.get(benchTapIdx);
@@ -7829,6 +7777,12 @@ public class OverlayService extends Service {
         int matched=plannerWrapMatched+benchTapResults, unknown=plannerWrapUnknown, occupied=plannerWrapOccupied;
         long tookMs=plannerWrapTookMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
         plannerBenchTapTargets=null; benchTapResults=0;
+        if(plannerBenchPending){
+            plannerBenchPending=false;
+            overlayTouchHold=false;
+            setOverlaysTouchable(true);
+            setOverlayShotHidden(false);
+        }
         if(btnLabel!=null) btnLabel.setText("SCRY");
         applyScanGold(autoScanGold);
         if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
@@ -8156,7 +8110,10 @@ public class OverlayService extends Service {
         try{ if(hudXpView!=null)   hudXpView.setAlpha(hidden?0f:1f); }catch(Exception e){}
         // watchdog: if a shot callback is ever dropped (HyperOS), restore anyway —
         // idempotent, and no legitimate hide lasts anywhere near this long
-        if(hidden) boardHandler.postDelayed(()->setOverlayShotHidden(false), 4000);
+        // one watchdog at a time: stacked timers from earlier hides could pop the
+        // overlays back into a later screenshot
+        boardHandler.removeCallbacks(shotHiddenWatchdog);
+        if(hidden) boardHandler.postDelayed(shotHiddenWatchdog, 8000); // planner scan hides ~4-5s between re-arms
     }
 
     private void showStopButton(final String label){
@@ -8221,9 +8178,8 @@ public class OverlayService extends Service {
     private void stopActiveMode(){
         if(scanAllMode){ stopScanAll(); return; }
         if(huntMode){ stopHuntMode(); return; }
-        if(boardScanMode){ stopBoardScanMode(); return; }
-        if(oppScanMode){ stopOppScanMode(); return; }
         if(autoScanPending){ finishAutoTapScan(); return; }
+        if(plannerBenchPending){ addScanLog("bench: stopped"); plannerHandler.removeCallbacksAndMessages(null); plannerWrapUp(); return; }
         hideStopButton();
     }
 
@@ -8295,7 +8251,7 @@ public class OverlayService extends Service {
         // screenshot rate limit or interrupt a hunt/scan — INCLUDING the planner
         // scan and both calibration wizards (a gold-watch screenshot mid-replay
         // steals the 1/sec shot budget the wizard's own steps need)
-        if(goldWatchBusy||huntMode||boardScanMode||oppScanMode||autoScanPending
+        if(goldWatchBusy||huntMode||autoScanPending||plannerBenchPending
                 ||plannerScanPending||scanAllMode||plnCalView!=null||oppCalView!=null) return;
         if(panel!=null) return; // panel covers the game — nothing useful to read
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
@@ -8661,49 +8617,6 @@ public class OverlayService extends Service {
         }});
     }
 
-    private void startOppScanMode(){
-        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
-            return;
-        }
-        oppScanMode=true;
-        oppScanDeadline=System.currentTimeMillis()+30000;
-        oppScanResults=new java.util.LinkedHashMap<>();
-        closePanel();
-        teardownStrayOverlays();
-        showStopButton("✦ STOP SCAN");
-        addScanLog("opp scan: started 30s window");
-
-        oppCountdownRunnable=new Runnable(){ public void run(){
-            if(!oppScanMode) return;
-            long rem=oppScanDeadline-System.currentTimeMillis();
-            if(rem<=0){ stopOppScanMode(); return; }
-            if(btnLabel!=null) btnLabel.setText(((int)((rem+999)/1000))+"s");
-            boardHandler.postDelayed(this,500);
-        }};
-        boardHandler.post(oppCountdownRunnable);
-
-        oppPollRunnable=new Runnable(){ public void run(){
-            if(!oppScanMode) return;
-            if(System.currentTimeMillis()>=oppScanDeadline){ stopOppScanMode(); return; }
-            triggerPopupScan();
-            boardHandler.postDelayed(this,scanFastReady?900:2500);
-        }};
-        boardHandler.postDelayed(oppPollRunnable,600);
-    }
-
-    private void stopOppScanMode(){
-        oppScanMode=false;
-        if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
-        if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
-        hideStopButton();
-        teardownStrayOverlays();
-        setOverlaysTouchable(true);
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("opp scan: stopped, found "+oppScanResults.size()+" champs");
-        mode=0; showPanel();
-    }
-
     // ---- SCRY THE LOBBY: one-pass scan of all calibrated enemy portraits ----
     private void startScanAllOpponents(){
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
@@ -8866,37 +8779,6 @@ public class OverlayService extends Service {
         if(oppCalView!=null){ try{ wm.removeView(oppCalView); }catch(Exception e){} oppCalView=null; }
     }
 
-    private void applyOppPopupScanResult(ScreenScanner.ScanResult r, final Bitmap sourceBmp){
-        if(r.detectedBoardUnit==null||r.detectedBoardUnit.isEmpty()){ sourceBmp.recycle(); return; }
-        final String name=r.detectedBoardUnit;
-        if(oppScanResults.containsKey(name)){ sourceBmp.recycle(); return; }
-        int stars=Math.max(1,r.detectedBoardStars);
-        oppScanResults.put(name,stars);
-        pool.addOpp(name,1);
-        buzz();
-        if(r.detectedPopupBounds!=null){
-            final android.graphics.Rect bounds=r.detectedPopupBounds;
-            new Thread(new Runnable(){ public void run(){
-                ChampionTemplates.saveTemplate(OverlayService.this, name, sourceBmp, bounds);
-                sourceBmp.recycle();
-            }}).start();
-        } else {
-            sourceBmp.recycle();
-        }
-        StringBuilder flash=new StringBuilder("+").append(name.split(" ")[0]);
-        for(int i=0;i<stars;i++) flash.append("★");
-        addScanLog("opp scan: "+name+" "+stars+"★"+(r.detectedPopupBounds!=null?" (template saved)":""));
-        if(btnLabel!=null){
-            btnLabel.setText(flash.toString());
-            boardHandler.postDelayed(new Runnable(){ public void run(){
-                if(oppScanMode&&btnLabel!=null){
-                    long rem=oppScanDeadline-System.currentTimeMillis();
-                    if(rem>0) btnLabel.setText(((int)((rem+999)/1000))+"s");
-                }
-            }},1200);
-        }
-    }
-
     // opens the GitHub releases page in the user's browser. Uses an Intent,
     // which does NOT require the INTERNET permission -- the browser handles
     // the network, so the app stays fully offline.
@@ -8948,10 +8830,6 @@ public class OverlayService extends Service {
     @Override public void onDestroy(){
         super.onDestroy();
         _instance=null;
-        if(boardPollRunnable!=null){ boardHandler.removeCallbacks(boardPollRunnable); boardPollRunnable=null; }
-        if(boardCountdownRunnable!=null){ boardHandler.removeCallbacks(boardCountdownRunnable); boardCountdownRunnable=null; }
-        if(oppPollRunnable!=null){ boardHandler.removeCallbacks(oppPollRunnable); oppPollRunnable=null; }
-        if(oppCountdownRunnable!=null){ boardHandler.removeCallbacks(oppCountdownRunnable); oppCountdownRunnable=null; }
         if(huntPollRunnable!=null){ boardHandler.removeCallbacks(huntPollRunnable); huntPollRunnable=null; }
         if(huntCountdownRunnable!=null){ boardHandler.removeCallbacks(huntCountdownRunnable); huntCountdownRunnable=null; }
         // also drop the untracked anonymous boardHandler callbacks (flash restorers,

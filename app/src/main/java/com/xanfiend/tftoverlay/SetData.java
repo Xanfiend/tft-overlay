@@ -100,6 +100,7 @@ public final class SetData {
         Pool.invalidateData();
         ScreenScanner.invalidateRosterCaches();
         SetIcons.reset();
+        ChampionTemplates.reset();   // learned sprites re-resolve against the new roster on next load
         return true;
     }
 

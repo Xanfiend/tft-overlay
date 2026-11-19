@@ -3,7 +3,6 @@ package com.xanfiend.tftoverlay;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Rect;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.LinkedHashMap;
@@ -41,7 +40,6 @@ public class ChampionTemplates {
     // absolute bar is raised instead.
     private static final float BOARD_SOLO_SIM   = 0.96f;
 
-    private static final Map<String, float[]> sigs = new LinkedHashMap<>();
     private static final Map<String, float[]> boardSigs    = new LinkedHashMap<>(); // own units (facing away)
     private static final Map<String, float[]> oppBoardSigs = new LinkedHashMap<>(); // enemy units (facing player)
     private static boolean loaded = false;
@@ -58,6 +56,12 @@ public class ChampionTemplates {
 
     // ---- load all saved templates from disk ----
 
+    // Forget loaded sprites so the next load() re-resolves names against the
+    // CURRENT roster — called when the event-mode switch swaps the pool.
+    public static synchronized void reset(){
+        boardSigs.clear(); oppBoardSigs.clear(); loaded = false;
+    }
+
     public static synchronized void load(Context ctx){
         if(loaded) return;
         loaded = true;
@@ -73,7 +77,7 @@ public class ChampionTemplates {
             boolean meanCenter;
             if(fn.startsWith("btplo_")){ prefix="btplo_"; target=oppBoardSigs; meanCenter=true; }
             else if(fn.startsWith("btpl_")){ prefix="btpl_"; target=boardSigs; meanCenter=true; }
-            else if(fn.startsWith("tpl_")){ prefix="tpl_"; target=sigs; meanCenter=false; }
+            else if(fn.startsWith("tpl_")){ f.delete(); continue; } // obsolete popup-portrait files from older versions
             else continue;
             String key = fn.substring(prefix.length(), fn.length()-4);
             // optional per-star variant suffix ("aatrox_s2"): a 1-star and a
@@ -96,8 +100,8 @@ public class ChampionTemplates {
                 bmp.recycle();
             }catch(Exception e){ android.util.Log.w("TFTTemplates","load err "+f.getName()+": "+e.getMessage()); }
         }
-        android.util.Log.d("TFTTemplates","loaded "+sigs.size()+" popup + "+boardSigs.size()+"/"+oppBoardSigs.size()+" board templates");
-        OverlayService.addScanLog("templates: "+sigs.size()+" popup, "+boardSigs.size()+" own sprites, "+oppBoardSigs.size()+" enemy sprites");
+        android.util.Log.d("TFTTemplates","loaded "+boardSigs.size()+"/"+oppBoardSigs.size()+" board templates");
+        OverlayService.addScanLog("templates: "+boardSigs.size()+" own sprites, "+oppBoardSigs.size()+" enemy sprites");
     }
 
     private static String findChampName(String lowerKey){
@@ -105,35 +109,6 @@ public class ChampionTemplates {
             for(String c : tier)
                 if(c.toLowerCase().replaceAll("[^a-z0-9]","").equals(lowerKey)) return c;
         return null;
-    }
-
-    // ---- save a new template (call when popup scan confirms a champion) ----
-    // popupBounds: bounding box of popup text blocks in the full screenshot
-    // sourceBmp:   the full screenshot bitmap (not yet recycled)
-
-    public static void saveTemplate(Context ctx, String champName, Bitmap sourceBmp, Rect popupBounds){
-        try{
-            // Portrait is just to the left of the text content, at the top of the popup.
-            // Estimate: 100×100 region at (popMinX - 90, popMinY).
-            int pw = 100, ph = 100;
-            int px = Math.max(0, popupBounds.left - 90);
-            int py = Math.max(0, popupBounds.top);
-            int maxX = px + pw, maxY = py + ph;
-            if(maxX > sourceBmp.getWidth())  { px = sourceBmp.getWidth()  - pw; if(px < 0) pw = sourceBmp.getWidth(); }
-            if(maxY > sourceBmp.getHeight()) { py = sourceBmp.getHeight() - ph; if(py < 0) ph = sourceBmp.getHeight(); }
-            Bitmap crop = Bitmap.createBitmap(sourceBmp, px, py, pw, ph);
-            File d = dir(ctx);
-            if(!d.exists()) d.mkdirs();
-            File out = new File(d, filename(champName));
-            FileOutputStream fos = new FileOutputStream(out);
-            crop.compress(Bitmap.CompressFormat.PNG, 100, fos);
-            fos.close();
-            sigs.put(champName, sig(crop));
-            crop.recycle();
-            OverlayService.addScanLog("template saved: "+champName);
-        }catch(Exception e){
-            OverlayService.addScanLog("ERR save template "+champName+": "+e.getMessage());
-        }
     }
 
     // ---- board-sprite templates: how the champion looks STANDING ON THE BOARD ----
@@ -211,7 +186,7 @@ public class ChampionTemplates {
         if(pool.isEmpty()) return null;
         Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
         float[] s = sig(scaled);
-        scaled.recycle();
+        if(scaled != crop) scaled.recycle();   // same-size input returns the caller's bitmap
         meanCenter(s);
         String best = null; float bestSim = -2f, secondSim = -2f;
         java.util.HashSet<String> champs = new java.util.HashSet<>();
@@ -252,32 +227,9 @@ public class ChampionTemplates {
         for(int i=0;i<s.length;i+=3){ s[i]-=mr; s[i+1]-=mg; s[i+2]-=mb; }
     }
 
-    // ---- match a hex crop against all saved templates ----
-
-    public static class Match {
-        public final String name;
-        public final float sim;
-        public Match(String n, float s){ name=n; sim=s; }
-    }
-
-    public static Match match(Bitmap hexCrop){
-        if(sigs.isEmpty()) return null;
-        Bitmap scaled = Bitmap.createScaledBitmap(hexCrop, SCALE, SCALE, true);
-        float[] s = sig(scaled);
-        scaled.recycle();
-        String best = null; float bestSim = -1;
-        for(Map.Entry<String,float[]> e : sigs.entrySet()){
-            float sim = cosine(s, e.getValue());
-            if(sim > bestSim){ bestSim = sim; best = e.getKey(); }
-        }
-        if(best == null || bestSim < MIN_SIM) return null;
-        return new Match(best, bestSim);
-    }
-
-    public static int templateCount(){ return sigs.size(); }
 
     public static synchronized void clearAll(Context ctx){
-        sigs.clear(); boardSigs.clear(); oppBoardSigs.clear();
+        boardSigs.clear(); oppBoardSigs.clear();
         File d = dir(ctx);
         if(d.exists()){
             File[] files = d.listFiles();

@@ -57,7 +57,7 @@ public final class ItemIcons {
                     is.close();
                     if(bmp == null) continue;
                     Bitmap scaled = Bitmap.createScaledBitmap(bmp, SCALE, SCALE, true);
-                    bmp.recycle();
+                    if(scaled != bmp) bmp.recycle();   // same-size input returns the SAME bitmap
                     float[] s = ChampionTemplates.sig(scaled);
                     scaled.recycle();
                     ChampionTemplates.meanCenter(s);
@@ -101,7 +101,7 @@ public final class ItemIcons {
         if(sigs.isEmpty()) return null;
         Bitmap scaled = Bitmap.createScaledBitmap(icon, SCALE, SCALE, true);
         float[] s = ChampionTemplates.sig(scaled);
-        scaled.recycle();
+        if(scaled != icon) scaled.recycle();   // never recycle the caller's bitmap
         ChampionTemplates.meanCenter(s);
         String best = null; float bestSim = -2f;
         String second = null; float secondSim = -2f;
@@ -127,7 +127,7 @@ public final class ItemIcons {
         if(sigs.isEmpty()) return "no item icons";
         Bitmap scaled = Bitmap.createScaledBitmap(icon, SCALE, SCALE, true);
         float[] s = ChampionTemplates.sig(scaled);
-        scaled.recycle();
+        if(scaled != icon) scaled.recycle();   // never recycle the caller's bitmap
         ChampionTemplates.meanCenter(s);
         String best = null; float bestSim = -2f;
         for(int i=0;i<sigs.size();i++){
