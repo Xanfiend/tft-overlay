@@ -104,11 +104,15 @@ for name in pool odds guide gold setup builds; do
   sleep 4
   tap_text "Start Overlay"          # starts the overlay, app goes to the background
   sleep 3
+  [ $i -eq 0 ] && shot dbg-1-after-start
   adb shell settings put system user_rotation 1
   adb shell am start -a android.settings.SETTINGS
   sleep 4
+  [ $i -eq 0 ] && { shot dbg-2-landscape; adb shell dumpsys activity services $PKG > "$OUT/dbg-services.txt" 2>&1; }
   tap_sigil                         # opens the panel on the tab saved in the prefs
   shot "tab-$name"
   i=$((i+1))
 done
+adb logcat -d -b crash > "$OUT/dbg-crash.txt" 2>&1
+adb logcat -d | grep -iE "tftoverlay|AndroidRuntime|OverlayService" | tail -200 > "$OUT/dbg-logcat.txt" 2>&1
 ls -la "$OUT"
