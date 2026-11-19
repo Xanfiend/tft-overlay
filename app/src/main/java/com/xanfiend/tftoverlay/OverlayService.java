@@ -108,7 +108,7 @@ public class OverlayService extends Service {
     private String poolTraitFilter = null; // null=all; else a TraitData trait name (learned via Pool.learnTraits)
     // Last time the gold watch successfully read the pinned HUD band. A fresh
     // watch read outranks any full-screen scan's gold guess — the scan zone can
-    // latch a wrong number (device log: scan wrote 951 while the watch read 51).
+    // latch a wrong number (a scan once wrote 951 while the watch read 51).
     private long lastGoldWatchOkMs = 0;
     private String augFilter = ""; // ""=all, "S"/"A"/"B"/"C"=tier
     private java.util.List<String> augCompare = new java.util.ArrayList<>();
@@ -319,7 +319,7 @@ public class OverlayService extends Service {
     // Per-probe timing. These three delays run once per probe (37+ per scan), so they
     // dominate the total scan time. Tuned for speed while leaving the popup enough time
     // to animate in before the screenshot.
-    // Gesture press duration. Was 25ms — the user's device (HyperOS) accepted
+    // Gesture press duration. Was 25ms — HyperOS devices accepted
     // those on nothing: planner calibration only started working at 80ms, and
     // shop-card buys (THE HUNT) and unit-popup taps are the same class of game
     // UI. 80ms is far below the game's drag/long-press thresholds, and every
@@ -787,7 +787,7 @@ public class OverlayService extends Service {
     // HUD positions are stored PER ORIENTATION ("_p" suffix in portrait). One
     // shared key let the portrait clamp overwrite the landscape spot on every
     // rotation/app-exit — and the gold watch's read band is pinned to the gold
-    // chip, so the band drifted mid-screen and read junk (user report).
+    // chip, so the band drifted mid-screen and read junk.
     private String hudKey(String base){
         android.util.DisplayMetrics dm=getResources().getDisplayMetrics();
         return dm.heightPixels>dm.widthPixels ? base+"_p" : base;
@@ -4724,7 +4724,7 @@ public class OverlayService extends Service {
     // AUTO-CALIBRATE: apply the measured standard board position instantly.
     // This used to run a teal hex-outline detector on a screenshot, but arenas
     // with teal scenery (water, foliage) biased the detected bounding box and it
-    // repeatedly saved misaligned grids (user reports: dots scattered; whole
+    // repeatedly saved misaligned grids (dots scattered; whole
     // grid shifted ~130px right by pond water). The standard model is measured
     // from the game's real hex mesh and height-fit, so it IS the board on any
     // device — detection added risk, not accuracy. ADJUST GRID remains for
@@ -5389,7 +5389,7 @@ public class OverlayService extends Service {
     // no screenshot, no detection. Used by the calibration flows (AUTO-CALIBRATE,
     // GRID NUDGE), where the smart-scan preview would hide exactly the thing
     // being verified — and its detection shot could even mark the calibration
-    // toast itself as a unit (user screenshot: marker on the toast icon).
+    // toast itself as a unit (a marker once landed on the toast icon).
     private void showGridDots(String banner){
         hideProbeDots();
         android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
@@ -6301,8 +6301,8 @@ public class OverlayService extends Service {
                 // row, so the zone runs from just above the back row's bars to just
                 // above the front row's units, padded one hex pitch sideways. The
                 // old fixed 27-76% / 5-93% zone included the left-cliff foliage and
-                // the enemy half: leaf-green bands were accepted as "units" (user
-                // screenshot: unit marker rendered on the trees at 13%W).
+                // the enemy half: leaf-green bands were accepted as "units" (a
+                // marker once rendered on the trees at 13%W).
                 float[] a = HexGrid.standardAnchors(w, h);
                 zoneTop      = Math.round(a[2] - 0.14f * h);   // back-row bars
                 zoneBot      = Math.round(a[5] - 0.05f * h);   // front-row bars
@@ -6385,7 +6385,7 @@ public class OverlayService extends Service {
                                                    int[] btnLoc, int btnW, int btnH){
         // Bar size scales with screen HEIGHT (the board is height-fit), not width:
         // on a wide 20:9 screen 2%W was 54px while a small unit's bar has only
-        // ~50px of fill — every short bar was rejected (user's knight was missed).
+        // ~50px of fill — every short bar was rejected (a small unit's bar was missed).
         int minLen=Math.max(6, h*35/1000);        // a bar is at least ~3.5% of screen height wide
         int maxLen=Math.max(minLen+4, h*20/100);  // and at most ~20% of height
         // Runs tolerate up to 2 non-matching pixels in a row, so the thin tick
@@ -6564,7 +6564,7 @@ public class OverlayService extends Service {
         injecting=true;
         // Injected gestures land on whatever TOUCHABLE window is on top — including
         // our own STOP pill / sigil / HUD. A probe tap that coincided with the STOP
-        // pill "pressed" it and killed the scan instantly (device log: probe at
+        // pill "pressed" it and killed the scan instantly (a probe at
         // 1184,549 = the pill's old parked spot -> done in 0.3s). Make our windows
         // untouchable for the tap's flight; finish() restores them.
         setOverlaysTouchable(false);
@@ -7749,7 +7749,7 @@ public class OverlayService extends Service {
 
     // The close tap is dispatched ~200ms after the read shot and the dialog
     // takes a moment to animate out — bench taps fired under the still-open
-    // planner landed on planner content (user report: tapping champions INSIDE
+    // planner landed on planner content (tapping champions INSIDE
     // the planner, polluting the planned team). Wait, then OCR-check the frame
     // for planner UI text; if it's still there, re-tap close (2 retries) before
     // letting the bench taps loose. Never taps the bench under an open dialog.
@@ -8302,7 +8302,7 @@ public class OverlayService extends Service {
         if(svc==null) return;
         // landscape only: after leaving TFT (home screen, other apps, portrait)
         // the frames still contain digits — score bubbles, clocks — which were
-        // read as "gold" and overwrote the tracked values (user report: gold and
+        // read as "gold" and overwrote the tracked values (gold and
         // level kept resetting when exiting the game)
         android.util.DisplayMetrics gwdm=new android.util.DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(gwdm);
