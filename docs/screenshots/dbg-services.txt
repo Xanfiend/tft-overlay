@@ -1,0 +1,19 @@
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{f8be3d7 u0 com.xanfiend.tftoverlay/.OverlayService}
+    intent={cmp=com.xanfiend.tftoverlay/.OverlayService}
+    packageName=com.xanfiend.tftoverlay
+    processName=com.xanfiend.tftoverlay
+    baseDir=/data/app/~~Wb0g0Q474eE6o-7Fz4bOvA==/com.xanfiend.tftoverlay-M6J602m7O2LtQ38vsa9uvw==/base.apk
+    dataDir=/data/user/0/com.xanfiend.tftoverlay
+    app=ProcessRecord{87d0915 3600:com.xanfiend.tftoverlay/u0a174}
+    allowWhileInUsePermissionInFgs=true
+    recentCallingPackage=com.xanfiend.tftoverlay
+    recentCallingUid=10174
+    allowStartForeground=PROC_STATE_TOP
+    startForegroundCount=1
+    infoAllowStartForeground=[callingPackage: com.xanfiend.tftoverlay; callingUid: 10174; uidState: TOP ; intent: Intent { cmp=com.xanfiend.tftoverlay/.OverlayService }; code:PROC_STATE_TOP; tempAllowListReason:<null>; targetSdkVersion:34; callerTargetSdkVersion:34; startForegroundCount:0; bindFromPackage:null]
+    isForeground=true foregroundId=23591 foregroundNoti=Notification(channel=tft_scryer_overlay shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 vis=PRIVATE)
+    createTime=-13s334ms startingBgTimeout=--
+    lastActivity=-13s332ms restartTime=-13s332ms createdFromFg=true
+    startRequested=true delayedStop=false stopIfKilled=false callStart=true lastStartId=1
