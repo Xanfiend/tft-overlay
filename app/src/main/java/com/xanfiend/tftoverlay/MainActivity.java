@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Set 17  ·  champion pool tracker");
+        sub.setText(SetData.SET_NAME.split(" - ")[0]+"  ·  champion pool tracker"); // "Set 18 - Enchanted Wilds" -> "Set 18"
         sub.setTextColor(GOLD); sub.setTextSize(13); sub.setGravity(Gravity.CENTER);
         sub.setShadowLayer(10,0,0,GOLD);
         LinearLayout.LayoutParams subl = new LinearLayout.LayoutParams(-1,-2);
