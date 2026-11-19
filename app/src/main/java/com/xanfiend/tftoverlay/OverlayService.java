@@ -5769,7 +5769,16 @@ public class OverlayService extends Service {
     }
 
     @SuppressWarnings("NewApi")
+    // Another scan or the hunt is already injecting taps — starting a second
+    // flow would make both fight over taps and read each other's popups.
+    private boolean scanBusy(){
+        if(!(plannerScanPending||plannerBenchPending||autoScanPending||huntMode)) return false;
+        Toast.makeText(this,"Scan already running",Toast.LENGTH_SHORT).show();
+        return true;
+    }
+
     private void startAutoTapScan(){
+        if(scanBusy()) return;
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
@@ -5899,8 +5908,10 @@ public class OverlayService extends Service {
     }
 
     private void startAutoOppScan(){
+        if(scanBusy()) return;
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
+            if(scanAllMode) stopScanAll();   // don't leave a lobby pass frozen mid-way
             return;
         }
         autoScanPending=true;
@@ -7149,7 +7160,7 @@ public class OverlayService extends Service {
                                 bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
                                 hw.recycle();
                             }catch(Exception e){ bmp=null; }
-                            cb.onShot(bmp);
+                            try{ cb.onShot(bmp); }catch(Exception e){ addScanLog("ERR planner shot cb: "+e.getMessage()); }
                         }
                         @Override public void onFailure(int errorCode){
                             if(errorCode==3 && attempt<2){
@@ -7164,7 +7175,7 @@ public class OverlayService extends Service {
     }
 
     private void startPlannerScan(){
-        if(plannerScanPending||plannerBenchPending) return; // a scan is already running
+        if(scanBusy()) return;
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
@@ -7679,6 +7690,7 @@ public class OverlayService extends Service {
             if(btnLabel!=null) btnLabel.setText("BENCH");
             addScanLog("bench: popup-reading "+plannerBenchTapTargets.size()+" unrecognized slot(s)");
             plannerBenchPending=true;
+            showStopButton("✦ STOP SCAN");
             benchAfterPlannerClose(0);
             return;
         }
@@ -7779,6 +7791,7 @@ public class OverlayService extends Service {
         plannerBenchTapTargets=null; benchTapResults=0;
         if(plannerBenchPending){
             plannerBenchPending=false;
+            hideStopButton();
             overlayTouchHold=false;
             setOverlaysTouchable(true);
             setOverlayShotHidden(false);
@@ -8326,6 +8339,7 @@ public class OverlayService extends Service {
     // rerolls by hand; the hunt does the buying. Stops on sigil tap or after
     // the 2-minute window.
     private void startHuntMode(){
+        if(scanBusy()) return;
         if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
             Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
             return;
