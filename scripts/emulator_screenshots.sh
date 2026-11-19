@@ -11,6 +11,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell appops set $PKG SYSTEM_ALERT_WINDOW allow
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 adb shell settings put system accelerometer_rotation 0
+# the emulator is slow enough that the launcher throws "isn't responding"
+# dialogs, which cover the app — suppress them (test-harness setting)
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put secure show_first_crash_dialog 0
 
 shot(){ sleep 2; adb exec-out screencap -p > "$OUT/$1.png"; echo "saved $1"; }
 
@@ -47,8 +51,15 @@ EOF
   adb shell "run-as $PKG sh -c 'cat > shared_prefs/tft_pool.xml'" < /tmp/tft_pool.xml
 }
 
-# tap the on-screen element whose text contains $1 (via a UI dump)
+# tap the on-screen element whose text contains $1 (via a UI dump);
+# any leftover "isn't responding" dialog is dismissed first
 tap_text(){
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+  adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1
+  if grep -q "t responding" /tmp/ui.xml; then echo "dismissing ANR dialog"; tap_text_once "Wait"; sleep 2; fi
+  tap_text_once "$1"
+}
+tap_text_once(){
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
   adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1
   local xy
@@ -114,6 +125,4 @@ for name in pool odds guide gold setup builds; do
   shot "tab-$name"
   i=$((i+1))
 done
-adb logcat -d -b crash > "$OUT/dbg-crash.txt" 2>&1
-adb logcat -d | grep -iE "tftoverlay|AndroidRuntime|OverlayService" | tail -200 > "$OUT/dbg-logcat.txt" 2>&1
 ls -la "$OUT"
