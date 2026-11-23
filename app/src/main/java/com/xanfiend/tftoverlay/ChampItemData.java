@@ -34,6 +34,8 @@ public final class ChampItemData {
 
     // Live patch this build data reflects. Shown in the BUILDS tab.
     public static final String PATCH = "17.6";
+    // Set this data was written for; the BUILDS tab warns when the live set differs.
+    public static final String SET_LABEL = "Set 17";
 
     /** One champion's meta build. */
     public static final class Build {

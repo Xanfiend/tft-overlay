@@ -92,6 +92,38 @@ public class RemoteDataTest {
         assertFalse(RemoteData.validate(o));
     }
 
+    // ---- 7-cost sets: 8-element champs/size (empty tier 6, 7-costs at index 7) ----
+
+    private static JSONObject withSevenCost() throws Exception {
+        JSONObject o = valid();
+        o.getJSONArray("champs").put(new JSONArray());                       // tier 6: none
+        JSONArray seven = new JSONArray(); seven.put("Sona"); seven.put("Rakan");
+        o.getJSONArray("champs").put(seven);                                 // tier 7
+        JSONArray size = o.getJSONArray("size"); size.put(0); size.put(6);
+        return o;
+    }
+
+    @Test public void sevenCostPayloadPasses() throws Exception {
+        assertTrue(RemoteData.validate(withSevenCost()));
+    }
+
+    @Test public void sevenCostSizeMustMatchChamps() throws Exception {
+        JSONObject o = withSevenCost();
+        o.put("size", valid().getJSONArray("size"));    // 6 sizes vs 8 tiers
+        assertFalse(RemoteData.validate(o));
+    }
+
+    @Test public void nineTiersFails() throws Exception {
+        JSONObject o = withSevenCost();
+        o.getJSONArray("champs").put(new JSONArray());
+        o.getJSONArray("size").put(0);
+        assertFalse(RemoteData.validate(o));
+    }
+
+    @Test public void sevenCostRosterShapePasses() throws Exception {
+        assertTrue(RemoteData.validRosterShape(withSevenCost()));
+    }
+
     // ---- empty tier 1-5 ----
 
     @Test public void emptyTierOneFails() throws Exception {

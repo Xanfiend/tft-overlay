@@ -645,7 +645,7 @@ public class Pool {
     }
     public void clearJunk(){
         SharedPreferences.Editor e = p.edit();
-        for(int c=1;c<=5;c++) e.remove("junk"+c);
+        for(int c=1;c<=7;c++) e.remove("junk"+c);
         e.apply();
     }
 

@@ -43,11 +43,12 @@ public final class SetData {
     public static int[] SIZE = {0, 30, 25, 18, 10, 9};
 
     // Shop odds per level: row = player level (0-10), columns = 1c..5c, percent.
-    // Carried over from Set 17 — sources disagreed on Set 18 level 7; verify rows 7-10.
+    // Set 18 table (MetaTFT, TFTFlow, Redeemer, Noxu and TFTCodex agree). A couple of
+    // sites list level 7 as 19/30/40/10/1; the majority figure is used here.
     public static final int[][] ODDS = {
         {0,0,0,0,0},{100,0,0,0,0},{100,0,0,0,0},{75,25,0,0,0},
-        {55,30,15,0,0},{45,33,20,2,0},{30,40,25,5,0},{19,30,40,10,1},
-        {18,25,32,22,3},{10,20,25,35,10},{5,10,20,40,25}
+        {55,30,15,0,0},{45,33,20,2,0},{30,40,25,5,0},{16,30,43,10,1},
+        {15,20,32,30,3},{10,17,25,33,15},{5,10,20,40,25}
     };
 
     // XP needed to advance FROM each level (index = current level).

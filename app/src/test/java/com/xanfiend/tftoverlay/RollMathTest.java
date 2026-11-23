@@ -43,4 +43,10 @@ public class RollMathTest {
         assertEquals(-1, RollMath.expectedGoldToFirst(99, 4, 9, 12, 60)); // bad level
         assertEquals(-1, RollMath.expectedGoldToFirst(8, 4, 0, 12, 60));  // no copies left
     }
+
+    @Test public void sevenCostIsNeverRollable(){
+        // 7-cost units come from quests, not the shop: no odds column, no crash
+        assertEquals(0.0, RollMath.hitChances(9, 7, 6, 12, 50, 1)[0], 1e-9);
+        assertEquals(-1, RollMath.expectedGoldToFirst(9, 7, 6, 12, 60));
+    }
 }
