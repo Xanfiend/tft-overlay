@@ -160,7 +160,6 @@ public final class RemoteData {
 
         Pool.invalidateData();   // rebuild every roster-derived cache against the new list
         ScreenScanner.invalidateRosterCaches();
-        SetIcons.reset();
         return true;
     }
 

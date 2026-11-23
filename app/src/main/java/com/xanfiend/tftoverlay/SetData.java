@@ -101,7 +101,6 @@ public final class SetData {
         // every roster-derived cache must rebuild against the new list
         Pool.invalidateData();
         ScreenScanner.invalidateRosterCaches();
-        SetIcons.reset();
         ChampionTemplates.reset();   // learned sprites re-resolve against the new roster on next load
         return true;
     }

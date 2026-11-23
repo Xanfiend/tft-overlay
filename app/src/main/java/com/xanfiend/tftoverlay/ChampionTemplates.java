@@ -121,10 +121,8 @@ public class ChampionTemplates {
         }
     }
 
-    // Same as saveBoardTemplate but the caller already holds the sprite crop —
-    // used by the planner scan, which learns every named unit's look from the
-    // board shot it took before opening the planner.
-    public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop){
+    // Scales, stores and indexes an already-cropped sprite.
+    private static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop){
         try{
             Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
             File d = dir(ctx);

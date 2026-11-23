@@ -27,11 +27,9 @@ app/src/main/java/com/xanfiend/tftoverlay/
   ItemData.java         — 9-component combination matrix
   TraitData.java        — trait breakpoints
   ChampionTemplates.java — cosine-signature Visual ID templates
-  SetIcons.java          — planner-scan 2D icon matching
   ChampItemData.java     — champion-to-item mapping + carry→comp/tier (BUILDS tab + COACH); update PATCH each patch
   CompAdvisor.java       — pure mid-game coach: board+econ → recommended comp/items + roll/level call (COACH sub-tab)
   PositionAdvisor.java   — pure positioning coach: board → front/back/flank map + carry corner + evergreen fundamentals (POSITION sub-tab)
-  OppScout.java          — pure opponent threat model: aggregates remembered enemy boards (Pool slots 1-7) → lobby role mix + archetypes (hook/AoE) + AP/AD split + top carries + counter tips + tech tips. Feeds POSITION (COUNTER THE LOBBY) and COACH (TECH vs LOBBY)
   OpenerData.java        — evergreen early-game reference (stage arc + item-slam priority + principles); OPENER sub-tab under GUIDE
   ThreatData.java        — per-champ positioning role (FRONT/BACK/FLANK); meta-stable, per-SET refresh not per-patch
   RollMath.java          — hit-probability tables
@@ -41,7 +39,6 @@ app/src/main/java/com/xanfiend/tftoverlay/
   ImageScanActivity.java — dev: pick a saved screenshot, run the scan pipeline on it (no TFT needed)
 ```
 
-`assets/seticons/` — 48×48 PNG champion portraits for planner scan (bundle per set).
 `data/setdata.json` — remote set data the app fetches on launch (champs/sizes/gods). Keep in sync with `SetData.java` bundled fallback.
 
 ## Set updates (remote data sync)
@@ -104,7 +101,7 @@ Planned "AUTO-CALIBRATE FROM BOARD" button:
 ## Direction notes (decisions, so they aren't re-pitched)
 
 - Remote/auto meta-data updates for builds/comps: **declined.** No reliable on-device source for "what pros run"; hand-maintaining item metas is unwanted upkeep. COACH/BUILDS read the bundled `ChampItemData` snapshot and may go stale — accepted limitation.
-- Distribution stays GitHub-only; no ads. Automation (THE HUNT, planner auto-tap) stays.
+- Distribution stays GitHub-only; no ads. Automation (THE HUNT) stays. Lobby scan, planner scan and star-level detection were removed.
 - Candidate future feature: **positioning helper** (high value — positioning wins otherwise-unwinnable rounds). Depends on reading the opponent board; the evergreen/reliable part is fundamentals + rule-based counter-positioning (spread vs clump, corner the carry) keyed off slow-changing per-champ threat tags (diver/AoE/backline-access), NOT patch-specific item data.
 - Deferred (big task): auto-scan that reads **every opponent in one planning phase**.
 
@@ -112,20 +109,18 @@ Planned "AUTO-CALIBRATE FROM BOARD" button:
 
 ```
 sigil tap → panel toggle (never stops a scan)
-STOP button → only way to end Board / Opp / Auto / Planner scans
+STOP button → only way to end Board / Auto scans
 
 triggerPopupScan()
   ↓ takeScreenshot()  [AccessibilityService, API 30+]
   ↓ ScreenScanner.scanBitmap(MODE_POPUP)
-  ↓ parsePopup() → ScanResult.detectedBoardUnit + detectedBoardStars
-  → if oppScanMode:   applyOppPopupScanResult()
-  → else:             applyPopupScanResult()
+  ↓ parsePopup() → ScanResult.detectedBoardUnit
+  → applyPopupScanResult()
 
 Auto Scan flow:
-  1. detectHealthBarUnits() → positions + star levels
-  2. Planner snapshot (3 taps: open, snapshot, close) → champion NAME LIST
-  3. Merge by count; unresolved units fall back to tap-per-unit OCR
-  4. Bench units: existing bench OCR pass
+  1. detectHealthBarUnits() → unit positions
+  2. Visual ID names the units it already knows; the rest are tapped and read by popup OCR
+  3. Bench units: probes after the board probes, same popup OCR
 
 THE HUNT (auto-buy):
   huntBuyNext() fires a tap; does NOT immediately call pool.add()
@@ -137,7 +132,7 @@ THE HUNT (auto-buy):
 injecting boolean guard:
   Set true before dispatchGesture; cleared in callback or by clearInjecting().
   HyperOS/MIUI can drop the callback → stuck true → silent tap skips.
-  startPlannerCalibration() calls clearInjecting() to reset it.
+  Calibration and teardown paths call clearInjecting() to reset it.
 ```
 
 ## UI color constants (OverlayService.java)

@@ -210,8 +210,8 @@ public class OverlayService extends Service {
     private boolean injecting = false;
 
     // While true, dispatchTap's finish() leaves the overlays NOT_TOUCHABLE instead
-    // of restoring them — set by flows that fire several taps back-to-back (planner
-    // scan) so the async updateViewLayout flag flip isn't raced once per tap.
+    // of restoring them — set by flows that fire several taps back-to-back so the
+    // async updateViewLayout flag flip isn't raced once per tap.
     private boolean overlayTouchHold = false;
 
     // debug scan: close panel, scan, reopen settings so user sees results
@@ -233,32 +233,9 @@ public class OverlayService extends Service {
     // corner handles — visual calibration without blind taps
     private View gridAdjustView = null;
 
-    // planner scan: reads the whole board in one pass by snapshotting the Team
-    // Planner (flat 2D tiles, matched against bundled set icons) — zero unit taps
-    private boolean plannerScanPending = false;
-    // last pass-through tap replayed by the planner calibration wizard — the
-    // banner offers RETRY when a step's injected tap got swallowed by the game
-    private float plnCalLastX = -1, plnCalLastY = -1;
-    // sprite crops captured at the planner scan's first board shot, one per
-    // detected unit (same order as plannerUnits) — labeled with the planner's
-    // names at finish so every tap-free scan TEACHES Visual ID
-    private java.util.List<Bitmap> plannerCrops = null;
-    private java.util.List<int[]> plannerUnits = null; // health-bar detection from the board shot (positions + stars)
-    private java.util.List<String> plannerBenchNames = null; // bench units recognized by Visual ID on the board shot
-    private java.util.List<int[]> plannerBenchTapTargets = null; // occupied bench slots Visual ID could NOT name — popup-tapped after the planner read
-    private int benchTapIdx = 0, benchTapResults = 0;
     private final Runnable shotHiddenWatchdog = new Runnable(){ public void run(){ setOverlayShotHidden(false); }};
-    private boolean plannerBenchPending = false; // bench popup pass running after the planner read
-    private int plannerWrapMatched = 0, plannerWrapUnknown = 0, plannerWrapOccupied = 0;
-    private long plannerWrapTookMs = 0;
     private boolean setupShowAll = false; // SETUP tab: advanced sections folded away by default
     private static final String[] GAME_MODES = {"STANDARD","HYPER ROLL","DOUBLE UP","TOCKER'S","EVENT"};
-    private final android.os.Handler plannerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    // planner calibration overlay: records where the planner controls live
-    private int plnCalStep = 0; // 0=idle, 1=planner btn, 2=snapshot btn, 3=first slot, 4=last slot, 5=close
-    private View plnCalView = null;
-    private boolean plnCalBusy = false;        // a pass-through tap is being replayed into the game
-    private final int[][] plnCalPts = new int[6][2]; // percent coords per step (index 1-5)
 
     // auto-tap board scan: dispatches gestures to each hex, OCRs popup — no templates needed
     private boolean autoScanPending = false;
@@ -295,7 +272,7 @@ public class OverlayService extends Service {
     // dominate the total scan time. Tuned for speed while leaving the popup enough time
     // to animate in before the screenshot.
     // Gesture press duration. Was 25ms — HyperOS devices accepted
-    // those on nothing: planner calibration only started working at 80ms, and
+    // those on nothing: calibration taps only started working at 80ms, and
     // shop-card buys (THE HUNT) and unit-popup taps are the same class of game
     // UI. 80ms is far below the game's drag/long-press thresholds, and every
     // tap cycle is screenshot-rate-limited anyway, so nothing gets slower.
@@ -554,8 +531,6 @@ public class OverlayService extends Service {
          .append("\n");
         s.append("set  ").append(SetData.SET_NAME).append(" patch ").append(SetData.PATCH)
          .append("  builds patch ").append(ChampItemData.PATCH).append("\n");
-        s.append("icons  champ ").append(SetIcons.champCount())
-         .append("  item ").append(ItemIcons.itemCount()).append(ItemIcons.isReady()?"":" (none bundled yet)");
         return s.toString();
     }
 
@@ -699,7 +674,7 @@ public class OverlayService extends Service {
                         // All long-running modes (scans, hunt) are stopped ONLY by the
                         // on-screen STOP button. The sigil just opens the panel so the
                         // user can check their pool without killing the active scan.
-                        if(plannerScanPending||plannerBenchPending||autoScanPending){
+                        if(autoScanPending){
                             mode=pool.isEmpty()?0:1; itemA=-1; itemB=-1; showPanel(); return true;
                         }
                         long held=System.currentTimeMillis()-down;
@@ -1487,38 +1462,15 @@ public class OverlayService extends Service {
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
             root.addView(asActive);
         } else {
-            // tap-free by default: when the planner is calibrated and icons are
-            // bundled, SCRY MY BOARD reads the whole board from one Team Planner
-            // snapshot — zero unit taps. Long-press forces the classic tap read.
-            SetIcons.load(this);
-            final boolean plnRoute = accAvail && pool.plannerCalibrated();
             LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD",
-                    plnRoute ? "no unit taps \u00b7 hold for tap scan" : "level \u00b7 gold \u00b7 every unit",
+                    "level \u00b7 gold \u00b7 every unit",
                     accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
             LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(-1,-2); asl.setMargins(0,0,0,4); asBtn.setLayoutParams(asl);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ openAccessibilitySettings(); return; }
-                // re-evaluate LIVE (the button may have been built before the user
-                // calibrated), and say WHY when the tap-free route is unavailable
-                // card-label OCR is the primary read now, so missing icons no
-                // longer force the tap scan — calibration is the only gate
-                if(pool.plannerCalibrated()){ startPlannerScan(); return; }
                 startAutoTapScan();
             }});
-            asBtn.setOnLongClickListener(new View.OnLongClickListener(){ public boolean onLongClick(View v){
-                if(!accAvail) return false;
-                buzz(); startAutoTapScan(); return true;
-            }});
-
             root.addView(asBtn);
-
-            if(accAvail && !plnRoute){
-                TextView plnTip=new TextView(this);
-                plnTip.setText("tip: calibrate the planner once (SETUP) and board scans stop needing unit taps");
-                plnTip.setTextColor(DIM); plnTip.setTextSize(9); plnTip.setGravity(Gravity.CENTER);
-                plnTip.setPadding(0,0,0,4);
-                root.addView(plnTip);
-            }
 
             // THE HUNT \u2014 shop watcher / auto-buy
             final java.util.List<String> huntList=pool.getHunt();
@@ -4220,52 +4172,6 @@ public class OverlayService extends Service {
         }
         root.addView(fsRow);
 
-        addSecHdr(root, "PLANNER SCAN", GOLD);
-
-        SetIcons.load(this);
-        ItemIcons.load(this); // Phase 2 scaffold: loads enemy-item icons if bundled (no-op until then)
-        boolean plnCal=pool.plannerCalibrated();
-        int plnIcons=SetIcons.champCount();
-        TextView plnInfo=new TextView(this);
-        plnInfo.setText("Reads your whole board in one pass with zero unit taps: the scan opens the "
-                +"Team Planner, presses Snapshot, names every fielded unit from its flat tile, then "
-                +"closes the planner without confirming (the game is untouched). Calibrate once so it "
-                +"knows where the planner controls are.");
-        plnInfo.setTextColor(ASH); plnInfo.setTextSize(10); plnInfo.setPadding(2,0,0,6); root.addView(plnInfo);
-
-        TextView plnStatus=new TextView(this);
-        plnStatus.setText((plnCal?"✓ calibrated":"not calibrated yet")
-                +"  ·  "+plnIcons+" champion icons bundled"
-                +(plnIcons==0?" — Planner Scan needs an app update with icons":""));
-        plnStatus.setTextColor(plnCal&&plnIcons>0?GREEN:DIM); plnStatus.setTextSize(10);
-        plnStatus.setPadding(2,0,0,6); root.addView(plnStatus);
-
-        TextView plnCalBtn=new TextView(this);
-        plnCalBtn.setText(plnCal?"RECALIBRATE PLANNER":"CALIBRATE PLANNER");
-        plnCalBtn.setTextColor(BONE); plnCalBtn.setTextSize(13); plnCalBtn.setGravity(Gravity.CENTER);
-        plnCalBtn.setPadding(0,12,0,12); plnCalBtn.setBackground(box(plnCal?CARD:BLOOD,6,plnCal?GOLD:BLOODL,2));
-        LinearLayout.LayoutParams pcbl=new LinearLayout.LayoutParams(-1,-2); pcbl.setMargins(0,0,0,4); plnCalBtn.setLayoutParams(pcbl);
-        plnCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-                Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
-            }
-            startPlannerCalibration();
-        }});
-        root.addView(plnCalBtn);
-
-        TextView plnHint=new TextView(this);
-        plnHint.setText("Do this on the board view during a planning phase. Your taps are replayed into "
-                +"the game, so the planner really opens while you point things out. The instruction bar "
-                +"is DRAGGABLE — if it covers the button you need to tap, drag it out of the way first. "
-                +"Use the ✕ CANCEL button on the bar to stop.");
-        plnHint.setTextColor(ASH); plnHint.setTextSize(10); plnHint.setPadding(2,0,0,6); root.addView(plnHint);
-
-        if(plnCal){
-            root.addView(miniChip("✕ clear planner calibration", new View.OnClickListener(){ public void onClick(View v){
-                pool.clearPlannerCal(); showPanel();
-            }}));
-        }
-
         root=advBox;   // Visual ID toggle is a tweakable — below the fold
 
         addSecHdr(root, "INSTANT VISUAL ID", GOLD);
@@ -5577,7 +5483,7 @@ public class OverlayService extends Service {
     // Another scan or the hunt is already injecting taps — starting a second
     // flow would make both fight over taps and read each other's popups.
     private boolean scanBusy(){
-        if(!(plannerScanPending||plannerBenchPending||autoScanPending||huntMode)) return false;
+        if(!(autoScanPending||huntMode)) return false;
         Toast.makeText(this,"Scan already running",Toast.LENGTH_SHORT).show();
         return true;
     }
@@ -6134,7 +6040,7 @@ public class OverlayService extends Service {
     private void dispatchTap(float x, float y, final Runnable onDone){
         dispatchTap(x, y, TAP_STROKE_MS, onDone);
     }
-    // UI buttons in the game (planner open/snapshot/close, menus) often ignore
+    // UI buttons in the game (menus, shop) often ignore
     // ultra-short synthetic taps that board hexes accept — callers hitting game
     // CHROME pass a longer stroke (UI_TAP_MS) while the fast scan loops keep the
     // quick one.
@@ -6155,7 +6061,7 @@ public class OverlayService extends Service {
         // onDone MUST run exactly once. Normally the gesture's completion callback
         // fires it, but HyperOS/MIUI frequently DROP that callback — and without a
         // fallback the whole sequence stalls (the hunt buys one champ then freezes;
-        // planner steps never advance). So a timeout fires onDone if the callback
+        // calibration steps never advance). So a timeout fires onDone if the callback
         // never arrives, and a one-shot guard stops it running twice.
         final boolean[] fired={false};
         final Runnable[] fallbackRef=new Runnable[1];
@@ -6662,491 +6568,6 @@ public class OverlayService extends Service {
         }
     }
 
-    // ---- PLANNER SCAN: whole board from one Team Planner snapshot ----
-    // The Team Planner's Snapshot button copies every fielded unit into the
-    // planner as flat 2D tiles — the one place the game shows the whole board
-    // as deterministic art instead of 3D sprites. The scan opens the planner,
-    // presses Snapshot, names each tile against the bundled set icons, then
-    // closes the planner. Nothing is confirmed, so the game is untouched.
-
-    private static final int PLN_OPEN_WAIT_MS = 1100; // planner open animation
-    private static final int PLN_SNAP_WAIT_MS = 900;  // snapshot tiles populate
-    private static final int PLN_SLOTS = 10;          // snapshot slot row length
-
-    private interface ShotCb { void onShot(Bitmap bmp); }
-
-    // one full-screen shot via the fast capture when available, else the
-    // accessibility screenshot (waits out the 1/sec limit, retries once on it)
-    @SuppressWarnings("NewApi")
-    private void plannerShot(final ShotCb cb){ plannerShotAttempt(cb, 0, false); }
-
-    // accessibility-screenshot-only variant: used when a fast-capture frame gave
-    // a suspect read (health-bar colors) and the other capture path should judge
-    @SuppressWarnings("NewApi")
-    private void plannerShotAcc(final ShotCb cb){ plannerShotAttempt(cb, 0, true); }
-
-    @SuppressWarnings("NewApi")
-    private void plannerShotAttempt(final ShotCb cb, final int attempt, final boolean forceAcc){
-        if(!forceAcc && scanFastReady){
-            Bitmap fast=captureScanFrame();
-            if(fast!=null){ cb.onShot(fast); return; }
-        }
-        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
-        if(svc==null){ cb.onShot(null); return; }
-        long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
-        long wait=Math.max(0, MIN_SHOT_GAP_MS-sinceShot);
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-            try{
-                lastShotMs=android.os.SystemClock.uptimeMillis();
-                svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
-                    new AccessibilityService.TakeScreenshotCallback(){
-                        @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
-                            // convert first, call back once: an error thrown further down the
-                            // callback chain must not re-enter it with null (double scan)
-                            Bitmap bmp=null;
-                            try{
-                                android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
-                                Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
-                                hb.close();
-                                bmp=hw.copy(Bitmap.Config.ARGB_8888,false);
-                                hw.recycle();
-                            }catch(Exception e){ bmp=null; }
-                            try{ cb.onShot(bmp); }catch(Exception e){ addScanLog("ERR planner shot cb: "+e.getMessage()); }
-                        }
-                        @Override public void onFailure(int errorCode){
-                            if(errorCode==3 && attempt<2){
-                                plannerHandler.postDelayed(new Runnable(){ public void run(){
-                                    plannerShotAttempt(cb, attempt+1, forceAcc);
-                                }}, MIN_SHOT_GAP_MS);
-                            } else cb.onShot(null);
-                        }
-                    });
-            }catch(Exception e){ cb.onShot(null); }
-        }}, wait);
-    }
-
-    private void startPlannerScan(){
-        if(scanBusy()) return;
-        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
-            return;
-        }
-        SetIcons.load(this);
-        // no icons (event roster, or icons not bundled yet) is no longer fatal —
-        // the card NAME labels are the primary read; icons only assist
-        if(SetIcons.champCount()==0)
-            addScanLog("planner scan: no icons for this roster — card labels only");
-        clearInjecting();
-        plannerScanPending=true;
-        plannerUnits=null;
-        plannerBenchNames=null;
-        plannerBenchTapTargets=null;
-        autoScanResults=new java.util.ArrayList<>();
-        autoScanGold=-1; autoScanLevel=-1;
-        autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
-        autoScanStartMs=android.os.SystemClock.uptimeMillis();
-        closePanel();
-        if(btnLabel!=null) btnLabel.setText("PLAN");
-        addScanLog("planner scan: board shot for positions/stars");
-        // hide our overlays for the detection shot — a pill/sigil over the board
-        // would blank out the health bars underneath (see startAutoTapScan)
-        setOverlayShotHidden(true);
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-        plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
-            if(!plannerScanPending){ setOverlayShotHidden(false); if(bmp!=null) bmp.recycle(); return; }
-            if(bmp!=null){
-                // best-effort: unit count + star levels from health bars. Names come
-                // from the planner; this only pairs stars to tiles, so failure is fine.
-                try{ plannerUnits=detectHealthBarUnits(bmp); }catch(Exception e){ plannerUnits=null; }
-                // fast-capture frames have repeatedly produced 'no health bars'
-                // where the accessibility screenshot detected fine (color/profile
-                // differences in the mirrored surface) — retry once on the other
-                // capture path before giving up on star levels for this scan
-                if((plannerUnits==null||plannerUnits.isEmpty()) && scanFastReady){
-                    final Bitmap fastBmp=bmp;
-                    plannerShotAcc(new ShotCb(){ public void onShot(Bitmap acc){
-                        setOverlayShotHidden(false);
-                        if(!plannerScanPending){ if(acc!=null) acc.recycle(); fastBmp.recycle(); return; }
-                        Bitmap use=fastBmp;
-                        if(acc!=null){
-                            try{ plannerUnits=detectHealthBarUnits(acc); }catch(Exception e){ plannerUnits=null; }
-                            if(plannerUnits!=null && !plannerUnits.isEmpty()){
-                                addScanLog("planner: health bars found on screenshot retry");
-                                use=acc; fastBmp.recycle();
-                            } else acc.recycle();
-                        }
-                        plannerBoardReady(use);
-                    }});
-                    return;
-                }
-            }
-            setOverlayShotHidden(false);
-            plannerBoardReady(bmp);
-        }});
-        }}, 120);
-    }
-
-    // continuation of startPlannerScan once the board shot (and its health-bar
-    // read) is settled: sprite crops for Visual ID teaching, tap-free bench
-    // recognition, HUD OCR, then the planner choreography
-    private void plannerBoardReady(Bitmap bmp){
-        if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
-            if(bmp!=null){
-                // no health bars even after the retry — in dev mode keep the frame
-                // so the detector can be tuned against the real pixels
-                if((plannerUnits==null||plannerUnits.isEmpty()) && pool.isDevMode()){
-                    try{
-                        final Bitmap dump=bmp.copy(Bitmap.Config.ARGB_8888,false);
-                        new Thread(new Runnable(){ public void run(){
-                            saveDebugPng(dump,"tft-board"); dump.recycle();
-                        }}).start();
-                    }catch(Exception e){}
-                }
-                // keep a sprite crop per detected unit: once the planner names the
-                // tiles, these get saved as Visual ID templates (crop size mirrors
-                // visualIdPass so learning and matching see the same framing)
-                recyclePlannerCrops();
-                if(plannerUnits!=null && pool.getVisualId()){
-                    plannerCrops=new java.util.ArrayList<>();
-                    int cs=Math.max(48, bmp.getHeight()*9/100);
-                    for(int[] u:plannerUnits){
-                        Bitmap c=null;
-                        int x0=u[0]-cs/2, y0=u[1]-cs/2;
-                        if(x0>=0&&y0>=0&&x0+cs<=bmp.getWidth()&&y0+cs<=bmp.getHeight()){
-                            try{ c=Bitmap.createBitmap(bmp,x0,y0,cs,cs); }catch(Exception e){ c=null; }
-                        }
-                        plannerCrops.add(c);
-                    }
-                }
-                // BENCH read: the planner snapshot never includes bench units.
-                // Each of the 9 standard bench slots gets an occupancy check
-                // (texture detail — empty strip is flat); occupied slots are
-                // named by Visual ID when a learned sprite matches, and every
-                // occupied slot Visual ID can't name is queued for a quick
-                // popup tap AFTER the planner read (benchTapNext).
-                plannerBenchNames=new java.util.ArrayList<>();
-                plannerBenchTapTargets=new java.util.ArrayList<>();
-                try{
-                    if(bmp.getWidth()>bmp.getHeight()){
-                        float[] bch=HexGrid.standardBench(bmp.getWidth(), bmp.getHeight());
-                        float slotW=(bch[1]-bch[0])/9f;
-                        int cs2=Math.max(48, bmp.getHeight()*9/100);
-                        boolean haveTpl=ChampionTemplates.boardTemplateCount()>0;
-                        for(int s=0;s<9;s++){
-                            int bx=(int)(bch[0]+(s+0.5f)*slotW), by=(int)bch[2];
-                            int x0=bx-cs2/2, y0=by-cs2/2;
-                            if(x0<0||y0<0||x0+cs2>bmp.getWidth()||y0+cs2>bmp.getHeight()) continue;
-                            float bd=hexDetail(bmp,bx,by,cs2/2,bmp.getWidth(),bmp.getHeight());
-                            if(bd<11f) continue; // flat texture = empty slot
-                            ChampionTemplates.BoardMatch bm=null;
-                            if(haveTpl){
-                                Bitmap bc=Bitmap.createBitmap(bmp,x0,y0,cs2,cs2);
-                                bm=ChampionTemplates.matchBoardSprite(bc);
-                                bc.recycle();
-                            }
-                            if(bm!=null){
-                                plannerBenchNames.add(bm.name);
-                                addScanLog("planner bench: "+bm.name+" (visual ID, slot "+(s+1)
-                                        +", "+(int)(bm.sim*100)+"%)");
-                            } else {
-                                plannerBenchTapTargets.add(new int[]{bx,by});
-                            }
-                        }
-                    }
-                }catch(Exception e){}
-                // the same shot carries gold/level/XP/stage — read them in parallel
-                // with the planner steps so the tap-free scan is a full scry
-                // (scanBitmap recycles the bitmap)
-                new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
-                    new ScreenScanner.ScanCallback(){
-                        public void onResult(ScreenScanner.ScanResult r){
-                            autoScanGold=r.gold; autoScanLevel=r.level;
-                            autoScanXpCur=r.xpCur; autoScanXpNeed=r.xpNeed;
-                            autoScanStage=r.stageRound;
-                        }
-                        public void onError(String msg){}
-                    }, ScreenScanner.MODE_FULL);
-            }
-            addScanLog("planner scan: "+(plannerUnits==null||plannerUnits.isEmpty()?"no health-bar read"
-                    :plannerUnits.size()+" units (health bar)")+", opening planner");
-            plannerOpenPhase();
-    }
-
-    private void plannerOpenPhase(){
-        if(!plannerScanPending) return;
-        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
-        wm.getDefaultDisplay().getRealMetrics(dm);
-        final int sw=dm.widthPixels, sh=dm.heightPixels;
-        // Hold every overlay window NOT_TOUCHABLE (and invisible) for the WHOLE
-        // open→snapshot→close choreography. The old per-tap flag flip gave the
-        // async updateViewLayout only 200ms to land — the same race that made the
-        // calibration wizard's replayed taps hit our own still-touchable windows
-        // (see handlePlnCalTap), which is why the wizard waits 650ms. The hold
-        // also stops dispatchTap's finish() from flipping the windows back
-        // touchable between steps, so no per-tap re-flip is ever raced again.
-        overlayTouchHold=true;
-        setOverlaysTouchable(false);
-        setOverlayShotHidden(true);
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-            if(!plannerScanPending) return;
-            // reference frame from BEFORE the open tap — compared after the tap
-            // so a swallowed/ignored tap is detected and re-fired instead of
-            // blindly snapshotting a planner that never opened
-            plannerShot(new ShotCb(){ public void onShot(Bitmap ref){
-                if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
-                plannerOpenTap(ref, sw, sh, 0);
-            }});
-        }}, 650);   // flag propagation gets the same margin the calibration replays use
-    }
-
-    // tap the planner button, wait out the open animation, then check the screen
-    // actually changed; a tap the game ignored is re-fired (3 tries total)
-    private void plannerOpenTap(final Bitmap ref, final int sw, final int sh, final int attempt){
-        if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
-        dispatchTap(pool.getPln("btn_x")*sw/100f, pool.getPln("btn_y")*sh/100f, UI_TAP_MS, new Runnable(){ public void run(){
-            plannerHandler.postDelayed(new Runnable(){ public void run(){
-                if(!plannerScanPending){ if(ref!=null) ref.recycle(); return; }
-                if(ref==null){ plannerSnapPhase(pool.getPln("snap_x")*sw/100f, pool.getPln("snap_y")*sh/100f); return; }
-                plannerShot(new ShotCb(){ public void onShot(final Bitmap now){
-                    if(!plannerScanPending){ if(now!=null) now.recycle(); ref.recycle(); return; }
-                    boolean opened = now!=null && framesDiffer(ref, now);
-                    if(opened){
-                        ref.recycle();
-                        // The planner opens as one of TWO screens — the MY TEAMS
-                        // list (SNAPSHOT pill at the top) or the team editor
-                        // (SNAPSHOT at the bottom) — so one calibrated point
-                        // misses half the time. Both screens print the literal
-                        // word SNAPSHOT on the button: find it in this same
-                        // verify frame and tap THAT, calibrated point only as
-                        // the fallback when OCR can't see it.
-                        new ScreenScanner(OverlayService.this,null).scanLines(now,
-                            new ScreenScanner.LinesCallback(){ public void onLines(java.util.List<ScreenScanner.OcrLine> lines){
-                                now.recycle();
-                                if(!plannerScanPending) return;
-                                float tx=pool.getPln("snap_x")*sw/100f, ty=pool.getPln("snap_y")*sh/100f;
-                                boolean located=false;
-                                for(ScreenScanner.OcrLine l:lines){
-                                    if(l.text.toUpperCase().contains("SNAPSHOT")){ tx=l.cx; ty=l.cy; located=true; break; }
-                                }
-                                addScanLog(located ? "planner: SNAPSHOT button found at "+(int)tx+","+(int)ty
-                                                   : "planner: SNAPSHOT text not seen — using calibrated point");
-                                plannerSnapPhase(tx,ty);
-                            }});
-                        return;
-                    }
-                    if(now!=null) now.recycle();
-                    if(attempt<2){
-                        addScanLog("planner scan: planner didn't open — retapping ("+(attempt+2)+"/3)");
-                        plannerOpenTap(ref, sw, sh, attempt+1);
-                    } else {
-                        ref.recycle();
-                        stopPlannerScan("open tap not registering — recalibrate PLANNER in SETUP");
-                    }
-                }});
-            }}, PLN_OPEN_WAIT_MS);
-        }});
-    }
-
-    private void plannerSnapPhase(final float x, final float y){
-        if(!plannerScanPending) return;
-        dispatchTap(x, y, UI_TAP_MS, new Runnable(){ public void run(){
-            plannerHandler.postDelayed(new Runnable(){ public void run(){ plannerReadPhase(); }}, PLN_SNAP_WAIT_MS);
-        }});
-    }
-
-    // Coarse "did the screen change" check for tap verification: sample a grid
-    // across the middle of both frames and count samples whose brightness moved.
-    // The planner dialog covers most of the screen, so a successful open flips
-    // far more samples than idle unit animation on the board ever does.
-    private static boolean framesDiffer(Bitmap a, Bitmap b){
-        try{
-            int changed=0, total=0;
-            for(int gy=0; gy<12; gy++){
-                for(int gx=0; gx<20; gx++){
-                    float fx=0.20f+0.60f*gx/19f, fy=0.15f+0.70f*gy/11f;
-                    int pa=a.getPixel((int)(fx*a.getWidth()),(int)(fy*a.getHeight()));
-                    int pb=b.getPixel((int)(fx*b.getWidth()),(int)(fy*b.getHeight()));
-                    int la=((pa>>16&255)*3+(pa>>8&255)*6+(pa&255))/10;
-                    int lb=((pb>>16&255)*3+(pb>>8&255)*6+(pb&255))/10;
-                    total++;
-                    if(Math.abs(la-lb)>28) changed++;
-                }
-            }
-            return changed*100/total > 18;   // >18% of samples moved = new UI on screen
-        }catch(Exception e){ return true; }  // can't verify — assume the tap worked
-    }
-
-    private void plannerReadPhase(){
-        if(!plannerScanPending) return;
-        addScanLog("planner scan: reading snapshot tiles");
-        setOverlayShotHidden(true);   // re-arm: a pill/sigil over the slot row would corrupt the tiles
-        plannerShot(new ShotCb(){ public void onShot(final Bitmap bmp){
-            if(!plannerScanPending){ if(bmp!=null) bmp.recycle(); return; }
-            // close the planner right away — nothing was confirmed, so the
-            // snapshot is discarded and the board is exactly as it was
-            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
-            wm.getDefaultDisplay().getRealMetrics(dm);
-            final float closeX=pool.getPln("close_x")*dm.widthPixels/100f;
-            final float closeY=pool.getPln("close_y")*dm.heightPixels/100f;
-            // boardHandler, NOT plannerHandler: plannerProcess can finish inside
-            // this 200ms and plannerFinish clears plannerHandler's queue — which
-            // silently cancelled the close tap and left the planner open in game
-            boardHandler.postDelayed(new Runnable(){ public void run(){
-                // the hold from plannerOpenPhase is still active — overlays have
-                // been untouchable the whole time, so this tap needs no lead-in
-                dispatchTap(closeX,closeY,UI_TAP_MS,new Runnable(){ public void run(){
-                    overlayTouchHold=false;
-                    setOverlaysTouchable(true);
-                    setOverlayShotHidden(false);
-                }});
-            }},200);
-            if(bmp==null){ stopPlannerScan("no planner screenshot"); return; }
-            plannerProcess(bmp);
-        }});
-    }
-
-    // crop each snapshot slot along the calibrated first→last line, skip empties
-    // by detail (flat empty hexes have almost no texture), and name the rest.
-    // Naming is two-layered: the 2D icon match on the tile art first, then the
-    // champion NAME text printed on the card (line OCR + fuzzy match) — the text
-    // survives art/frame/scale differences that break a cosine match.
-    private void plannerProcess(final Bitmap shot){
-        new ScreenScanner(this,null).scanLines(shot, new ScreenScanner.LinesCallback(){
-            public void onLines(final java.util.List<ScreenScanner.OcrLine> lines){
-                new Thread(new Runnable(){ public void run(){ plannerProcessSlots(shot, lines); }}).start();
-            }
-        });
-    }
-
-    private void plannerProcessSlots(final Bitmap shot, java.util.List<ScreenScanner.OcrLine> lines){
-        final java.util.List<String> slotNames=new java.util.ArrayList<>(); // one entry per OCCUPIED slot, null = unknown
-        try{
-            int w=shot.getWidth(), h=shot.getHeight();
-            float x1=pool.getPln("s1_x")*w/100f, y1=pool.getPln("s1_y")*h/100f;
-            float xN=pool.getPln("sn_x")*w/100f, yN=pool.getPln("sn_y")*h/100f;
-            float dxs=(xN-x1)/(PLN_SLOTS-1), dys=(yN-y1)/(PLN_SLOTS-1);
-            float spacing=(float)Math.hypot(dxs,dys);
-            // roster arrays for the fuzzy card-name fallback (parallel names/norms)
-            java.util.List<String> all=new java.util.ArrayList<>();
-            for(String[] tier:SetData.CHAMPS) for(String c:tier) all.add(c);
-            String[] cn=all.toArray(new String[0]);
-            String[] cnorm=new String[cn.length];
-            for(int i=0;i<cn.length;i++) cnorm[i]=NameMatch.norm(cn[i]);
-            // PRIMARY read — the champion NAME LABELS printed under the team
-            // cards. The team area is the right half of the planner dialog (the
-            // left half is the full roster list, which must NOT count); the
-            // vertical band keeps out the dialog title and game HUD around the
-            // dialog. This needs no slot geometry at all, so it survives the
-            // 5x2 card grid the old first→last slot line never matched.
-            java.util.List<ScreenScanner.OcrLine> labels=new java.util.ArrayList<>();
-            for(ScreenScanner.OcrLine l:lines){
-                if(l.cx < w*45/100 || l.cx > w*91/100) continue;
-                if(l.cy < h*20/100 || l.cy > h*88/100) continue;
-                String nm=NameMatch.bestMatch(l.text, cn, cnorm);
-                if(nm!=null) labels.add(new ScreenScanner.OcrLine(nm, l.cx, l.cy));
-            }
-            if(!labels.isEmpty()){
-                final int rowH=Math.max(1,h*12/100);
-                java.util.Collections.sort(labels, new java.util.Comparator<ScreenScanner.OcrLine>(){
-                    public int compare(ScreenScanner.OcrLine a, ScreenScanner.OcrLine b){
-                        int ra=a.cy/rowH, rb=b.cy/rowH;
-                        return ra!=rb ? ra-rb : a.cx-b.cx;
-                    }
-                });
-                for(ScreenScanner.OcrLine l:labels){
-                    slotNames.add(l.text);
-                    addScanLog("planner card: "+l.text+" (label)");
-                }
-                if(pool.isDevMode()) saveDebugPng(shot,"tft-planner");
-                shot.recycle();
-                plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
-                return;
-            }
-            // LEGACY fallback — the calibrated slot-line icon walk (only viable
-            // when the slot calibration exists and is sane)
-            if(spacing<8f){
-                addScanLog("planner: no card labels read and slot line uncalibrated — nothing to name");
-                saveDebugPng(shot,"tft-planner");
-                shot.recycle();
-                plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
-                return;
-            }
-            int cs=Math.max(24,(int)(spacing*0.80f));
-            int occupied=0, named=0;
-            for(int i=0;i<PLN_SLOTS;i++){
-                int cx=(int)(x1+dxs*i), cy=(int)(y1+dys*i);
-                float detail=hexDetail(shot,cx,cy,cs/2,w,h);
-                if(detail<11f){ addScanLog("planner slot "+(i+1)+": empty (detail "+(int)detail+")"); continue; }
-                occupied++;
-                int inset=cs*12/100;
-                int tx=Math.max(0,cx-cs/2+inset), ty=Math.max(0,cy-cs/2+inset);
-                int ts=Math.min(cs-2*inset, Math.min(w-tx,h-ty));
-                if(ts<16){ slotNames.add(null); continue; }
-                Bitmap tile=Bitmap.createBitmap(shot,tx,ty,ts,ts);
-                SetIcons.IconMatch m=SetIcons.match(tile);
-                if(m!=null){
-                    slotNames.add(m.name); named++;
-                    addScanLog("planner slot "+(i+1)+": "+m.name+" "+(int)(m.sim*100)
-                            +"% (+"+(int)(m.margin*100)+"%)");
-                } else {
-                    // fallback: nearest OCR line within reach of this slot that
-                    // fuzzy-resolves to a champion name (the card prints one)
-                    String byText=null; float bestD=Float.MAX_VALUE;
-                    float reach=spacing*1.15f;
-                    for(ScreenScanner.OcrLine l:lines){
-                        float d=(float)Math.hypot(l.cx-cx, l.cy-cy);
-                        if(d>reach||d>=bestD) continue;
-                        String nm=NameMatch.bestMatch(l.text, cn, cnorm);
-                        if(nm!=null){ byText=nm; bestD=d; }
-                    }
-                    if(byText!=null){
-                        slotNames.add(byText); named++;
-                        addScanLog("planner slot "+(i+1)+": "+byText+" (card name text)");
-                    } else {
-                        slotNames.add(null);
-                        addScanLog("planner slot "+(i+1)+": unknown — closest "+SetIcons.debugBest(tile));
-                    }
-                }
-                tile.recycle();
-            }
-            // total recognition failure (or dev mode): save the snapshot so the
-            // slot line and tile art can be inspected instead of guessed at
-            if(pool.isDevMode() || (occupied>0 && named==0)) saveDebugPng(shot,"tft-planner");
-        }catch(Exception e){ addScanLog("ERR planner process: "+e.getMessage()); }
-        shot.recycle();
-        plannerHandler.post(new Runnable(){ public void run(){ plannerFinish(slotNames); }});
-    }
-
-    // Save a bitmap to Pictures/TFTScryer (API 29+) or the app pictures dir —
-    // debugging aid; the scan log records where it landed.
-    @SuppressWarnings({"deprecation","NewApi"})
-    private void saveDebugPng(Bitmap bmp, String prefix){
-        String name=prefix+"-"+System.currentTimeMillis()+".png";
-        try{
-            java.io.OutputStream os;
-            String where;
-            if(Build.VERSION.SDK_INT>=29){
-                android.content.ContentValues cvv=new android.content.ContentValues();
-                cvv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,name);
-                cvv.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png");
-                cvv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/TFTScryer");
-                android.net.Uri uri=getContentResolver().insert(
-                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cvv);
-                os=getContentResolver().openOutputStream(uri);
-                where="Pictures/TFTScryer/"+name;
-            } else {
-                java.io.File d=getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
-                if(d!=null && !d.exists()) d.mkdirs();
-                java.io.File f=new java.io.File(d,name);
-                os=new java.io.FileOutputStream(f);
-                where=f.getAbsolutePath();
-            }
-            bmp.compress(Bitmap.CompressFormat.PNG,100,os);
-            os.close();
-            addScanLog("debug shot saved: "+where);
-        }catch(Exception e){ addScanLog("ERR debug save: "+e.getMessage()); }
-    }
-
     // A scan's full-screen gold parse yields to the gold watch when the watch has
     // read the pinned HUD band recently — the watch zone is verified per-device,
     // the scan zone is a whole-screen guess that has latched wrong numbers.
@@ -7157,496 +6578,6 @@ public class OverlayService extends Service {
             return;
         }
         pool.setGold(scanGold);
-    }
-
-    private void plannerFinish(java.util.List<String> slotNames){
-        if(!plannerScanPending) return;
-        plannerScanPending=false;
-        plannerHandler.removeCallbacksAndMessages(null);
-        // the close tap (on boardHandler) is usually still in flight — it releases
-        // the hold itself when it lands. Restoring here immediately would flip the
-        // overlays touchable underneath that tap; this delayed release is only the
-        // failsafe for a dropped tap callback.
-        boardHandler.postDelayed(new Runnable(){ public void run(){
-            if(plannerBenchPending) return; // the bench pass releases the hold itself
-            overlayTouchHold=false;
-            setOverlaysTouchable(true);
-            setOverlayShotHidden(false);
-        }}, 1200);
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        int occupied=slotNames.size();
-        int matched=0, unknown=0;
-        long tookMs=autoScanStartMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
-
-        int[][] hbArray = plannerUnits!=null ? plannerUnits.toArray(new int[0][]) : null;
-        if(hbArray==null){
-            // health-bar scan did not run or failed — add all recognised names, no stars
-            for(String name:slotNames){
-                if(name==null||name.isEmpty()){ unknown++; continue; }
-                matched++;
-                pool.add(name,1);
-                autoScanResults.add(name+" ≈");
-            }
-        } else {
-            PlannerMerge.MergeResult merge=PlannerMerge.merge(slotNames,hbArray);
-            java.util.List<String> floating=PlannerMerge.floatingNames(slotNames,hbArray);
-            for(PlannerMerge.BoardUnit u:merge.resolved){
-                matched++;
-                pool.add(u.name,1);
-                // teach Visual ID: the crop at this unit's health-bar position now
-                // has a confirmed name — future scans recognize it from one shot
-                if(plannerCrops!=null && plannerUnits!=null){
-                    for(int ci=0;ci<plannerUnits.size() && ci<plannerCrops.size();ci++){
-                        int[] hb=plannerUnits.get(ci);
-                        if(hb[0]==(int)u.x && hb[1]==(int)u.y){
-                            Bitmap c=plannerCrops.get(ci);
-                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c);
-                            break;
-                        }
-                    }
-                }
-                autoScanResults.add(u.name+" ≈");
-            }
-            // floating: planner named but no matching health-bar position (unit died between scans)
-            for(String n:floating){
-                matched++;
-                pool.add(n,1);
-                autoScanResults.add(n+" ≈");
-            }
-            unknown=merge.unresolvedCount();
-            if(!floating.isEmpty())
-                addScanLog("planner: "+floating.size()+" floating (no health-bar match): "+floating);
-        }
-        // bench units the board shot recognized by Visual ID (the snapshot never
-        // shows bench) — counted like any other copy
-        if(plannerBenchNames!=null){
-            for(String bn:plannerBenchNames){
-                matched++;
-                pool.add(bn,1);
-                autoScanResults.add(bn+" ≈ bench");
-            }
-            plannerBenchNames=null;
-        }
-
-        // stash the summary numbers, then either run the bench popup pass
-        // (async — finishes in plannerWrapUp) or wrap up immediately
-        plannerWrapMatched=matched; plannerWrapUnknown=unknown;
-        plannerWrapOccupied=occupied; plannerWrapTookMs=tookMs;
-        if(plannerBenchTapTargets!=null && !plannerBenchTapTargets.isEmpty()
-                && Build.VERSION.SDK_INT>=31 && TFTAccessibilityService.instance!=null){
-            benchTapIdx=0; benchTapResults=0;
-            if(btnLabel!=null) btnLabel.setText("BENCH");
-            addScanLog("bench: popup-reading "+plannerBenchTapTargets.size()+" unrecognized slot(s)");
-            plannerBenchPending=true;
-            showStopButton("✦ STOP SCAN");
-            benchAfterPlannerClose(0);
-            return;
-        }
-        plannerWrapUp();
-    }
-
-    // The close tap is dispatched ~200ms after the read shot and the dialog
-    // takes a moment to animate out — bench taps fired under the still-open
-    // planner landed on planner content (tapping champions INSIDE
-    // the planner, polluting the planned team). Wait, then OCR-check the frame
-    // for planner UI text; if it's still there, re-tap close (2 retries) before
-    // letting the bench taps loose. Never taps the bench under an open dialog.
-    private void benchAfterPlannerClose(final int attempt){
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-            if(!plannerBenchPending) return;
-            plannerShot(new ShotCb(){ public void onShot(final Bitmap frame){
-                if(!plannerBenchPending){ if(frame!=null) frame.recycle(); return; }
-                // no frame = can't confirm the planner closed: retry, never tap blind
-                if(frame==null){
-                    if(attempt>=2){ addScanLog("bench: no frame to confirm the planner closed — skipping bench taps"); plannerWrapUp(); }
-                    else benchAfterPlannerClose(attempt+1);
-                    return;
-                }
-                new ScreenScanner(OverlayService.this,null).scanLines(frame,
-                    new ScreenScanner.LinesCallback(){ public void onLines(java.util.List<ScreenScanner.OcrLine> lines){
-                        frame.recycle();
-                        boolean open=false;
-                        for(ScreenScanner.OcrLine l:lines){
-                            String u=l.text.toUpperCase();
-                            if(u.contains("SNAPSHOT")||u.contains("TEAM PLANNER")||u.contains("MY TEAMS")){ open=true; break; }
-                        }
-                        if(!open){ benchTapNext(); return; }
-                        if(attempt>=2){
-                            addScanLog("bench: planner would not close — skipping bench taps");
-                            plannerWrapUp();
-                            return;
-                        }
-                        addScanLog("bench: planner still open — re-tapping close");
-                        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
-                        wm.getDefaultDisplay().getRealMetrics(dm);
-                        dispatchTap(pool.getPln("close_x")*dm.widthPixels/100f,
-                                    pool.getPln("close_y")*dm.heightPixels/100f, UI_TAP_MS,
-                            new Runnable(){ public void run(){ benchAfterPlannerClose(attempt+1); }});
-                    }});
-            }});
-        }}, 900);
-    }
-
-    // Bench completion pass: the planner named the board tap-free; the occupied
-    // bench slots Visual ID couldn't name get one quick popup tap each. Every
-    // popup also becomes Visual ID knowledge via the normal popup-template path,
-    // so these taps disappear over time.
-    @SuppressWarnings("NewApi")
-    private void benchTapNext(){
-        if(!plannerBenchPending) return;
-        // our panel isn't covered by the touch hold — wait until it's closed
-        if(panel!=null){ plannerHandler.postDelayed(new Runnable(){ public void run(){ benchTapNext(); }}, 400); return; }
-        final java.util.List<int[]> targets=plannerBenchTapTargets;
-        if(targets==null || benchTapIdx>=targets.size()){ plannerWrapUp(); return; }
-        int[] t=targets.get(benchTapIdx);
-        final float bx=t[0], by=t[1];
-        dispatchTap(bx, by, new Runnable(){ public void run(){
-            long sinceShot=android.os.SystemClock.uptimeMillis()-lastShotMs;
-            long wait=scanFastReady ? (POPUP_WAIT_MS+140)
-                                    : Math.max(POPUP_WAIT_MS, MIN_SHOT_GAP_MS-sinceShot);
-            plannerHandler.postDelayed(new Runnable(){ public void run(){
-                plannerShot(new ShotCb(){ public void onShot(Bitmap bmp){
-                    if(bmp==null){ benchTapIdx++; benchTapNext(); return; }
-                    new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
-                        new ScreenScanner.ScanCallback(){
-                            public void onResult(ScreenScanner.ScanResult r){
-                                String nm=r.detectedBoardUnit;
-                                if(nm!=null && !nm.isEmpty()){
-                                    pool.add(nm,1);
-                                    if(!r.popupTraits.isEmpty()) pool.learnTraits(nm, r.popupTraits);
-                                    autoScanResults.add(nm+" bench");
-                                    addScanLog("bench: "+nm+" (popup)");
-                                    benchTapResults++;
-                                } else {
-                                    addScanLog("bench slot @"+(int)bx+": no popup name — skipped");
-                                }
-                                benchTapIdx++; benchTapNext();
-                            }
-                            public void onError(String msg){ benchTapIdx++; benchTapNext(); }
-                        }, ScreenScanner.MODE_POPUP);
-                }});
-            }}, wait);
-        }});
-    }
-
-    private void plannerWrapUp(){
-        int matched=plannerWrapMatched+benchTapResults, unknown=plannerWrapUnknown, occupied=plannerWrapOccupied;
-        long tookMs=plannerWrapTookMs>0?android.os.SystemClock.uptimeMillis()-autoScanStartMs:0;
-        plannerBenchTapTargets=null; benchTapResults=0;
-        if(plannerBenchPending){
-            plannerBenchPending=false;
-            hideStopButton();
-            overlayTouchHold=false;
-            setOverlaysTouchable(true);
-            setOverlayShotHidden(false);
-        }
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        applyScanGold(autoScanGold);
-        if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
-        if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
-        if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
-        refreshHud();
-        addScanLog("planner scan: done, "+matched+" named, "+unknown+" unknown of "+occupied
-                +" board tiles in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s"
-                +(autoScanGold>=0?(" · gold="+autoScanGold):"")
-                +(autoScanLevel>=0?(" · lv"+autoScanLevel):""));
-        if(occupied==0){
-            Toast.makeText(this,"No snapshot tiles found — did the planner open? Recalibrate in SETUP if not.",Toast.LENGTH_LONG).show();
-        } else if(unknown>0){
-            Toast.makeText(this,unknown+" unit"+(unknown==1?"":"s")+" not recognized — run SCRY MY BOARD to read them by popup",Toast.LENGTH_LONG).show();
-        }
-        recyclePlannerCrops();
-        if(matched>0) buzzDone();
-        mode=0; showPanel();
-    }
-
-    private void recyclePlannerCrops(){
-        if(plannerCrops!=null){
-            for(Bitmap c:plannerCrops){ if(c!=null){ try{ c.recycle(); }catch(Exception e){} } }
-            plannerCrops=null;
-        }
-    }
-
-    private void stopPlannerScan(String why){
-        plannerScanPending=false;
-        plannerHandler.removeCallbacksAndMessages(null);
-        overlayTouchHold=false;
-        setOverlaysTouchable(true);
-        setOverlayShotHidden(false);
-        recyclePlannerCrops();
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("planner scan: "+why);
-        mode=0; showPanel();
-    }
-
-    // ---- planner calibration: tap-through capture of the planner controls ----
-    // Unlike board calibration, the pointed-at controls must actually work while
-    // calibrating (the planner has to open before its Snapshot button can be
-    // shown), so steps 1, 2 and 5 replay the user's tap into the game.
-
-    private void startPlannerCalibration(){
-        plnCalStep=1;
-        plnCalBusy=false;
-        plnCalLastX=-1; plnCalLastY=-1;
-        // If a previous scan left injecting=true (e.g. gesture callback dropped by HyperOS),
-        // dispatchTap would silently skip every calibration tap — advancing the wizard without
-        // ever opening the planner. Clear it before any calibration tap fires.
-        clearInjecting();
-        closePanel();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-            new Runnable(){ public void run(){ showPlnCalOverlay(); }}, 300);
-    }
-
-    @SuppressWarnings("deprecation")
-    private void showPlnCalOverlay(){
-        hidePlnCalView();
-        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
-        wm.getDefaultDisplay().getRealMetrics(dm);
-        final int sw=dm.widthPixels, sh=dm.heightPixels;
-        final float spx=getResources().getDisplayMetrics().scaledDensity;
-
-        plnCalView=new View(OverlayService.this){
-            private final android.graphics.Paint bgP=new android.graphics.Paint();
-            private final android.graphics.Paint txtP=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-            // instruction banner is DRAGGABLE — TFT's planner/menu buttons can sit
-            // anywhere, so the user slides this strip off whatever they need to tap.
-            float barTop=-1;   // px; -1 until first layout, then defaults to the top
-            float barH=0;
-            boolean downInBar=false, dragged=false;
-            float downY=0, barTopAtDown=0;
-
-            private void ensureLayout(){
-                int H=getHeight(); if(H<=0) return;
-                barH=H*0.16f;
-                if(barTop<0) barTop=H*0.40f;           // start at mid-screen, away from top HUD and bottom shop
-                if(barTop>H-barH) barTop=H-barH;
-                if(barTop<0) barTop=0;
-            }
-            private boolean retryAvail(){ return plnCalLastX>=0 && (plnCalStep==2 || plnCalStep==3 || plnCalStep==5); }
-            private android.graphics.RectF cancelRect(){
-                int W=getWidth();
-                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f;
-                float left=retryAvail() ? W*0.5f+W*0.01f : W*0.5f-w/2f;
-                return new android.graphics.RectF(left,top,left+w,top+h);
-            }
-            private android.graphics.RectF retryRect(){
-                int W=getWidth();
-                float h=barH*0.40f, top=barTop+barH*0.54f, w=W*0.34f, left=W*0.5f-w-W*0.01f;
-                return new android.graphics.RectF(left,top,left+w,top+h);
-            }
-            @Override protected void onDraw(android.graphics.Canvas canvas){
-                ensureLayout();
-                int W=getWidth();
-                bgP.setColor(0xF00B0709);
-                canvas.drawRect(0,barTop,W,barTop+barH,bgP);
-                txtP.setStyle(android.graphics.Paint.Style.FILL);
-                txtP.setTextAlign(android.graphics.Paint.Align.CENTER);
-                String stepMsg, stepSub;
-                switch(plnCalStep){
-                    case 1: stepMsg="Tap the TEAM PLANNER button"; stepSub="the icon that opens the planner"; break;
-                    case 2: stepMsg="Tap the SNAPSHOT button"; stepSub="inside the planner that just opened"; break;
-                    case 3: stepMsg="Tap the FIRST snapshot slot"; stepSub="center of the LEFT-most slot in the row"; break;
-                    case 4: stepMsg="Tap the LAST slot in that row"; stepSub="center of the RIGHT-most slot"; break;
-                    case 5: stepMsg="Tap what CLOSES the planner"; stepSub="the X or back control"; break;
-                    default: stepMsg=""; stepSub="";
-                }
-                txtP.setTextSize(10*spx); txtP.setColor(0xFF7A6B60);
-                canvas.drawText("PLANNER CALIBRATION — STEP "+plnCalStep+" OF 5   ·   drag this bar if it covers a button",
-                        W/2f, barTop+barH*0.18f, txtP);
-                txtP.setTextSize(13*spx); txtP.setColor(0xFFE0D5C0);
-                txtP.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                canvas.drawText(plnCalBusy?"…":stepMsg, W/2f, barTop+barH*0.38f, txtP);
-                txtP.setTypeface(android.graphics.Typeface.DEFAULT);
-                txtP.setTextSize(9*spx); txtP.setColor(0xFFC9A227);
-                canvas.drawText(plnCalBusy?"replaying your tap into the game":stepSub,
-                        W/2f, barTop+barH*0.50f, txtP);
-                // CANCEL pill (+ RETRY when the previous replayed tap may have missed)
-                android.graphics.RectF cr=cancelRect();
-                txtP.setColor(0xFF1A0E10); canvas.drawRoundRect(cr,10,10,txtP);
-                txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
-                txtP.setColor(BLOODL); canvas.drawRoundRect(cr,10,10,txtP);
-                txtP.setStyle(android.graphics.Paint.Style.FILL);
-                txtP.setTextSize(11*spx);
-                canvas.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, txtP);
-                if(retryAvail() && !plnCalBusy){
-                    android.graphics.RectF rr=retryRect();
-                    txtP.setColor(0xFF141A0E); canvas.drawRoundRect(rr,10,10,txtP);
-                    txtP.setStyle(android.graphics.Paint.Style.STROKE); txtP.setStrokeWidth(2f);
-                    txtP.setColor(GOLD); canvas.drawRoundRect(rr,10,10,txtP);
-                    txtP.setStyle(android.graphics.Paint.Style.FILL);
-                    txtP.setColor(GOLD);
-                    canvas.drawText("↻ RETRY LAST TAP", rr.centerX(), rr.centerY()+4*spx, txtP);
-                    txtP.setColor(0xFFE0D5C0);
-                }
-            }
-            @Override public boolean onTouchEvent(android.view.MotionEvent e){
-                ensureLayout();
-                if(plnCalBusy) return true;
-                float vx=e.getX(), vy=e.getY();
-                int a=e.getAction();
-                boolean inBar = vy>=barTop && vy<=barTop+barH;
-                if(a==android.view.MotionEvent.ACTION_DOWN){
-                    downInBar=inBar; dragged=false; downY=vy; barTopAtDown=barTop;
-                    return true;
-                } else if(a==android.view.MotionEvent.ACTION_MOVE){
-                    if(downInBar){
-                        float dy=vy-downY;
-                        if(Math.abs(dy)>12) dragged=true;
-                        int H=getHeight();
-                        barTop=Math.max(0,Math.min(H-barH, barTopAtDown+dy));
-                        invalidate();
-                    }
-                    return true;
-                } else if(a==android.view.MotionEvent.ACTION_UP){
-                    if(downInBar){
-                        // a tap (not a drag) on the CANCEL pill cancels; RETRY re-fires
-                        // the previous step's tap into the game without advancing —
-                        // for when the injected tap got swallowed (planner didn't open)
-                        if(!dragged && cancelRect().contains(vx,vy)) cancelPlnCal();
-                        else if(!dragged && retryAvail() && retryRect().contains(vx,vy)) retryPlnCalTap();
-                        return true;
-                    }
-                    // record in RAW (screen) coordinates, not view-local: this window
-                    // can sit inset from the screen origin (camera cutout / system
-                    // bars), and dispatchGesture uses screen coordinates — local
-                    // coords made every replayed tap miss by the window offset
-                    handlePlnCalTap(e.getRawX(),e.getRawY());
-                    return true;
-                }
-                return true;
-            }
-        };
-        plnCalView.setLayerType(View.LAYER_TYPE_SOFTWARE,null);
-        WindowManager.LayoutParams clp=new WindowManager.LayoutParams(
-            sw,sh,0,0,
-            Build.VERSION.SDK_INT>=26
-                ?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                :WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                |WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                |WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT);
-        // let the window extend into the camera cutout — without this it gets
-        // shifted off the screen origin in landscape and taps record offset
-        if(Build.VERSION.SDK_INT>=28)
-            clp.layoutInDisplayCutoutMode=
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        clp.gravity=Gravity.TOP|Gravity.LEFT;
-        try{ wm.addView(plnCalView,clp); }catch(Exception ex){ plnCalView=null; plnCalStep=0; }
-    }
-
-    private void handlePlnCalTap(final float vx, final float vy){
-        final View v=plnCalView;
-        if(v==null) return;
-        // vx,vy are RAW screen coordinates — normalize against the real display,
-        // never the view (the window can be inset from the screen origin)
-        android.util.DisplayMetrics pdm=new android.util.DisplayMetrics();
-        wm.getDefaultDisplay().getRealMetrics(pdm);
-        int W=pdm.widthPixels, H=pdm.heightPixels;
-        int[] wloc=new int[2]; v.getLocationOnScreen(wloc);
-        if(wloc[0]!=0||wloc[1]!=0)
-            addScanLog("plnCal: overlay sits at +"+wloc[0]+","+wloc[1]+" — raw coords compensate");
-        plnCalPts[plnCalStep][0]=Math.round(vx*100/W);
-        plnCalPts[plnCalStep][1]=Math.round(vy*100/H);
-        boolean passThrough = plnCalStep==1 || plnCalStep==2 || plnCalStep==5;
-        if(!passThrough){
-            // slot taps are record-only: tapping a planner slot for real could
-            // add or remove a planned unit
-            advancePlnCal();
-            return;
-        }
-        // Replay this tap into the game so the planner actually opens / snapshots /
-        // closes. The OLD approach flipped FLAG_NOT_TOUCHABLE on this same full-screen
-        // overlay and dispatched the tap 180ms later — but updateViewLayout is async,
-        // so on many devices the flag had not propagated yet and the injected tap
-        // landed straight back on this (still-touchable) overlay, which swallowed it.
-        // The planner never opened, yet the wizard advanced anyway — exactly the
-        // "tapping the icon just goes to the next step" bug. A REMOVED window cannot
-        // intercept the gesture, so tear the overlay down completely first, replay,
-        // then rebuild it for the next step.
-        final boolean closing = plnCalStep==5;
-        plnCalLastX=vx; plnCalLastY=vy;
-        addScanLog("plnCal: replaying step "+plnCalStep+" tap at "+(int)vx+","+(int)vy);
-        hidePlnCalView();              // removes the window; sets plnCalBusy=false
-        plnCalBusy=true;              // still mid-replay
-        setOverlaysTouchable(false);  // lift the sigil/HUD chips out of the way too
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(vx,vy,UI_TAP_MS,new Runnable(){ public void run(){
-                // Allow extra time for TFT to open/close the planner before the next
-                // calibration overlay appears — 1500ms covers slow animation on older devices.
-                plannerHandler.postDelayed(new Runnable(){ public void run(){
-                    setOverlaysTouchable(true);
-                    plnCalBusy=false;
-                    if(closing){ finishPlnCal(); return; }
-                    plnCalStep++;              // advance, then rebuild the capture sheet
-                    showPlnCalOverlay();
-                }}, closing?500:1500);
-            }});
-        }}, 650);   // window removal must reach the input pipeline before the tap fires
-    }
-
-    // Re-fire the previous calibration step's tap into the game without
-    // advancing the wizard — recovers from an injected tap the game swallowed.
-    private void retryPlnCalTap(){
-        if(plnCalLastX<0) return;
-        final float rx=plnCalLastX, ry=plnCalLastY;
-        addScanLog("plnCal: RETRY replay at "+(int)rx+","+(int)ry);
-        hidePlnCalView();
-        plnCalBusy=true;
-        setOverlaysTouchable(false);
-        plannerHandler.postDelayed(new Runnable(){ public void run(){
-            dispatchTap(rx,ry,UI_TAP_MS,new Runnable(){ public void run(){
-                plannerHandler.postDelayed(new Runnable(){ public void run(){
-                    setOverlaysTouchable(true);
-                    plnCalBusy=false;
-                    showPlnCalOverlay();   // same step
-                }},1500);
-            }});
-        }}, 500);
-    }
-
-    private void advancePlnCal(){
-        if(plnCalStep>=5){ finishPlnCal(); return; }
-        plnCalStep++;
-        if(plnCalView!=null) plnCalView.invalidate();
-    }
-
-    private void finishPlnCal(){
-        String[] keys={null,"btn","snap","s1","sn","close"};
-        for(int i=1;i<=5;i++){
-            pool.setPln(keys[i]+"_x", plnCalPts[i][0]);
-            pool.setPln(keys[i]+"_y", plnCalPts[i][1]);
-        }
-        plnCalStep=0;
-        hidePlnCalView();
-        // failsafe: every passThrough step makes overlays untouchable around the
-        // replay; if any restore callback was dropped (e.g. handler cleared by a
-        // racing scan-stop) the sigil/HUD could be left untouchable. Force them back.
-        setOverlaysTouchable(true);
-        Toast.makeText(this,"⛧ Planner calibrated — SCRY THE PLANNER is ready",Toast.LENGTH_LONG).show();
-        mode=4; showPanel();
-    }
-
-    private void cancelPlnCal(){
-        plnCalStep=0;
-        hidePlnCalView();
-        setOverlaysTouchable(true); // failsafe, same reason as finishPlnCal
-        mode=4; showPanel();
-    }
-
-    private void hidePlnCalView(){
-        if(plnCalView!=null){
-            // Belt-and-suspenders: flag non-touchable first so even if removeView is
-            // delayed by the compositor the upcoming dispatchGesture reaches TFT.
-            try{
-                WindowManager.LayoutParams lp=(WindowManager.LayoutParams)plnCalView.getLayoutParams();
-                lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                wm.updateViewLayout(plnCalView,lp);
-            }catch(Exception e){}
-            try{ wm.removeView(plnCalView); }catch(Exception e){}
-            plnCalView=null;
-        }
-        plnCalBusy=false;
     }
 
     // ---- on-screen STOP button + stray-overlay failsafe ----
@@ -7670,7 +6601,7 @@ public class OverlayService extends Service {
         // one watchdog at a time: stacked timers from earlier hides could pop the
         // overlays back into a later screenshot
         boardHandler.removeCallbacks(shotHiddenWatchdog);
-        if(hidden) boardHandler.postDelayed(shotHiddenWatchdog, 8000); // planner scan hides ~4-5s between re-arms
+        if(hidden) boardHandler.postDelayed(shotHiddenWatchdog, 8000); // auto-tap scan re-arms between shots
     }
 
     private void showStopButton(final String label){
@@ -7735,7 +6666,6 @@ public class OverlayService extends Service {
     private void stopActiveMode(){
         if(huntMode){ stopHuntMode(); return; }
         if(autoScanPending){ finishAutoTapScan(); return; }
-        if(plannerBenchPending){ addScanLog("bench: stopped"); plannerHandler.removeCallbacksAndMessages(null); plannerWrapUp(); return; }
         hideStopButton();
     }
 
@@ -7746,7 +6676,6 @@ public class OverlayService extends Service {
     private void teardownStrayOverlays(){
         hideCalCaptureView();
         hideGridAdjustView();
-        hidePlnCalView();
         hideProbeDots();
         clearInjecting();
         overlayTouchHold=false;
@@ -7754,7 +6683,7 @@ public class OverlayService extends Service {
     }
 
     // Make the sigil, HUD chips, and stop button touchable or not. Called around
-    // injected planner taps so the gesture reaches TFT instead of landing on our
+    // injected taps so the gesture reaches TFT instead of landing on our
     // overlay views (which sit on top of the game in the window stack).
     private void setOverlaysTouchable(boolean touchable){
         int f=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
@@ -7803,11 +6732,8 @@ public class OverlayService extends Service {
     @SuppressWarnings("NewApi")
     private void goldWatchTick(){
         // yield while any capture-heavy mode is running so we don't fight the
-        // screenshot rate limit or interrupt a hunt/scan — INCLUDING the planner
-        // scan and both calibration wizards (a gold-watch screenshot mid-replay
-        // steals the 1/sec shot budget the wizard's own steps need)
-        if(goldWatchBusy||huntMode||autoScanPending||plannerBenchPending
-                ||plannerScanPending||plnCalView!=null) return;
+        // screenshot rate limit or interrupt a hunt/scan
+        if(goldWatchBusy||huntMode||autoScanPending) return;
         if(panel!=null) return; // panel covers the game — nothing useful to read
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null) return;
@@ -8190,7 +7116,6 @@ public class OverlayService extends Service {
         // if tap-calibration or grid-adjust was active, cancel it — the overlay will be wrong size
         if(calCaptureView!=null){ calStep=0; hideCalCaptureView(); }
         if(gridAdjustView!=null) hideGridAdjustView();
-        if(plnCalView!=null){ plnCalStep=0; hidePlnCalView(); setOverlaysTouchable(true); }
         // screen rotated — rebuild panel with fresh dimensions so it fits the new orientation
         if(panel != null){
             int savedMode = mode;
@@ -8232,12 +7157,10 @@ public class OverlayService extends Service {
         releaseHuntCapture();
         releaseScanCapture();
         autoTapHandler.removeCallbacksAndMessages(null);
-        plannerHandler.removeCallbacksAndMessages(null);
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         dimHandler.removeCallbacksAndMessages(null); dimRunnable=null;
         panelDismissHandler.removeCallbacksAndMessages(null); panelDismissRunnable=null;
         hideCalCaptureView();
-        hidePlnCalView();
         hideGridAdjustView();
         hideProbeDots();
         hideImageScan();

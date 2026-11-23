@@ -138,8 +138,7 @@ public final class ItemData {
     public static boolean isAdItem(String item)   { return AD_ITEMS.contains(item); }
     public static boolean isHealItem(String item) { return HEAL_ITEMS.contains(item); }
 
-    /** Distinct completed-item names from the combine matrix, in first-seen order.
-     *  Used by ItemIcons to map a bundled icon filename to its canonical name. */
+    /** Distinct completed-item names from the combine matrix, in first-seen order. */
     public static java.util.List<String> fullItems() {
         java.util.LinkedHashSet<String> s = new java.util.LinkedHashSet<>();
         for (int i = 1; i < COMBOS.length; i++)

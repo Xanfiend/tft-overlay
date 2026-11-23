@@ -5,8 +5,8 @@ import java.util.List;
 
 /*
  * Pure reconciliation of raw OCR champion-name reads into a clean roster with
- * copy counts. The autoscan gathers names from several passes (planner snapshot,
- * popup taps, bench) that are noisy and duplicated; this canonicalizes each raw
+ * copy counts. The autoscan gathers names from several passes (popup
+ * taps, bench) that are noisy and duplicated; this canonicalizes each raw
  * read to a real champion via NameMatch, drops junk, and tallies copies.
  *
  * GROUNDWORK (dormant): pure + tested. ScreenScanner / OverlayService can adopt
