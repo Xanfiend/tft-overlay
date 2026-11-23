@@ -515,6 +515,7 @@ public class MainActivity extends Activity {
 
     private void buildChangelog(){
         String[][] cl={
+            {"v1.99.84  ·  2026-11-23","Set 18 refresh: corrected shop odds at levels 7 to 9, updated builds and augment tiers, and a warning on those tabs whenever their data falls behind the live patch. Ready for Set 19's special 7-cost champions. Removed the enemy lobby scan, star-level reading and planner scan so the app stays focused on pool tracking and auto-buy. Cleaner launch screen."},
             {"v1.99.83  ·  2026-11-19","Reliability fixes: the bench read can no longer tap into your panel or a still-open planner, SCRY THE ENEMY gets a STOP button, switching game modes keeps unit recognition in sync, the update prompt no longer appears twice after rotating, and a few rare crashes and stuck states are gone. Leaner code under the hood."},
             {"v1.99.82  ·  2026-11-19","Updated for Set 18: Enchanted Wilds — new champion roster, pool sizes, traits, positioning roles and champion portraits."},
             {"v1.99.81  ·  2026-11-09","New EVENT option under GAME MODE for event queues that use their own champion pool. Bench reading now waits for the Team Planner to close first."},
