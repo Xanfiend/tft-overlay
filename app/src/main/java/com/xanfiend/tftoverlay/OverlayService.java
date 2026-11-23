@@ -1594,7 +1594,7 @@ public class OverlayService extends Service {
             asrTv.setTextColor(BONE); asrTv.setTextSize(12); asrTv.setPadding(2,0,2,4); root.addView(asrTv);
             if(anyVisual){
                 TextView visHint=new TextView(this);
-                visHint.setText("★ = star level  ·  ≈ = recognized by sprite, no tap needed");
+                visHint.setText("≈ = recognized by sprite, no tap needed");
                 visHint.setTextColor(DIM); visHint.setTextSize(9); visHint.setPadding(2,0,2,4);
                 root.addView(visHint);
             }
@@ -2094,11 +2094,9 @@ public class OverlayService extends Service {
     }
 
     // extracts the champion name from an auto-scan results entry
-    // (entries are "Name" + "★"*stars + optional " ≈" visual-ID marker)
+    // (entries are "Name" plus an optional " ≈" visual-ID or " bench" marker)
     private static String scanEntryName(String entry){
-        int cut=entry.indexOf('★');
-        String n=cut>=0?entry.substring(0,cut):entry;
-        return n.replace(" ≈","").trim();
+        return entry.replace(" ≈","").replace(" bench","").trim();
     }
 
     private static String joinNames(java.util.List<String> l){
@@ -5106,7 +5104,7 @@ public class OverlayService extends Service {
         java.util.List<int[]> grid=buildProbeGrid(w,h);
         int boardCount=autoTapBoardProbeCount;
         java.util.List<int[]> det=null;
-        try{ det=detectHealthBarUnits(bmp,false); }catch(Exception e){}
+        try{ det=detectHealthBarUnits(bmp); }catch(Exception e){}
 
         // grid dots
         pt.setTextSize(Math.max(18f, h*0.018f));
@@ -5229,7 +5227,7 @@ public class OverlayService extends Service {
                                 final int bw=bmp.getWidth(), bh=bmp.getHeight();
                                 java.util.List<int[]> grid=buildProbeGrid(bw,bh);
                                 int gridBoardCount=autoTapBoardProbeCount;
-                                java.util.List<int[]> detected=detectHealthBarUnits(bmp,false);
+                                java.util.List<int[]> detected=detectHealthBarUnits(bmp);
                                 java.util.List<int[]> out; int bc;
                                 if(detected!=null){
                                     java.util.List<int[]> bench=new java.util.ArrayList<>(
@@ -5369,7 +5367,7 @@ public class OverlayService extends Service {
         final ScreenScanner.ScanResult[] ocr={null};
         Runnable finish=()->{
             java.util.List<int[]> detected=null;
-            try{ detected=detectHealthBarUnits(img,false); }catch(Exception e){}
+            try{ detected=detectHealthBarUnits(img); }catch(Exception e){}
             java.util.List<int[]> grid=buildProbeGrid(bw,bh);
             java.util.List<int[]> probes; int boardCount;
             if(detected!=null && !detected.isEmpty()){
@@ -5554,7 +5552,6 @@ public class OverlayService extends Service {
         // The debug log shows which names were detected so the user can verify.
         if(!r.shopChampions.isEmpty()){
             addScanLog("shop champs found: "+r.shopChampions.toString());
-            if(!r.starLevels.isEmpty()) addScanLog("star levels: "+r.starLevels.toString());
         }
         // bench scan auto-fills the junk counters (bench units thin the pool);
         // the ODDS-tab steppers stay available to correct it
@@ -5644,7 +5641,7 @@ public class OverlayService extends Service {
                             // is inconclusive. The bench keeps the grid (bench units have no
                             // health bar to detect) and is filtered for occupancy.
                             java.util.List<int[]> detected = pool.getSmartScan()
-                                    ? detectHealthBarUnits(goldLvlBmp,false) : null;
+                                    ? detectHealthBarUnits(goldLvlBmp) : null;
                             if(detected!=null){
                                 java.util.List<int[]> bench=new java.util.ArrayList<>(
                                         filteredGrid.subList(filteredBoardCount, filteredGrid.size()));
@@ -5904,26 +5901,18 @@ public class OverlayService extends Service {
     // "relaxed colors") — shown in the SHOW DOTS banner and the debug log.
     private String lastSmartTier = "";
 
-    private java.util.List<int[]> detectHealthBarUnits(Bitmap bmp, boolean opp){
+    private java.util.List<int[]> detectHealthBarUnits(Bitmap bmp){
         try{
             int w=bmp.getWidth(), h=bmp.getHeight();
             boolean portrait = h > w;
             // FIXED board-region bounds — no calibration needed. The TFT Mobile board
-            // is a 4x7 hex grid drawn in perspective in the lower-centre of the screen
-            // (your own units) or the upper half during combat (the enemy). These
-            // generous percentage bounds cover the whole play area across phone aspect
+            // is a 4x7 hex grid drawn in perspective in the lower-centre of the screen.
+            // These generous percentage bounds cover the whole play area across phone aspect
             // ratios, while excluding the top augment/HUD bar and the bottom shop bar
             // so we don't read their text/icons as health bars. Detection finds the
             // actual units inside this region, so exact placement never matters.
             int zoneTop, zoneBot, leftExtreme, rightExtreme;
-            if(opp){
-                // enemy team fights from the TOP half during combat; red bars float
-                // above their units, from the back row (~14%) to the front (~58%).
-                zoneTop      = h * 11 / 100;
-                zoneBot      = h * 60 / 100;
-                leftExtreme  = w *  5 / 100;
-                rightExtreme = w * 93 / 100;
-            } else if(portrait){
+            if(portrait){
                 // portrait: the board sits higher and is taller on screen
                 zoneTop      = h * 18 / 100;
                 zoneBot      = h * 68 / 100;
@@ -5968,7 +5957,7 @@ public class OverlayService extends Service {
             // thresholds. Arena foliage (olive/yellow greens, where red is more
             // than ~60% of green) fails the ratio test at both tiers, and anything
             // that slips through must still survive the structural checks below.
-            java.util.List<int[]> units = detectBarsAtTier(px, zw, zh, w, h, opp, 2,
+            java.util.List<int[]> units = detectBarsAtTier(px, zw, zh, w, h, 2,
                     leftExtreme, zoneTop, btnLoc, btnW, btnH);
             if(units == null){
                 addScanLog("smart: no health bars found, using grid");
@@ -5980,7 +5969,7 @@ public class OverlayService extends Service {
                 return units;
             }
             int relaxedCount = units.size();
-            units = detectBarsAtTier(px, zw, zh, w, h, opp, 1,
+            units = detectBarsAtTier(px, zw, zh, w, h, 1,
                     leftExtreme, zoneTop, btnLoc, btnW, btnH);
             if(units != null && units.size() <= 13){
                 lastSmartTier = "strict colors";
@@ -5998,13 +5987,8 @@ public class OverlayService extends Service {
     }
 
     // True if the pixel reads as health-bar fill at the given tier.
-    private static boolean barPixel(int c, boolean opp, int tier){
+    private static boolean barPixel(int c, int tier){
         int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
-        if(opp){
-            // enemy red bar: red strongly dominant over both green and blue
-            return tier==1 ? (r>=150 && r*5>=g*9 && r*5>=b*9)   // r ≥ 1.8g, 1.8b
-                           : (r>=120 && r*5>=g*8 && r*5>=b*8);  // r ≥ 1.6g, 1.6b
-        }
         // ally green bar: green strongly dominant. Foliage greens have r at
         // 60-80% of g and fail the ratio; bar greens have r under ~50% of g.
         return tier==1 ? (g>=150 && g*5>=r*9 && g*5>=b*8)       // g ≥ 1.8r, 1.6b
@@ -6014,7 +5998,7 @@ public class OverlayService extends Service {
     // One full detection pass at a single color tier: scanline runs -> clusters ->
     // structural validation -> tap points. Returns null when no unit survives.
     private java.util.List<int[]> detectBarsAtTier(int[] px, int zw, int zh, int w, int h,
-                                                   boolean opp, int tier,
+                                                   int tier,
                                                    int zoneLeft, int zoneTop,
                                                    int[] btnLoc, int btnW, int btnH){
         // Bar size scales with screen HEIGHT (the board is height-fit), not width:
@@ -6031,7 +6015,7 @@ public class OverlayService extends Service {
         for(int ry=0; ry<zh; ry+=2){
             int base=ry*zw; int runStart=-1, lastHit=-1;
             for(int rx=0; rx<zw; rx++){
-                if(barPixel(px[base+rx], opp, tier)){
+                if(barPixel(px[base+rx], tier)){
                     if(runStart<0) runStart=rx;
                     lastHit=rx;
                 } else if(runStart>=0 && rx-lastHit>GAP_TOL){
@@ -6078,24 +6062,20 @@ public class OverlayService extends Service {
             // a larger green region, so the rows just above and below it also
             // match. Reject the cluster if either flanking row is >40% bar-colored
             // across the bar's own width.
-            if(flankMatches(px, zw, zh, cx-zoneLeft, minY-zoneTop-6, barW, opp, tier) ||
-               flankMatches(px, zw, zh, cx-zoneLeft, maxY-zoneTop+6, barW, opp, tier)) continue;
+            if(flankMatches(px, zw, zh, cx-zoneLeft, minY-zoneTop-6, barW, tier) ||
+               flankMatches(px, zw, zh, cx-zoneLeft, maxY-zoneTop+6, barW, tier)) continue;
             int tapY=Math.max(0, Math.min(h-1, maxY+bodyDrop));
             boolean dup=false;
             for(int[] u : units){
                 if(Math.abs(u[0]-cx)<=clusterXTol && Math.abs(u[1]-tapY)<=h*5/100){ dup=true; break; }
             }
             if(dup) continue;
-            // star level from the star icons drawn directly above the bar — COLOR
-            // based (bronze/silver/gold), so unit size differences cannot fool it
-            int stars=starsAboveBar(px,zw,zh,cx-zoneLeft,minY-zoneTop,maxY-minY,barW);
-            units.add(new int[]{cx,tapY,stars});
+            units.add(new int[]{cx,tapY});
             // log the bar's center pixel color so thresholds stay tunable from logs
             int relX=cx-zoneLeft, relY=(minY+maxY)/2-zoneTop;
             if(relX>=0 && relX<zw && relY>=0 && relY<zh){
                 int pc=px[relY*zw+relX];
                 clrLog.append(" (").append((pc>>16)&0xFF).append(",").append((pc>>8)&0xFF).append(",").append(pc&0xFF).append(")");
-                if(stars>0) clrLog.append(stars).append("★");
             }
         }
         if(units.isEmpty()) return null;
@@ -6105,46 +6085,16 @@ public class OverlayService extends Service {
         return units;
     }
 
-    // Star level read from the star icons that TFT draws directly above each
-    // unit's health bar. Classification is by COLOR ONLY: gold = 3 stars,
-    // silver = 2, bronze = 1. Sprite size grows with star level too, but size
-    // also changes with naturally-large champions and combat buffs, so color is
-    // the only reliable signal. Returns 0 when no clear star color is found
-    // (callers treat 0 as unknown, not as 1 star).
-    private static int starsAboveBar(int[] px,int zw,int zh,int relCx,int relBarTop,int barThick,int barW){
-        int bandH=Math.max(6, barThick*3);
-        int y1=relBarTop-2, y0=Math.max(0, y1-bandH);
-        int x0=Math.max(0, relCx-barW/2), x1=Math.min(zw-1, relCx+barW/2);
-        if(y1<=y0 || x1<=x0 || y1>=zh) return 0;
-        int gold=0, silver=0, bronze=0;
-        for(int y=y0;y<=y1;y++){
-            int base=y*zw;
-            for(int x=x0;x<=x1;x++){
-                int c=px[base+x];
-                int r=(c>>16)&0xFF, g=(c>>8)&0xFF, b=c&0xFF;
-                if(r>=200 && g>=140 && g<r && b<=110 && b*2<r) gold++;
-                else if(r>=150 && g>=150 && b>=150
-                        && Math.abs(r-g)<=35 && Math.abs(g-b)<=45 && Math.abs(r-b)<=45) silver++;
-                else if(r>=110 && r<200 && g*10>=r*4 && g*10<=r*8 && b*2<r) bronze++;
-            }
-        }
-        int minPix=Math.max(4,(x1-x0)/6);
-        if(gold>=minPix && gold>=silver && gold>=bronze) return 3;
-        if(silver>=minPix && silver>=gold && silver>=bronze) return 2;
-        if(bronze>=minPix) return 1;
-        return 0;
-    }
-
     // True if the zone-relative scanline at relY is more than 40% bar-colored
     // across [relCx-barW/2, relCx+barW/2] — meaning the candidate bar is actually
     // part of a taller colored region. Out-of-zone rows count as clear.
     private boolean flankMatches(int[] px, int zw, int zh, int relCx, int relY, int barW,
-                                 boolean opp, int tier){
+                                 int tier){
         if(relY<0 || relY>=zh) return false;
         int x0=Math.max(0, relCx-barW/2), x1=Math.min(zw-1, relCx+barW/2);
         if(x1<=x0) return false;
         int base=relY*zw, hits=0, total=x1-x0+1;
-        for(int x=x0;x<=x1;x++) if(barPixel(px[base+x], opp, tier)) hits++;
+        for(int x=x0;x<=x1;x++) if(barPixel(px[base+x], tier)) hits++;
         return hits*10 > total*4;
     }
 
@@ -6382,15 +6332,10 @@ public class OverlayService extends Service {
             if(m==null){ toTap.add(u); continue; }
             autoScanVisualCount++;
             autoTapHits++;
-            // star level detected from the star-icon color above this unit's health bar
-            int uStars = u.length>2 ? u[2] : 0;
-            addScanLog("visual ID: "+m.name+(uStars>0?" "+uStars+"★":"")
+            addScanLog("visual ID: "+m.name
                     +" sim="+(int)(m.sim*100)+"% margin="+(int)(m.margin*100)+"%");
             pool.add(m.name,1);
-            StringBuilder entry=new StringBuilder(m.name);
-            for(int i=0;i<uStars;i++) entry.append("★");
-            entry.append(" ≈"); // ≈ marks a visual match
-            autoScanResults.add(entry.toString());
+            autoScanResults.add(m.name+" ≈"); // ≈ marks a visual match
         }
         if(autoScanVisualCount>0) buzz();
         return toTap;
@@ -6404,11 +6349,6 @@ public class OverlayService extends Service {
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
             final int[] probePos = autoTapIndex<autoTapProbes.size() ? autoTapProbes.get(autoTapIndex) : null;
-            // star level: popup OCR first; if it missed the stars, fall back to the
-            // star-icon color read above this unit's health bar during detection
-            int stars=r.detectedBoardStars;
-            if(stars<=0 && probePos!=null && probePos.length>2) stars=probePos[2];
-            if(stars<=0) stars=1;
             buzz();
             autoTapConsecutiveMisses=0;
             autoTapHits++;
@@ -6417,16 +6357,13 @@ public class OverlayService extends Service {
             if(!r.popupTraits.isEmpty()) pool.learnTraits(name, r.popupTraits);
             final boolean onBoard = !inBenchPhase;
             pool.add(name,1);
-            StringBuilder entry=new StringBuilder(name);
-            for(int i=0;i<stars;i++) entry.append("★");
-            autoScanResults.add(entry.toString());
-            addScanLog("auto-tap: +"+name+" "+stars+"★");
+            autoScanResults.add(name);
+            addScanLog("auto-tap: +"+name);
             if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
             if(sourceBmp!=null){
                 final android.graphics.Rect bounds=r.detectedPopupBounds;
                 final int spriteSize=Math.max(48, autoTapScreenH*9/100);
                 final int gen=autoScanGeneration;
-                final int tplStars=stars;   // effectively-final capture for the thread
                 new Thread(new Runnable(){ public void run(){
                   try{
                     // board-sprite template for Instant Visual ID — only from board
@@ -6440,9 +6377,9 @@ public class OverlayService extends Service {
                         popupGrown.inset(-20,-20);
                         if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
                             ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
-                                    probePos[0],probePos[1],spriteSize,tplStars);
+                                    probePos[0],probePos[1],spriteSize);
                             // Duplicate-skip: this same screenshot likely shows other
-                            // copies of the champion just learned (2★/3★ units, or
+                            // copies of the champion just learned (merged units, or
                             // multiple 1-cost copies). Check the remaining un-tapped
                             // board probes against the sprite just learned so those
                             // copies are recorded now instead of needing their own tap.
@@ -6557,12 +6494,8 @@ public class OverlayService extends Service {
                 autoTapSkip.add(i);
                 if(i>=probes.size()) continue; // probe list was reassigned mid-scan
                 int[] p=probes.get(i);
-                int dStars=p.length>2?p[2]:0;
                 pool.add(dm.name,1);
-                StringBuilder e=new StringBuilder(dm.name);
-                for(int s=0;s<dStars;s++) e.append("★");
-                e.append(" ≈");
-                autoScanResults.add(e.toString());
+                autoScanResults.add(dm.name+" ≈");
                 autoScanVisualCount++; autoTapHits++;
                 addScanLog("dup visual ID: "+dm.name+" (probe "+(i+1)+")");
                 any=true;
@@ -6824,7 +6757,7 @@ public class OverlayService extends Service {
             if(bmp!=null){
                 // best-effort: unit count + star levels from health bars. Names come
                 // from the planner; this only pairs stars to tiles, so failure is fine.
-                try{ plannerUnits=detectHealthBarUnits(bmp,false); }catch(Exception e){ plannerUnits=null; }
+                try{ plannerUnits=detectHealthBarUnits(bmp); }catch(Exception e){ plannerUnits=null; }
                 // fast-capture frames have repeatedly produced 'no health bars'
                 // where the accessibility screenshot detected fine (color/profile
                 // differences in the mirrored surface) — retry once on the other
@@ -6836,7 +6769,7 @@ public class OverlayService extends Service {
                         if(!plannerScanPending){ if(acc!=null) acc.recycle(); fastBmp.recycle(); return; }
                         Bitmap use=fastBmp;
                         if(acc!=null){
-                            try{ plannerUnits=detectHealthBarUnits(acc,false); }catch(Exception e){ plannerUnits=null; }
+                            try{ plannerUnits=detectHealthBarUnits(acc); }catch(Exception e){ plannerUnits=null; }
                             if(plannerUnits!=null && !plannerUnits.isEmpty()){
                                 addScanLog("planner: health bars found on screenshot retry");
                                 use=acc; fastBmp.recycle();
@@ -7267,15 +7200,12 @@ public class OverlayService extends Service {
                         int[] hb=plannerUnits.get(ci);
                         if(hb[0]==(int)u.x && hb[1]==(int)u.y){
                             Bitmap c=plannerCrops.get(ci);
-                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,u.stars);
+                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c);
                             break;
                         }
                     }
                 }
-                StringBuilder e=new StringBuilder(u.name);
-                for(int s=0;s<u.stars;s++) e.append('★');
-                e.append(" ≈");
-                autoScanResults.add(e.toString());
+                autoScanResults.add(u.name+" ≈");
             }
             // floating: planner named but no matching health-bar position (unit died between scans)
             for(String n:floating){
@@ -7382,14 +7312,10 @@ public class OverlayService extends Service {
                             public void onResult(ScreenScanner.ScanResult r){
                                 String nm=r.detectedBoardUnit;
                                 if(nm!=null && !nm.isEmpty()){
-                                    int st=Math.max(1,r.detectedBoardStars);
                                     pool.add(nm,1);
                                     if(!r.popupTraits.isEmpty()) pool.learnTraits(nm, r.popupTraits);
-                                    StringBuilder e=new StringBuilder(nm);
-                                    for(int s=0;s<st;s++) e.append('★');
-                                    e.append(" bench");
-                                    autoScanResults.add(e.toString());
-                                    addScanLog("bench: "+nm+" "+st+"★ (popup)");
+                                    autoScanResults.add(nm+" bench");
+                                    addScanLog("bench: "+nm+" (popup)");
                                     benchTapResults++;
                                 } else {
                                     addScanLog("bench slot @"+(int)bx+": no popup name — skipped");

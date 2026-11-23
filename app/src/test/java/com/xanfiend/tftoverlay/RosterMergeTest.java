@@ -27,15 +27,6 @@ public class RosterMergeTest {
         assertTrue(RosterMerge.tally(Arrays.asList("Jhin"), null).isEmpty());
     }
 
-    @Test public void starsFromCopies() {
-        assertEquals(0, RosterMerge.starsFromCopies(0));
-        assertEquals(1, RosterMerge.starsFromCopies(1));
-        assertEquals(1, RosterMerge.starsFromCopies(2));
-        assertEquals(2, RosterMerge.starsFromCopies(3));
-        assertEquals(2, RosterMerge.starsFromCopies(8));
-        assertEquals(3, RosterMerge.starsFromCopies(9));
-    }
-
     @Test public void unresolvedCount() {
         LinkedHashMap<String,Integer> t = RosterMerge.tally(
             Arrays.asList("Jhin", "Corki"), ROSTER);   // 2 resolved

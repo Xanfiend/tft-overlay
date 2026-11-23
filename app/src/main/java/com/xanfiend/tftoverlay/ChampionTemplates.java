@@ -73,8 +73,8 @@ public class ChampionTemplates {
             if(fn.startsWith("btplo_") || fn.startsWith("tpl_")){ f.delete(); continue; } // obsolete enemy-sprite / popup-portrait files from older versions
             if(!fn.startsWith("btpl_")) continue;
             String key = fn.substring("btpl_".length(), fn.length()-4);
-            // optional per-star variant suffix ("aatrox_s2"): a 1-star and a
-            // 2-star model look different — both are kept, keyed name+bucket
+            // sprites saved by older versions may carry a per-star suffix ("aatrox_s2");
+            // they stay usable, keyed name+suffix
             String starSuf = "";
             int sIdx = key.lastIndexOf("_s");
             if(sIdx > 0 && sIdx == key.length()-3 && Character.isDigit(key.charAt(key.length()-1))){
@@ -109,12 +109,12 @@ public class ChampionTemplates {
     // cx,cy is the tap point (unit body); size is the square crop edge in px.
 
     public static synchronized void saveBoardTemplate(Context ctx, String champName, Bitmap sourceBmp,
-                                                      int cx, int cy, int size, int stars){
+                                                      int cx, int cy, int size){
         int x0 = cx - size/2, y0 = cy - size/2;
         if(x0 < 0 || y0 < 0 || x0+size > sourceBmp.getWidth() || y0+size > sourceBmp.getHeight()) return;
         try{
             Bitmap crop = Bitmap.createBitmap(sourceBmp, x0, y0, size, size);
-            saveBoardTemplateBitmap(ctx, champName, crop, stars);
+            saveBoardTemplateBitmap(ctx, champName, crop);
             crop.recycle();
         }catch(Exception e){
             OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
@@ -125,34 +125,26 @@ public class ChampionTemplates {
     // used by the planner scan, which learns every named unit's look from the
     // board shot it took before opening the planner.
     public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop){
-        saveBoardTemplateBitmap(ctx, champName, crop, 0);
-    }
-    // stars picks the variant bucket: a 1-star and a 2-star+ model differ in
-    // size/pose, so each star tier keeps its own learned sprite instead of the
-    // last sighting overwriting the other. 0 = unknown tier (legacy bucket).
-    public static synchronized void saveBoardTemplateBitmap(Context ctx, String champName, Bitmap crop, int stars){
         try{
             Bitmap scaled = Bitmap.createScaledBitmap(crop, SCALE, SCALE, true);
             File d = dir(ctx);
             if(!d.exists()) d.mkdirs();
-            String starSuf = stars > 0 ? "_s" + Math.min(3, stars) : "";
-            String fn = "btpl_"
-                    + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + starSuf + ".png";
+            String fn = "btpl_" + champName.toLowerCase().replaceAll("[^a-z0-9]", "") + ".png";
             File out = new File(d, fn);
             FileOutputStream fos = new FileOutputStream(out);
             scaled.compress(Bitmap.CompressFormat.PNG, 100, fos);
             fos.close();
             float[] s = sig(scaled);
             meanCenter(s);
-            boardSigs.put(champName + starSuf, s);
+            boardSigs.put(champName, s);
             if(scaled != crop) scaled.recycle();   // same-size input returns the caller's bitmap
-            OverlayService.addScanLog("sprite learned: "+champName+(stars>0?" "+Math.min(3,stars)+"\u2605":""));
+            OverlayService.addScanLog("sprite learned: "+champName);
         }catch(Exception e){
             OverlayService.addScanLog("ERR save sprite "+champName+": "+e.getMessage());
         }
     }
 
-    // map key -> champion name (strips the per-star variant suffix)
+    // map key -> champion name (strips the "_sN" suffix of sprites saved by older versions)
     private static String baseName(String key){
         int i = key.lastIndexOf("_s");
         if(i > 0 && i == key.length()-3 && Character.isDigit(key.charAt(key.length()-1)))

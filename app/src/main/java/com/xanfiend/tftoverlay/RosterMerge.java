@@ -29,15 +29,6 @@ public final class RosterMerge {
         return out;
     }
 
-    /* Star level implied by copies under TFT's 3-merge rule: 3 = 2-star,
-     * 9 = 3-star. Clamped; 0 copies = not on board. */
-    public static int starsFromCopies(int copies) {
-        if (copies >= 9) return 3;
-        if (copies >= 3) return 2;
-        if (copies >= 1) return 1;
-        return 0;
-    }
-
     /* Of `detectedUnits` positions found (e.g. from health bars), how many were
      * NOT resolved to a name by the tally — i.e. still need a tap-OCR fallback. */
     public static int unresolvedCount(int detectedUnits, LinkedHashMap<String,Integer> tally) {

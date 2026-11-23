@@ -47,9 +47,7 @@ public class ScreenScanner {
         public List<String> shopChampions = new ArrayList<>();
         public List<int[]> shopChampPos = new ArrayList<>(); // shop strip scan: {cx,cy} per shopChampions entry, crop coords
         public List<String> benchChampions = new ArrayList<>();
-        public Map<String, Integer> starLevels = new HashMap<>();
         public String detectedBoardUnit = ""; // board scan mode: champion name from popup
-        public int detectedBoardStars = 0;   // board scan mode: star level 1-3 from popup (0 = not detected)
         public List<String> popupTraits = new ArrayList<>(); // trait names visible in the unit popup
         public android.graphics.Rect detectedPopupBounds = null; // popup scan: bounding rect of all popup-zone blocks
         public String status = "";
@@ -182,11 +180,6 @@ public class ScreenScanner {
                     (int) (pMaxX * inv), (int) (pMaxY * inv));
         }
         if (!r.detectedBoardUnit.isEmpty()) {
-            for (Text.TextBlock block : text.getTextBlocks()) {
-                if (block.getBoundingBox() == null) continue;
-                int s = countStars(block.getText());
-                if (s > r.detectedBoardStars) r.detectedBoardStars = s;
-            }
             // trait names appear in small text under the unit name — learn them
             for (Text.TextBlock block : text.getTextBlocks()) {
                 android.graphics.Rect b = block.getBoundingBox();
@@ -199,7 +192,7 @@ public class ScreenScanner {
                     }
                 }
             }
-            log("popup unit: " + r.detectedBoardUnit + (r.detectedBoardStars > 0 ? " " + r.detectedBoardStars + "★" : "")
+            log("popup unit: " + r.detectedBoardUnit
                     + (r.popupTraits.isEmpty() ? "" : " traits=" + r.popupTraits));
         } else if (r.detectedPopupBounds != null) {
             // popup appeared but no champion matched — log the raw text blocks to aid debugging
@@ -506,7 +499,6 @@ public class ScreenScanner {
                                 + " augs=" + r.augments.size()
                                 + " shop=" + r.shopChampions.size()
                                 + " bench=" + r.benchChampions.size()
-                                + " stars=" + r.starLevels.size()
                                 + " -> " + r.status);
                     }
                     bmp.recycle();
@@ -633,31 +625,6 @@ public class ScreenScanner {
                     }
                 }
             }
-
-            // stars: ★ or ⭐ anywhere on screen (best-effort)
-            int stars = countStars(raw);
-            if (stars > 0) {
-                log("stars x" + stars + " at cx=" + cx + " cy=" + cy + " from \"" + raw + "\"");
-                String nearest = null;
-                int nearestDx = Integer.MAX_VALUE;
-                for (Text.TextBlock b2 : text.getTextBlocks()) {
-                    android.graphics.Rect b2box = b2.getBoundingBox();
-                    if (b2box == null) continue;
-                    String b2raw = b2.getText().trim();
-                    int b2cy = b2box.centerY();
-                    if (b2cy < shopTop || b2cy > shopBot) continue;
-                    for (String name : r.shopChampions) {
-                        if (fuzzyMatchChamp(b2raw, name)) {
-                            int dx = Math.abs(b2box.centerX() - cx);
-                            if (dx < 400 && dx < nearestDx) { nearest = name; nearestDx = dx; }
-                        }
-                    }
-                }
-                if (nearest != null && !r.starLevels.containsKey(nearest)) {
-                    r.starLevels.put(nearest, stars);
-                    log("star level: " + nearest + " = " + stars + "★");
-                }
-            }
         }
 
         // Fuzzy fallback for shop and bench zones: catches single-letter OCR slips that
@@ -767,20 +734,6 @@ public class ScreenScanner {
             log("popup: no champion matched" + (r.detectedPopupBounds != null ? " (non-champion popup)" : " (empty hex)"));
         } else {
             log("popup unit: " + r.detectedBoardUnit + " (h=" + bestH + ")");
-        }
-
-        // Star sweep — same zone and height filter
-        if (!r.detectedBoardUnit.isEmpty()) {
-            for (Text.TextBlock block : text.getTextBlocks()) {
-                android.graphics.Rect box = block.getBoundingBox();
-                if (box == null) continue;
-                int cy = box.centerY();
-                if (cy < popTop || cy > popBot) continue;
-                int stars = countStars(block.getText());
-                if (stars > r.detectedBoardStars) r.detectedBoardStars = stars;
-            }
-            if (r.detectedBoardStars > 0)
-                log("popup stars: " + r.detectedBoardStars + " for " + r.detectedBoardUnit);
         }
 
         // Trait sweep — the popup lists the unit's traits under its name in small
@@ -902,15 +855,6 @@ public class ScreenScanner {
         return b.toString();
     }
 
-
-    private int countStars(String s) {
-        int n = 0;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '★' || c == '⭐') n++;
-        }
-        return n;
-    }
 
     // Additive edit-distance fallback for the popup name. ML Kit routinely misreads
     // a single letter (Corki->Corkl, Jhin->Jhln, Samira->Samlra); the containment
