@@ -9,8 +9,8 @@ import static org.junit.Assert.*;
 public class ChampItemDataTest {
 
     @Test public void knownCarryHasUsableBuild(){
-        assertTrue(ChampItemData.has("Corki"));
-        ChampItemData.Build b = ChampItemData.get("Corki");
+        assertTrue(ChampItemData.has("Aphelios"));
+        ChampItemData.Build b = ChampItemData.get("Aphelios");
         assertNotNull(b);
         assertTrue("a carry must list items", b.items.length > 0);
         assertFalse("a carry must name a comp", b.comp.isEmpty());
@@ -23,7 +23,7 @@ public class ChampItemDataTest {
     }
 
     @Test public void tiersAreValidLabels(){
-        for(String champ : new String[]{"Corki","Jhin","Samira","Xayah"}){
+        for(String champ : new String[]{"MasterYi","Pebbles","Aphelios","Sivir"}){
             String t = ChampItemData.tierOf(champ);
             assertTrue("tier '"+t+"' for "+champ+" must be S/A/B/C or empty",
                 Arrays.asList("", "S", "A", "B", "C").contains(t));
@@ -31,9 +31,9 @@ public class ChampItemDataTest {
     }
 
     @Test public void recommendBuildsAroundTheCarry(){
-        CompAdvisor.Rec r = CompAdvisor.recommend(Arrays.asList("Corki"));
+        CompAdvisor.Rec r = CompAdvisor.recommend(Arrays.asList("Aphelios"));
         assertTrue(r.hasBoard);
-        assertEquals("Corki", r.carry);
+        assertEquals("Aphelios", r.carry);
         assertTrue(r.items.length > 0);
         assertFalse(r.comp.isEmpty());
     }
@@ -53,9 +53,9 @@ public class ChampItemDataTest {
     @Test public void recommendPicksTheHigherTierCarry(){
         // with two carries present, the higher-tier one is chosen and the other
         // is listed as a secondary — robust to which specific tier each holds
-        CompAdvisor.Rec r = CompAdvisor.recommend(Arrays.asList("Kaisa", "Corki"));
-        assertTrue(r.carry.equals("Corki") || r.carry.equals("Kaisa"));
-        String other = r.carry.equals("Corki") ? "Kaisa" : "Corki";
+        CompAdvisor.Rec r = CompAdvisor.recommend(Arrays.asList("Sivir", "Aphelios"));
+        assertTrue(r.carry.equals("Aphelios") || r.carry.equals("Sivir"));
+        String other = r.carry.equals("Aphelios") ? "Sivir" : "Aphelios";
         assertTrue("chosen carry must rank >= the other",
             rank(ChampItemData.tierOf(r.carry)) >= rank(ChampItemData.tierOf(other)));
         assertTrue("the unchosen carry is a secondary", r.alsoCarries.contains(other));
