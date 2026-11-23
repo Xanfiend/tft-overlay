@@ -214,21 +214,6 @@ public class OverlayService extends Service {
     // scan) so the async updateViewLayout flag flip isn't raced once per tap.
     private boolean overlayTouchHold = false;
 
-    // enemy units found by the current SCRY THE ENEMY pass (name -> stars)
-    private java.util.Map<String, Integer> oppScanResults = new java.util.LinkedHashMap<>();
-
-    // SCRY THE LOBBY (REAPER): one-pass scan of every calibrated enemy portrait.
-    // Wraps the existing auto-opp board sweep; taps portrait i, sweeps that board,
-    // files OPP slot, advances. Portrait positions + the settle delay are tuned
-    // live (the only device-dependent bits) — see Pool cal_opp* and SCANALL_SETTLE_MS.
-    private boolean scanAllMode = false;
-    private int scanAllIdx = 0, scanAllTotal = 0;
-    // wait after tapping a portrait for TFT's board-switch animation before scanning
-    private static final long SCANALL_SETTLE_MS = 1200;
-    // portrait-calibration overlay (records up to 7 tap positions)
-    private View oppCalView;
-    private int oppCalCount = 0;
-
     // debug scan: close panel, scan, reopen settings so user sees results
     private boolean debugScanPending = false;
     // last known screen orientation — updated in showPanel() and used by calGet/calSet
@@ -280,7 +265,6 @@ public class OverlayService extends Service {
     // bumped on every (re)start; lets late-arriving background work (duplicate-skip
     // visual ID) detect whether it still belongs to the scan that's running/just finished
     private int autoScanGeneration = 0;
-    private boolean autoOppMode = false;    // when true, results route to oppScanResults
     private java.util.List<String> autoScanResults = new java.util.ArrayList<>();
     private int autoScanGold = -1;
     private int autoScanLevel = -1;
@@ -289,8 +273,6 @@ public class OverlayService extends Service {
     // set when a scan suggests the previous game's data is stale (level 2-4
     // seen while the pool still has entries) — POOL tab shows a reset banner
     private boolean newGameHint = false;
-    // opponent slot the most recent enemy scry was filed under (for the UI note)
-    private int lastOppSlot = 0;
     private int autoTapIndex = 0;
     private int autoTapConsecutiveMisses = 0;
     private int autoTapBoardProbeCount = 0; // index where bench probes start
@@ -569,7 +551,7 @@ public class OverlayService extends Service {
          .append("  streak ").append(pool.getStreak());
         String st=pool.getStageRound(); s.append("  stage ").append(st.isEmpty()?"-":st).append("\n");
         s.append("cal  landscapeGrid ").append(pool.hasLandscapeGridCal())
-         .append("  oppPortraits ").append(pool.oppPortraitCount()).append("/7\n");
+         .append("\n");
         s.append("set  ").append(SetData.SET_NAME).append(" patch ").append(SetData.PATCH)
          .append("  builds patch ").append(ChampItemData.PATCH).append("\n");
         s.append("icons  champ ").append(SetIcons.champCount())
@@ -1240,10 +1222,10 @@ public class OverlayService extends Service {
             ngYes.setBackground(box(BLOOD,6,BLOODL,2)); ngYes.setPadding(18,8,18,8);
             pressFeedback(ngYes);
             ngYes.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                pool.reset(); autoScanResults.clear(); oppScanResults.clear();
+                pool.reset(); autoScanResults.clear();
                 econUndoAction=null; econUndoLabel=null;
                 undoAction=null; undoLabel=null;
-                newGameHint=false; lastOppSlot=0; buzz(); refreshHud(); showPanel();
+                newGameHint=false; buzz(); refreshHud(); showPanel();
             }});
             ng.addView(ngYes);
             TextView ngNo=new TextView(this); ngNo.setText("\u2715");
@@ -1299,25 +1281,6 @@ public class OverlayService extends Service {
             augBnr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ mode=2; guideTab=3; showPanel(); }});
             pressFeedback(augBnr);
             root.addView(augBnr);
-        }
-
-        // lobby snapshot: 1-liner from any scouted opponent boards
-        OppScout.Profile oppSnap=OppScout.analyzeUnits(pool.getAllOppUnits());
-        if(oppSnap.hasData()){
-            StringBuilder lb=new StringBuilder();
-            lb.append(oppSnap.boards).append(oppSnap.boards==1?" board":" boards").append(" scouted");
-            if(!oppSnap.topCarries.isEmpty()){
-                lb.append("  ·  ").append(oppSnap.topCarries.get(0));
-                if(oppSnap.topCarries.size()>1) lb.append("/").append(oppSnap.topCarries.get(1));
-            }
-            if(oppSnap.apCarries>oppSnap.adCarries*2) lb.append("  ·  AP-heavy");
-            else if(oppSnap.adCarries>oppSnap.apCarries*2) lb.append("  ·  AD-heavy");
-            if(oppSnap.flankHeavy) lb.append("  ·  divers");
-            TextView lobbyTv=new TextView(this);
-            lobbyTv.setText(lb.toString());
-            lobbyTv.setTextColor(ASH); lobbyTv.setTextSize(10); lobbyTv.setGravity(Gravity.CENTER);
-            lobbyTv.setPadding(0,0,0,4);
-            root.addView(lobbyTv);
         }
 
         // tracked-champ list, sorted once and reused by every section below
@@ -1517,19 +1480,13 @@ public class OverlayService extends Service {
         if(autoScanPending){
             int total=autoTapProbes.size(); int done=autoTapIndex;
             String prog=total>0?(done+"/"+total+" hexes"):"starting...";
-            String label=autoOppMode
-                    ? ("\u25C9 Scrying the enemy: "+prog+" \u00b7 tap STOP to end")
-                    : ("\u29bf Scrying your board: "+prog+" \u00b7 tap STOP to end");
+            String label="\u29bf Scrying your board: "+prog+" \u00b7 tap STOP to end";
             TextView asActive=new TextView(this); asActive.setText(label);
             asActive.setTextColor(GOLD); asActive.setTextSize(12); asActive.setGravity(Gravity.CENTER);
             asActive.setBackground(box(BLOOD,6,BLOODL,2)); asActive.setPadding(0,12,0,12);
             LinearLayout.LayoutParams asal=new LinearLayout.LayoutParams(-1,-2); asal.setMargins(0,0,0,4); asActive.setLayoutParams(asal);
             root.addView(asActive);
         } else {
-            // the two scrying rites, side by side: your board and the enemy's
-            LinearLayout row1=new LinearLayout(this); row1.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams r1p=new LinearLayout.LayoutParams(-1,-2); r1p.setMargins(0,0,0,4); row1.setLayoutParams(r1p);
-
             // tap-free by default: when the planner is calibrated and icons are
             // bundled, SCRY MY BOARD reads the whole board from one Team Planner
             // snapshot — zero unit taps. Long-press forces the classic tap read.
@@ -1538,7 +1495,7 @@ public class OverlayService extends Service {
             LinearLayout asBtn=ritualBtn("\u29bf SCRY MY BOARD",
                     plnRoute ? "no unit taps \u00b7 hold for tap scan" : "level \u00b7 gold \u00b7 every unit",
                     accAvail?BLOOD:0xFF0D0909, accAvail?BLOODL:DIM, accAvail);
-            LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(0,-2,1f); asl.setMargins(0,0,3,0); asBtn.setLayoutParams(asl);
+            LinearLayout.LayoutParams asl=new LinearLayout.LayoutParams(-1,-2); asl.setMargins(0,0,0,4); asBtn.setLayoutParams(asl);
             asBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
                 if(!accAvail){ openAccessibilitySettings(); return; }
                 // re-evaluate LIVE (the button may have been built before the user
@@ -1553,16 +1510,7 @@ public class OverlayService extends Service {
                 buzz(); startAutoTapScan(); return true;
             }});
 
-            LinearLayout aoBtn=ritualBtn("\u25C9 SCRY THE ENEMY","scout a foe's board",
-                    accAvail?CARD:0xFF0D0909, accAvail?GOLD:DIM, accAvail);
-            LinearLayout.LayoutParams aol=new LinearLayout.LayoutParams(0,-2,1f); aol.setMargins(3,0,0,0); aoBtn.setLayoutParams(aol);
-            aoBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ openAccessibilitySettings(); return; }
-                startAutoOppScan();
-            }});
-
-            row1.addView(asBtn); row1.addView(aoBtn);
-            root.addView(row1);
+            root.addView(asBtn);
 
             if(accAvail && !plnRoute){
                 TextView plnTip=new TextView(this);
@@ -1571,21 +1519,6 @@ public class OverlayService extends Service {
                 plnTip.setPadding(0,0,0,4);
                 root.addView(plnTip);
             }
-
-            // SCRY THE LOBBY \u2014 one-pass scan of every enemy board (REAPER)
-            final boolean lobbyReady = accAvail && pool.hasOppPortraitCal();
-            int lobbyN = pool.oppPortraitCount();
-            LinearLayout lobbyBtn=ritualBtn("\u25c9 SCRY THE LOBBY",
-                    lobbyReady ? ("scan all "+lobbyN+" enemy boards in one pass")
-                               : "calibrate enemy portraits in SETUP first",
-                    lobbyReady?0xFF1A1400:0xFF0D0909, lobbyReady?GOLD:DIM, lobbyReady);
-            LinearLayout.LayoutParams lbl2=new LinearLayout.LayoutParams(-1,-2); lbl2.setMargins(0,0,0,4); lobbyBtn.setLayoutParams(lbl2);
-            lobbyBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                if(!accAvail){ openAccessibilitySettings(); return; }
-                if(!pool.hasOppPortraitCal()){ Toast.makeText(OverlayService.this,"Calibrate enemy portraits in the SETUP tab first",Toast.LENGTH_LONG).show(); return; }
-                startScanAllOpponents();
-            }});
-            root.addView(lobbyBtn);
 
             // THE HUNT \u2014 shop watcher / auto-buy
             final java.util.List<String> huntList=pool.getHunt();
@@ -1673,75 +1606,6 @@ public class OverlayService extends Service {
                 Toast.makeText(OverlayService.this,"Board copied",Toast.LENGTH_SHORT).show();
             }}));
             root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ autoScanResults.clear(); showPanel(); }}));
-        }
-
-        // opponent scan results
-        if(!oppScanResults.isEmpty()){
-        addSecHdr(root, "REVEALED · ENEMY  ("+oppScanResults.size()+")", GOLD);
-            StringBuilder osrSb=new StringBuilder();
-            for(java.util.Map.Entry<String,Integer> e:oppScanResults.entrySet()){
-                if(osrSb.length()>0) osrSb.append(" \u00b7 ");
-                osrSb.append(e.getKey());
-                int st=e.getValue(); if(st>0){ osrSb.append(" "); for(int si=0;si<st;si++) osrSb.append("\u2605"); }
-            }
-            TextView osrTv=new TextView(this); osrTv.setText(osrSb.toString());
-            osrTv.setTextColor(BONE); osrTv.setTextSize(12); osrTv.setPadding(2,0,2,4); root.addView(osrTv);
-            if(lastOppSlot>0){
-                TextView filed=new TextView(this);
-                filed.setText("filed as OPP "+lastOppSlot+" — scry the next enemy board to file OPP "+(lastOppSlot%7+1));
-                filed.setTextColor(DIM); filed.setTextSize(9); filed.setPadding(2,0,2,2); root.addView(filed);
-            }
-            root.addView(miniChip("⎘ copy scan", new View.OnClickListener(){ public void onClick(View v){
-                StringBuilder cb=new StringBuilder();
-                for(java.util.Map.Entry<String,Integer> e2:oppScanResults.entrySet()){
-                    if(cb.length()>0) cb.append(" · ");
-                    cb.append(e2.getKey()); int st2=e2.getValue();
-                    if(st2>0){ cb.append(" "); for(int si=0;si<st2;si++) cb.append("★"); }
-                }
-                android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(android.content.Context.CLIPBOARD_SERVICE);
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("tft-opp",cb.toString()));
-                Toast.makeText(OverlayService.this,"Enemy scan copied",Toast.LENGTH_SHORT).show();
-            }}));
-            root.addView(miniChip("✕ clear results", new View.OnClickListener(){ public void onClick(View v){ oppScanResults.clear(); showPanel(); }}));
-        }
-
-        // ◉ ENEMIES REMEMBERED — one line per scouted opponent board (slots 1-7).
-        // Scry each enemy in turn during scouting; boards stack up here.
-        {
-            boolean anyOpp=false;
-            for(int s=1;s<=7;s++) if(!pool.getOppBoard(s).isEmpty()){ anyOpp=true; break; }
-            if(anyOpp){
-                addSecHdr(root, "◉ ENEMIES REMEMBERED", GOLD);
-                for(int s=1;s<=7;s++){
-                    final int slot=s;
-                    java.util.Map<String,Integer> board=pool.getOppBoard(s);
-                    if(board.isEmpty()) continue;
-                    LinearLayout orow=new LinearLayout(this); orow.setOrientation(LinearLayout.HORIZONTAL);
-                    orow.setGravity(Gravity.CENTER_VERTICAL);
-                    orow.setBackground(box(CARD,6,EDGE,1)); orow.setPadding(10,8,10,8);
-                    LinearLayout.LayoutParams orl=new LinearLayout.LayoutParams(-1,-2); orl.setMargins(0,0,0,4); orow.setLayoutParams(orl);
-                    TextView oId=new TextView(this); oId.setText("OPP "+slot);
-                    oId.setTextColor(GOLD); oId.setTextSize(10); oId.setTypeface(null,android.graphics.Typeface.BOLD);
-                    oId.setPadding(0,0,10,0); orow.addView(oId);
-                    StringBuilder ob=new StringBuilder();
-                    for(java.util.Map.Entry<String,Integer> e:board.entrySet()){
-                        if(ob.length()>0) ob.append(" · ");
-                        ob.append(e.getKey());
-                        for(int st=0;st<e.getValue();st++) ob.append("★");
-                    }
-                    TextView oTv=new TextView(this); oTv.setText(ob.toString());
-                    oTv.setTextColor(BONE); oTv.setTextSize(10);
-                    oTv.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
-                    orow.addView(oTv);
-                    TextView oClr=new TextView(this); oClr.setText("✕");
-                    oClr.setTextColor(ASH); oClr.setTextSize(12); oClr.setPadding(10,4,4,4);
-                    oClr.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-                        pool.clearOppBoard(slot); showPanel();
-                    }});
-                    orow.addView(oClr);
-                    root.addView(orow);
-                }
-            }
         }
 
         // \u2720 GRIMOIRE \u2014 the manual chips. The rite records everything by itself;
@@ -3686,16 +3550,6 @@ public class OverlayService extends Service {
             }
         }
 
-        // ---- tech vs the scouted lobby (OppScout) — defensive itemization ----
-        OppScout.Profile opp=OppScout.analyzeUnits(pool.getAllOppUnits());
-        if(!opp.techTips.isEmpty()){
-            addSecHdr(root, "TECH vs LOBBY", BLOODL);
-            for(String tip:opp.techTips){
-                TextView tv=new TextView(this); tv.setText("•  "+tip);
-                tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,4); root.addView(tv);
-            }
-        }
-
         TextView ctx=new TextView(this);
         String stage=pool.getStageRound();
         ctx.setText("lv "+pool.getLevel()+"  ·  "+pool.getGold()+"g"+(stage.isEmpty()?"":("  ·  "+stage))
@@ -3704,8 +3558,7 @@ public class OverlayService extends Service {
     }
 
     // POSITION sub-tab: where to stand. Sorts the scanned board front/back/flank
-    // and lists the evergreen fundamentals (PositionAdvisor) — no opponent read,
-    // no per-patch upkeep, just the reliable half of positioning.
+    // and lists the evergreen fundamentals (PositionAdvisor) — no per-patch upkeep, just the reliable half of positioning.
     private void buildPosition(LinearLayout root){
         java.util.List<String> board=currentBoardNames();
         PositionAdvisor.Plan p=PositionAdvisor.plan(board, pool.getStageRound());
@@ -3738,27 +3591,6 @@ public class OverlayService extends Service {
         if(!p.flankers.isEmpty())
             addPlaceRow(root, "FLANK", p.flankers, GREEN, "divers — side/front corner toward their backline");
 
-        // ---- counter the scouted lobby (OppScout) ----
-        // Reads the enemy boards already remembered from manual scries (POOL tab);
-        // when none exist this section is simply absent and POSITION behaves as before.
-        OppScout.Profile opp=OppScout.analyzeUnits(pool.getAllOppUnits());
-        if(opp.hasData()){
-            addSecHdr(root, "COUNTER THE LOBBY", BLOODL);
-            TextView mix=new TextView(this);
-            StringBuilder mx=new StringBuilder();
-            mx.append(opp.boards).append(opp.boards==1?" enemy scouted":" enemies scouted");
-            mx.append("  ·  ").append(opp.flank).append(opp.flank==1?" diver":" divers");
-            mx.append("  ·  ").append(opp.back).append(" backline  ·  ").append(opp.front).append(" frontline");
-            if(opp.hooks>0) mx.append("  ·  ").append(opp.hooks).append(" hook");
-            if(opp.aoe>0)   mx.append("  ·  ").append(opp.aoe).append(" AoE");
-            mix.setText(mx.toString());
-            mix.setTextColor(ASH); mix.setTextSize(11); mix.setPadding(2,0,2,6); root.addView(mix);
-            for(String tip:opp.tips){
-                TextView tv=new TextView(this); tv.setText("•  "+tip);
-                tv.setTextColor(BONE); tv.setTextSize(12); tv.setPadding(2,3,2,3); root.addView(tv);
-            }
-        }
-
         // ---- fundamentals checklist ----
         addSecHdr(root, "FUNDAMENTALS", GOLD);
         for(String tip:p.tips){
@@ -3767,9 +3599,7 @@ public class OverlayService extends Service {
         }
 
         TextView foot=new TextView(this);
-        foot.setText(opp.hasData()
-            ? "Positioning is meta-stable — these rules hold across patches. Counter advice above is built from the enemy boards you've scried."
-            : "Positioning is meta-stable — these rules hold across patches. Scry enemy boards (POOL tab) to unlock counter-positioning here.");
+        foot.setText("Positioning is meta-stable — these rules hold across patches.");
         foot.setTextColor(DIM); foot.setTextSize(10); foot.setPadding(2,8,2,4); root.addView(foot);
     }
 
@@ -4435,45 +4265,6 @@ public class OverlayService extends Service {
         if(plnCal){
             root.addView(miniChip("✕ clear planner calibration", new View.OnClickListener(){ public void onClick(View v){
                 pool.clearPlannerCal(); showPanel();
-            }}));
-        }
-
-        // ---- one-pass lobby scan calibration (REAPER) ----
-        addSecHdr(root, "SCRY THE LOBBY", GOLD);
-        boolean oppCal=pool.hasOppPortraitCal();
-        int oppCalN=pool.oppPortraitCount();
-        TextView oppInfo=new TextView(this);
-        oppInfo.setText("Scan every opponent's board in one pass. Calibrate by tapping each enemy "
-                +"portrait (the player health icons) once; the scan then taps through them in turn, "
-                +"reading each board and filing it under OPP 1-7. Do this during a planning phase.");
-        oppInfo.setTextColor(ASH); oppInfo.setTextSize(10); oppInfo.setPadding(2,0,0,6); root.addView(oppInfo);
-
-        TextView oppStatus=new TextView(this);
-        oppStatus.setText(oppCal?("✓ "+oppCalN+" portrait"+(oppCalN==1?"":"s")+" calibrated"):"not calibrated yet");
-        oppStatus.setTextColor(oppCal?GREEN:DIM); oppStatus.setTextSize(10);
-        oppStatus.setPadding(2,0,0,6); root.addView(oppStatus);
-
-        TextView oppCalBtn=new TextView(this);
-        oppCalBtn.setText(oppCal?"RECALIBRATE PORTRAITS":"CALIBRATE PORTRAITS");
-        oppCalBtn.setTextColor(BONE); oppCalBtn.setTextSize(13); oppCalBtn.setGravity(Gravity.CENTER);
-        oppCalBtn.setPadding(0,12,0,12); oppCalBtn.setBackground(box(oppCal?CARD:BLOOD,6,oppCal?GOLD:BLOODL,2));
-        LinearLayout.LayoutParams ocbl=new LinearLayout.LayoutParams(-1,-2); ocbl.setMargins(0,0,0,4); oppCalBtn.setLayoutParams(ocbl);
-        oppCalBtn.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){
-            if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-                Toast.makeText(OverlayService.this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
-            }
-            startOppCalibration();
-        }});
-        root.addView(oppCalBtn);
-
-        TextView oppHint=new TextView(this);
-        oppHint.setText("Tap each enemy portrait in turn (up to 7), then ✓ DONE. The banner sits at the "
-                +"bottom so it won't cover the portraits. Re-run SCRY THE LOBBY from the POOL tab.");
-        oppHint.setTextColor(ASH); oppHint.setTextSize(10); oppHint.setPadding(2,0,0,6); root.addView(oppHint);
-
-        if(oppCal){
-            root.addView(miniChip("✕ clear portrait calibration", new View.OnClickListener(){ public void onClick(View v){
-                pool.clearOppPortraits(); showPanel();
             }}));
         }
 
@@ -5802,7 +5593,6 @@ public class OverlayService extends Service {
         }
         autoScanPending=true;
         autoScanGeneration++;
-        autoOppMode=false;
         autoScanResults=new java.util.ArrayList<>();
         autoScanGold=-1;
         autoScanLevel=-1;
@@ -5863,7 +5653,7 @@ public class OverlayService extends Service {
                                 // and removed from the tap list. New/unknown units get tapped
                                 // and their sprite is learned for next time.
                                 java.util.List<int[]> toTap = pool.getVisualId()
-                                        ? visualIdPass(goldLvlBmp, detected, false) : detected;
+                                        ? visualIdPass(goldLvlBmp, detected) : detected;
                                 autoTapSmartBoard=true;
                                 autoTapFallbackBoard=new java.util.ArrayList<>(
                                         filteredGrid.subList(0, filteredBoardCount));
@@ -5914,102 +5704,12 @@ public class OverlayService extends Service {
 
     @SuppressWarnings("NewApi")
     // A scan that fails before its first probe: undo every bit of start-up state.
-    // In a lobby pass, move on to the next opponent instead of stalling there.
     private void autoScanInitFailed(String msg){
         setOverlayShotHidden(false);
-        autoScanPending=false; autoOppMode=false;
+        autoScanPending=false;
         hideStopButton();
         addScanLog(msg);
-        if(scanAllMode){ scanAllAdvance(); return; }
         mode=0; showPanel();
-    }
-
-    private void startAutoOppScan(){
-        if(scanBusy()) return;
-        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show();
-            if(scanAllMode) stopScanAll();   // don't leave a lobby pass frozen mid-way
-            return;
-        }
-        autoScanPending=true;
-        autoScanGeneration++;
-        autoOppMode=true;
-        autoScanResults=new java.util.ArrayList<>();
-        autoScanGold=-1; autoScanLevel=-1;
-        autoScanXpCur=-1; autoScanXpNeed=-1; autoScanStage="";
-        autoTapIndex=0; autoTapConsecutiveMisses=0; autoTapBoardProbeCount=0;
-        autoTapProbes=new java.util.ArrayList<>();
-        autoTapSkip=new java.util.HashSet<>();
-        autoTapSmartBoard=false; autoTapSwitchedToGrid=false; autoTapNudgeStage=0;
-        autoTapHits=0; autoScanVisualCount=0;
-        autoTapFallbackBoard=null; autoTapBenchProbes=new java.util.ArrayList<>();
-        autoScanStartMs=android.os.SystemClock.uptimeMillis();
-        oppScanResults=new java.util.LinkedHashMap<>();
-        closePanel();
-        if(btnLabel!=null) btnLabel.setText("...");
-        addScanLog("auto-opp: starting");
-        showStopButton("✦ STOP SCAN");   // the sigil only opens the panel; STOP is the way out
-        final TFTAccessibilityService svc=TFTAccessibilityService.instance;
-        // hide our overlays for the detection shot (see startAutoTapScan)
-        setOverlayShotHidden(true);
-        boardHandler.postDelayed(new Runnable(){ public void run(){
-        try{
-            lastShotMs=android.os.SystemClock.uptimeMillis();
-            svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY, getMainExecutor(),
-                new AccessibilityService.TakeScreenshotCallback(){
-                    @Override public void onSuccess(AccessibilityService.ScreenshotResult result){
-                        setOverlayShotHidden(false);
-                        Bitmap bmpTmp=null; // visible to catch so an early failure can recycle it
-                        try{
-                            android.hardware.HardwareBuffer hb=result.getHardwareBuffer();
-                            Bitmap hw=Bitmap.wrapHardwareBuffer(hb,null);
-                            final int sw=hw.getWidth(), sh=hw.getHeight();
-                            bmpTmp=hw.copy(Bitmap.Config.ARGB_8888,false);
-                            final Bitmap bmp=bmpTmp;
-                            hb.close(); hw.recycle();
-                            autoTapScreenH=sh;
-                            java.util.List<int[]> oppGrid=buildOppProbeGrid(sw,sh);
-                            int oppGridCount=autoTapBoardProbeCount;
-                            java.util.List<int[]> filteredOpp=filterOccupiedProbes(bmp,oppGrid,oppGridCount);
-                            int filteredOppCount=autoTapBoardProbeCount;
-                            // Smart Scan for the opponent: enemy units in combat show RED
-                            // health bars. Detect those for exact positions; fall back to the
-                            // mirrored grid if inconclusive.
-                            java.util.List<int[]> oppDetected = pool.getSmartScan()
-                                    ? detectHealthBarUnits(bmp,true) : null;
-                            if(oppDetected!=null){
-                                java.util.List<int[]> toTap = pool.getVisualId()
-                                        ? visualIdPass(bmp, oppDetected, true) : oppDetected;
-                                autoTapSmartBoard=true;
-                                autoTapFallbackBoard=new java.util.ArrayList<>(
-                                        filteredOpp.subList(0, filteredOppCount));
-                                autoTapProbes=new java.util.ArrayList<>(toTap);
-                                autoTapBoardProbeCount=toTap.size();
-                                addScanLog("auto-opp: "+oppDetected.size()+" enemy units (health bar), "
-                                        +autoScanVisualCount+" visual, "+toTap.size()+" to tap "+sw+"x"+sh);
-                            } else {
-                                autoTapProbes=filteredOpp;
-                                autoTapBoardProbeCount=filteredOppCount;
-                                addScanLog("auto-opp: "+autoTapProbes.size()+" grid probes "+sw+"x"+sh);
-                            }
-                            if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
-                            new ScreenScanner(OverlayService.this,null).scanBitmap(bmp,
-                                new ScreenScanner.ScanCallback(){
-                                    public void onResult(ScreenScanner.ScanResult r){
-                                        autoScanGold=r.gold; autoScanLevel=r.level;
-                                        autoTapNextProbe();
-                                    }
-                                    public void onError(String msg){ autoTapNextProbe(); }
-                                }, ScreenScanner.MODE_FULL);
-                        }catch(Exception e){
-                            if(bmpTmp!=null) bmpTmp.recycle();
-                            autoScanInitFailed("ERR auto-opp init: "+e.getMessage());
-                        }
-                    }
-                    @Override public void onFailure(int errorCode){ autoScanInitFailed("ERR auto-opp shot: "+errorCode); }
-                });
-        }catch(Exception e){ autoScanInitFailed("ERR startAutoOppScan: "+e.getMessage()); }
-        }}, 120);
     }
 
     private java.util.List<int[]> buildProbeGrid(int w, int h){
@@ -6105,62 +5805,6 @@ public class OverlayService extends Service {
                       &&benchY>=btnLoc[1]-30&&benchY<=btnLoc[1]+btnH+30) continue;
             pts.add(new int[]{cx,benchY});
         }
-        return pts;
-    }
-
-    // Probe grid for the opponent's board during combat. Their four rows continue
-    // the SAME board honeycomb above the player's back row, so the hex centers come
-    // from extrapolating the calibrated projection upward (HexGrid.opp): pitch and
-    // centerline extrapolate linearly in screen Y, row gaps keep compressing with
-    // distance, and the honeycomb stagger continues through their rows. Replaces
-    // the old mirrored-Y guess with untapered rows, which drifted off the far rows.
-    // No bench probes — opponent bench units don't fight.
-    private java.util.List<int[]> buildOppProbeGrid(int w, int h){
-        java.util.List<int[]> pts=new java.util.ArrayList<>();
-        boolean portrait = h > w;
-        int top, bot, topLeft, topRight, botLeft, botRight;
-        if (portrait) {
-            top      = h * pool.getPortraitBoardTopPct()      / 100;
-            bot      = h * pool.getPortraitBoardBotPct()      / 100;
-            topLeft  = w * pool.getPortraitBoardTopLeftPct()  / 100;
-            topRight = w * pool.getPortraitBoardTopRightPct() / 100;
-            botLeft  = w * pool.getPortraitBoardBotLeftPct()  / 100;
-            botRight = w * pool.getPortraitBoardBotRightPct() / 100;
-        } else {
-            if(pool.hasLandscapeGridCal()){
-                top      = Math.round(h * pool.getBoardTopPctF() / 100f);
-                bot      = Math.round(h * pool.getBoardBotPctF() / 100f);
-                topLeft  = Math.round(w * pool.getBoardTopLeftPctF()  / 100f);
-                topRight = Math.round(w * pool.getBoardTopRightPctF() / 100f);
-                botLeft  = Math.round(w * pool.getBoardBotLeftPctF()  / 100f);
-                botRight = Math.round(w * pool.getBoardBotRightPctF() / 100f);
-            } else {
-                float[] a=HexGrid.standardAnchors(w,h);
-                topLeft=Math.round(a[0]); topRight=Math.round(a[1]); top=Math.round(a[2]);
-                botLeft=Math.round(a[3]); botRight=Math.round(a[4]); bot=Math.round(a[5]);
-            }
-        }
-        if(top > bot){
-            int t=top; top=bot; bot=t;
-            t=topLeft;  topLeft=botLeft;   botLeft=t;
-            t=topRight; topRight=botRight; botRight=t;
-        }
-        float f1raw = portrait ? pool.getPortraitRowF1Pct() : pool.getRowF1PctF();
-        float f2raw = portrait ? pool.getPortraitRowF2Pct() : pool.getRowF2PctF();
-        float[][][] hexes = HexGrid.opp(topLeft, topRight, top, botLeft, botRight, bot,
-                f1raw < 0 ? -1f : f1raw / 100f, f2raw < 0 ? -1f : f2raw / 100f);
-        int[] btnLoc=new int[2]; int btnW=0,btnH=0;
-        if(button!=null){ button.getLocationOnScreen(btnLoc); btnW=button.getWidth(); btnH=button.getHeight(); }
-        for(int row=0;row<4;row++){
-            for(int col=0;col<7;col++){
-                int cx=(int)hexes[row][col][0], cy=(int)hexes[row][col][1];
-                if(cy<0) continue;
-                if(btnW>0&&cx>=btnLoc[0]-30&&cx<=btnLoc[0]+btnW+30
-                          &&cy>=btnLoc[1]-30&&cy<=btnLoc[1]+btnH+30) continue;
-                pts.add(new int[]{cx,cy});
-            }
-        }
-        autoTapBoardProbeCount=pts.size();
         return pts;
     }
 
@@ -6716,7 +6360,7 @@ public class OverlayService extends Service {
     // for the normal tap-and-read loop. Match thresholds live in
     // ChampionTemplates.matchBoardSprite and are strict enough to never guess —
     // an uncertain unit simply gets tapped like before.
-    private java.util.List<int[]> visualIdPass(Bitmap bmp, java.util.List<int[]> units, boolean opp){
+    private java.util.List<int[]> visualIdPass(Bitmap bmp, java.util.List<int[]> units){
         java.util.List<int[]> toTap=new java.util.ArrayList<>();
         if(ChampionTemplates.boardTemplateCount()==0) return new java.util.ArrayList<>(units);
         int w=bmp.getWidth(), h=bmp.getHeight();
@@ -6731,7 +6375,7 @@ public class OverlayService extends Service {
                                             && y0<btnLoc[1]+btnH && y0+cs>btnLoc[1];
                 if(!underButton && x0>=0 && y0>=0 && x0+cs<=w && y0+cs<=h){
                     Bitmap crop=Bitmap.createBitmap(bmp,x0,y0,cs,cs);
-                    m=ChampionTemplates.matchBoardSprite(crop,opp);
+                    m=ChampionTemplates.matchBoardSprite(crop);
                     crop.recycle();
                 }
             }catch(Exception e){ m=null; } // any failure: this unit just gets tapped normally
@@ -6742,18 +6386,11 @@ public class OverlayService extends Service {
             int uStars = u.length>2 ? u[2] : 0;
             addScanLog("visual ID: "+m.name+(uStars>0?" "+uStars+"★":"")
                     +" sim="+(int)(m.sim*100)+"% margin="+(int)(m.margin*100)+"%");
-            if(opp){
-                if(!oppScanResults.containsKey(m.name)){
-                    oppScanResults.put(m.name,Math.max(1,uStars));
-                    pool.addOpp(m.name,1);
-                }
-            } else {
-                pool.add(m.name,1);
-                StringBuilder entry=new StringBuilder(m.name);
-                for(int i=0;i<uStars;i++) entry.append("★");
-                entry.append(" ≈"); // ≈ marks a visual match
-                autoScanResults.add(entry.toString());
-            }
+            pool.add(m.name,1);
+            StringBuilder entry=new StringBuilder(m.name);
+            for(int i=0;i<uStars;i++) entry.append("★");
+            entry.append(" ≈"); // ≈ marks a visual match
+            autoScanResults.add(entry.toString());
         }
         if(autoScanVisualCount>0) buzz();
         return toTap;
@@ -6763,7 +6400,7 @@ public class OverlayService extends Service {
         if(!autoScanPending){ if(sourceBmp!=null) sourceBmp.recycle(); return; }
         // (boardProbeCount can legitimately be 0 when Visual ID recognized every
         // board unit — then all remaining probes are bench probes)
-        boolean inBenchPhase=(!autoOppMode && autoTapIndex>=autoTapBoardProbeCount);
+        boolean inBenchPhase=(autoTapIndex>=autoTapBoardProbeCount);
         if(r.detectedBoardUnit!=null && !r.detectedBoardUnit.isEmpty()){
             final String name=r.detectedBoardUnit;
             final int[] probePos = autoTapIndex<autoTapProbes.size() ? autoTapProbes.get(autoTapIndex) : null;
@@ -6779,25 +6416,14 @@ public class OverlayService extends Service {
             // (persists across games; powers the SYNERGIES card on the ODDS tab)
             if(!r.popupTraits.isEmpty()) pool.learnTraits(name, r.popupTraits);
             final boolean onBoard = !inBenchPhase;
-            if(autoOppMode){
-                // opponent scan: record into oppScanResults, increment contest badge
-                if(!oppScanResults.containsKey(name)){
-                    oppScanResults.put(name,stars);
-                    pool.addOpp(name,1);
-                    addScanLog("auto-opp: +"+name+" "+stars+"★");
-                    if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
-                }
-            } else {
-                pool.add(name,1);
-                StringBuilder entry=new StringBuilder(name);
-                for(int i=0;i<stars;i++) entry.append("★");
-                autoScanResults.add(entry.toString());
-                addScanLog("auto-tap: +"+name+" "+stars+"★");
-                if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
-            }
+            pool.add(name,1);
+            StringBuilder entry=new StringBuilder(name);
+            for(int i=0;i<stars;i++) entry.append("★");
+            autoScanResults.add(entry.toString());
+            addScanLog("auto-tap: +"+name+" "+stars+"★");
+            if(btnLabel!=null) btnLabel.setText("+"+name.split(" ")[0]);
             if(sourceBmp!=null){
                 final android.graphics.Rect bounds=r.detectedPopupBounds;
-                final boolean oppMode=autoOppMode;
                 final int spriteSize=Math.max(48, autoTapScreenH*9/100);
                 final int gen=autoScanGeneration;
                 final int tplStars=stars;   // effectively-final capture for the thread
@@ -6814,13 +6440,13 @@ public class OverlayService extends Service {
                         popupGrown.inset(-20,-20);
                         if(!android.graphics.Rect.intersects(spriteRect, popupGrown)){
                             ChampionTemplates.saveBoardTemplate(OverlayService.this,name,sourceBmp,
-                                    probePos[0],probePos[1],spriteSize,oppMode,tplStars);
+                                    probePos[0],probePos[1],spriteSize,tplStars);
                             // Duplicate-skip: this same screenshot likely shows other
                             // copies of the champion just learned (2★/3★ units, or
                             // multiple 1-cost copies). Check the remaining un-tapped
                             // board probes against the sprite just learned so those
                             // copies are recorded now instead of needing their own tap.
-                            checkDuplicateProbes(sourceBmp,spriteSize,oppMode,gen);
+                            checkDuplicateProbes(sourceBmp,spriteSize,gen);
                         }
                     }
                   }catch(Exception e){ addScanLog("ERR sprite learning: "+e.getMessage()); }
@@ -6885,14 +6511,9 @@ public class OverlayService extends Service {
                             +autoTapBoardProbeCount+" probes)");
                     if(btnLabel!=null) btnLabel.setText("0/"+autoTapProbes.size());
                 } else if(autoTapConsecutiveMisses>=8){
-                    if(autoOppMode){
-                        // opponent board has no bench — just finish
-                        finishAutoTapScan(); return;
-                    } else {
-                        autoTapIndex=autoTapBoardProbeCount-1;
-                        autoTapConsecutiveMisses=0;
-                        addScanLog("auto-tap: 8 board misses, jumping to bench");
-                    }
+                    autoTapIndex=autoTapBoardProbeCount-1;
+                    autoTapConsecutiveMisses=0;
+                    addScanLog("auto-tap: 8 board misses, jumping to bench");
                 }
             }
         }
@@ -6904,7 +6525,7 @@ public class OverlayService extends Service {
     // board probe and matches it against the (now updated) sprite library — any
     // hit is almost certainly another copy of the champion just confirmed, so it
     // is recorded immediately and that probe is skipped instead of tapped.
-    private void checkDuplicateProbes(final Bitmap sourceBmp, final int spriteSize, final boolean oppMode, final int gen){
+    private void checkDuplicateProbes(final Bitmap sourceBmp, final int spriteSize, final int gen){
         final java.util.List<Integer> dupIdx=new java.util.ArrayList<>();
         final java.util.List<ChampionTemplates.BoardMatch> dupMatch=new java.util.ArrayList<>();
         int w=sourceBmp.getWidth(), h=sourceBmp.getHeight();
@@ -6919,7 +6540,7 @@ public class OverlayService extends Service {
             int x0=p[0]-spriteSize/2, y0=p[1]-spriteSize/2;
             if(x0<0||y0<0||x0+spriteSize>w||y0+spriteSize>h) continue;
             Bitmap c=Bitmap.createBitmap(sourceBmp,x0,y0,spriteSize,spriteSize);
-            ChampionTemplates.BoardMatch dm=ChampionTemplates.matchBoardSprite(c,oppMode);
+            ChampionTemplates.BoardMatch dm=ChampionTemplates.matchBoardSprite(c);
             c.recycle();
             if(dm!=null){ dupIdx.add(i); dupMatch.add(dm); }
         }
@@ -6937,18 +6558,11 @@ public class OverlayService extends Service {
                 if(i>=probes.size()) continue; // probe list was reassigned mid-scan
                 int[] p=probes.get(i);
                 int dStars=p.length>2?p[2]:0;
-                if(oppMode){
-                    if(!oppScanResults.containsKey(dm.name)){
-                        oppScanResults.put(dm.name,Math.max(1,dStars));
-                        pool.addOpp(dm.name,1);
-                    }
-                } else {
-                    pool.add(dm.name,1);
-                    StringBuilder e=new StringBuilder(dm.name);
-                    for(int s=0;s<dStars;s++) e.append("★");
-                    e.append(" ≈");
-                    autoScanResults.add(e.toString());
-                }
+                pool.add(dm.name,1);
+                StringBuilder e=new StringBuilder(dm.name);
+                for(int s=0;s<dStars;s++) e.append("★");
+                e.append(" ≈");
+                autoScanResults.add(e.toString());
                 autoScanVisualCount++; autoTapHits++;
                 addScanLog("dup visual ID: "+dm.name+" (probe "+(i+1)+")");
                 any=true;
@@ -6968,33 +6582,20 @@ public class OverlayService extends Service {
         teardownStrayOverlays();
         setOverlaysTouchable(true);
         if(btnLabel!=null) btnLabel.setText("SCRY");
-        if(!autoOppMode){
-            // one self-scry commits everything: gold, level, XP, stage (champs
-            // were committed per probe as they were identified)
-            applyScanGold(autoScanGold);
-            if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
-            if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
-            if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
-            // stale-game heuristic, same as the quick scan path
-            if(autoScanLevel>=2 && autoScanLevel<=4 && !pool.isEmpty() && autoTapHits>0) newGameHint=true;
-            refreshHud();
-        } else if(!oppScanResults.isEmpty()){
-            // file this enemy board into the next opponent slot (cycles 1-7) so
-            // scouting the lobby is just repeated SCRY THE ENEMY presses
-            int slot=pool.nextOppSlot();
-            pool.setOppBoard(slot, new java.util.LinkedHashMap<>(oppScanResults));
-            lastOppSlot=slot;
-            addScanLog("auto-opp: filed as OPP "+slot);
-        }
+        // one self-scry commits everything: gold, level, XP, stage (champs
+        // were committed per probe as they were identified)
+        applyScanGold(autoScanGold);
+        if(autoScanLevel>=0){ level=autoScanLevel; pool.setLevel(autoScanLevel); }
+        if(autoScanXpNeed>0) pool.setXp(autoScanXpCur, autoScanXpNeed);
+        if(!autoScanStage.isEmpty()) pool.setStageRound(autoScanStage);
+        // stale-game heuristic, same as the quick scan path
+        if(autoScanLevel>=2 && autoScanLevel<=4 && !pool.isEmpty() && autoTapHits>0) newGameHint=true;
+        refreshHud();
         long tookMs=autoScanStartMs>0 ? android.os.SystemClock.uptimeMillis()-autoScanStartMs : 0;
-        int found=autoOppMode?oppScanResults.size():autoScanResults.size();
-        addScanLog((autoOppMode?"auto-opp":"auto-tap")+": done, "+found+" units ("
+        int found=autoScanResults.size();
+        addScanLog("auto-tap: done, "+found+" units ("
                 +autoScanVisualCount+" visual) in "+(tookMs/1000)+"."+(tookMs%1000/100)+"s");
-        autoOppMode=false;
         buzzDone();
-        // one-pass lobby scan: don't reopen the panel between boards — advance to
-        // the next calibrated portrait instead.
-        if(scanAllMode){ scanAllAdvance(); return; }
         mode=0; showPanel();
     }
 
@@ -7307,7 +6908,7 @@ public class OverlayService extends Service {
                             ChampionTemplates.BoardMatch bm=null;
                             if(haveTpl){
                                 Bitmap bc=Bitmap.createBitmap(bmp,x0,y0,cs2,cs2);
-                                bm=ChampionTemplates.matchBoardSprite(bc,false);
+                                bm=ChampionTemplates.matchBoardSprite(bc);
                                 bc.recycle();
                             }
                             if(bm!=null){
@@ -7666,7 +7267,7 @@ public class OverlayService extends Service {
                         int[] hb=plannerUnits.get(ci);
                         if(hb[0]==(int)u.x && hb[1]==(int)u.y){
                             Bitmap c=plannerCrops.get(ci);
-                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,false,u.stars);
+                            if(c!=null) ChampionTemplates.saveBoardTemplateBitmap(this,u.name,c,u.stars);
                             break;
                         }
                     }
@@ -8206,7 +7807,6 @@ public class OverlayService extends Service {
     }
     // stop whichever long-running mode is active (called by the STOP button)
     private void stopActiveMode(){
-        if(scanAllMode){ stopScanAll(); return; }
         if(huntMode){ stopHuntMode(); return; }
         if(autoScanPending){ finishAutoTapScan(); return; }
         if(plannerBenchPending){ addScanLog("bench: stopped"); plannerHandler.removeCallbacksAndMessages(null); plannerWrapUp(); return; }
@@ -8221,7 +7821,6 @@ public class OverlayService extends Service {
         hideCalCaptureView();
         hideGridAdjustView();
         hidePlnCalView();
-        hideOppCalView();
         hideProbeDots();
         clearInjecting();
         overlayTouchHold=false;
@@ -8282,7 +7881,7 @@ public class OverlayService extends Service {
         // scan and both calibration wizards (a gold-watch screenshot mid-replay
         // steals the 1/sec shot budget the wizard's own steps need)
         if(goldWatchBusy||huntMode||autoScanPending||plannerBenchPending
-                ||plannerScanPending||scanAllMode||plnCalView!=null||oppCalView!=null) return;
+                ||plannerScanPending||plnCalView!=null) return;
         if(panel!=null) return; // panel covers the game — nothing useful to read
         TFTAccessibilityService svc=TFTAccessibilityService.instance;
         if(svc==null) return;
@@ -8648,168 +8247,6 @@ public class OverlayService extends Service {
         }});
     }
 
-    // ---- SCRY THE LOBBY: one-pass scan of all calibrated enemy portraits ----
-    private void startScanAllOpponents(){
-        if(Build.VERSION.SDK_INT<31||TFTAccessibilityService.instance==null){
-            Toast.makeText(this,accErrorMsg(),Toast.LENGTH_LONG).show(); return;
-        }
-        int n=pool.oppPortraitCount();
-        if(n<1){ Toast.makeText(this,"Calibrate enemy portraits in SETUP first",Toast.LENGTH_LONG).show(); return; }
-        // fresh lobby read: drop stale boards and file from OPP 1
-        for(int i=1;i<=7;i++) pool.clearOppBoard(i);
-        pool.resetOppCursor();
-        scanAllMode=true; scanAllIdx=1; scanAllTotal=n;
-        closePanel(); teardownStrayOverlays();
-        showStopButton("✦ STOP SCAN");
-        addScanLog("scan-all: starting "+n+" opponents");
-        scanAllStep();
-    }
-
-    // tap the current portrait, wait for the board switch, then sweep that board
-    private void scanAllStep(){
-        if(!scanAllMode) return;
-        if(scanAllIdx>scanAllTotal){ finishScanAll(); return; }
-        final int[] pos=pool.getOppPortrait(scanAllIdx);
-        if(pos==null){ scanAllIdx++; scanAllStep(); return; }
-        // the per-board sweep hides the STOP button on finish; re-show it so the
-        // user can abort the lobby pass at any point
-        showStopButton("✦ STOP SCAN");
-        if(btnLabel!=null) btnLabel.setText("OPP "+scanAllIdx+"/"+scanAllTotal);
-        addScanLog("scan-all: tap portrait "+scanAllIdx+" ("+pos[0]+","+pos[1]+")");
-        dispatchTap(pos[0],pos[1],new Runnable(){ public void run(){
-            boardHandler.postDelayed(new Runnable(){ public void run(){
-                if(!scanAllMode) return;
-                // reuse the single-opponent board sweep; it ends in finishAutoTapScan,
-                // which files the slot and (because scanAllMode is set) advances us
-                startAutoOppScan();
-            }}, SCANALL_SETTLE_MS);
-        }});
-    }
-
-    // called from finishAutoTapScan after one board is filed, in scan-all mode
-    private void scanAllAdvance(){
-        if(!scanAllMode) return;
-        scanAllIdx++;
-        scanAllStep();
-    }
-
-    private void finishScanAll(){
-        scanAllMode=false;
-        hideStopButton();
-        teardownStrayOverlays();
-        setOverlaysTouchable(true);
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("scan-all: done, "+pool.oppPortraitCount()+" portraits swept");
-        buzzDone();
-        mode=0; showPanel();
-    }
-
-    private void stopScanAll(){
-        scanAllMode=false;
-        autoScanPending=false; autoOppMode=false;
-        autoTapHandler.removeCallbacksAndMessages(null);
-        hideStopButton();
-        teardownStrayOverlays();
-        setOverlaysTouchable(true);
-        if(btnLabel!=null) btnLabel.setText("SCRY");
-        addScanLog("scan-all: stopped by user");
-        mode=0; showPanel();
-    }
-
-    // ---- enemy-portrait calibration: record up to 7 portrait tap positions ----
-    private void startOppCalibration(){
-        clearInjecting();
-        oppCalCount=0;
-        pool.clearOppPortraits();   // start clean so re-calibrating doesn't mix old points
-        closePanel();
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-            new Runnable(){ public void run(){ showOppCalOverlay(); }}, 250);
-    }
-
-    @SuppressWarnings("deprecation")
-    private void showOppCalOverlay(){
-        hideOppCalView();
-        final float spx=getResources().getDisplayMetrics().scaledDensity;
-        oppCalView=new View(OverlayService.this){
-            private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-            private android.graphics.RectF doneRect(){
-                int W=getWidth(),H=getHeight(); float h=H*0.07f, w=W*0.30f, top=H*0.90f;
-                return new android.graphics.RectF(W*0.55f, top, W*0.55f+w, top+h);
-            }
-            private android.graphics.RectF cancelRect(){
-                int W=getWidth(),H=getHeight(); float h=H*0.07f, w=W*0.30f, top=H*0.90f;
-                return new android.graphics.RectF(W*0.15f, top, W*0.15f+w, top+h);
-            }
-            @Override protected void onDraw(android.graphics.Canvas c){
-                int W=getWidth(),H=getHeight();
-                p.setStyle(android.graphics.Paint.Style.FILL);
-                p.setColor(0x66000000); c.drawRect(0,0,W,H,p);
-                p.setColor(0xF00B0709); c.drawRect(0,H*0.83f,W,H,p);
-                p.setTextAlign(android.graphics.Paint.Align.CENTER);
-                p.setColor(0xFFE0D5C0); p.setTextSize(13*spx); p.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                c.drawText("Tap each ENEMY PORTRAIT  ·  "+oppCalCount+"/7", W/2f, H*0.865f, p);
-                p.setTypeface(android.graphics.Typeface.DEFAULT); p.setTextSize(9*spx); p.setColor(0xFFC9A227);
-                c.drawText("tap the player health icons in turn, then DONE", W/2f, H*0.885f, p);
-                // recorded points are SCREEN coordinates — shift by the window's
-                // own screen offset to draw them where the user actually tapped
-                int[] wloc=new int[2]; getLocationOnScreen(wloc);
-                for(int i=1;i<=oppCalCount;i++){
-                    int[] pt=pool.getOppPortrait(i); if(pt==null) continue;
-                    float px=pt[0]-wloc[0], py=pt[1]-wloc[1];
-                    p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(BLOODL);
-                    c.drawCircle(px,py,14,p);
-                    p.setColor(0xFFE0D5C0); p.setTextSize(11*spx); c.drawText(""+i, px, py+4*spx, p);
-                }
-                android.graphics.RectF dr=doneRect(), cr=cancelRect();
-                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A1400); c.drawRoundRect(dr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(0xFFC9A227); c.drawRoundRect(dr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFFC9A227); p.setTextSize(12*spx);
-                c.drawText("✓ DONE", dr.centerX(), dr.centerY()+4*spx, p);
-                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(0xFF1A0E10); c.drawRoundRect(cr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(BLOODL); c.drawRoundRect(cr,12,12,p);
-                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(BLOODL); p.setTextSize(12*spx);
-                c.drawText("✕ CANCEL", cr.centerX(), cr.centerY()+4*spx, p);
-            }
-            @Override public boolean onTouchEvent(android.view.MotionEvent e){
-                if(e.getAction()!=android.view.MotionEvent.ACTION_DOWN) return true;
-                float x=e.getX(), y=e.getY();
-                if(doneRect().contains(x,y)){ finishOppCal(); return true; }
-                if(cancelRect().contains(x,y)){ cancelOppCal(); return true; }
-                if(oppCalCount>=7) return true;
-                oppCalCount++;
-                // RAW screen coordinates: these get replayed via dispatchGesture
-                // (screen space) — view-local coords miss by the window offset
-                pool.setOppPortrait(oppCalCount,(int)e.getRawX(),(int)e.getRawY());
-                invalidate();
-                return true;
-            }
-        };
-        WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-1,-1,wtype(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT);
-        if(Build.VERSION.SDK_INT>=28)
-            lp.layoutInDisplayCutoutMode=
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        try{ wm.addView(oppCalView,lp); }catch(Exception e){ oppCalView=null; }
-    }
-
-    private void finishOppCal(){
-        hideOppCalView();
-        int n=pool.oppPortraitCount();
-        Toast.makeText(this,"⛧ "+n+" enemy portrait"+(n==1?"":"s")+" calibrated — SCRY THE LOBBY is ready",Toast.LENGTH_LONG).show();
-        mode=4; showPanel();
-    }
-    private void cancelOppCal(){
-        hideOppCalView();
-        pool.clearOppPortraits();
-        mode=4; showPanel();
-    }
-    private void hideOppCalView(){
-        if(oppCalView!=null){ try{ wm.removeView(oppCalView); }catch(Exception e){} oppCalView=null; }
-    }
-
     // opens the GitHub releases page in the user's browser. Uses an Intent,
     // which does NOT require the INTERNET permission -- the browser handles
     // the network, so the app stays fully offline.
@@ -8873,10 +8310,8 @@ public class OverlayService extends Service {
         if(glowAnim!=null){ glowAnim.cancel(); glowAnim=null; }
         dimHandler.removeCallbacksAndMessages(null); dimRunnable=null;
         panelDismissHandler.removeCallbacksAndMessages(null); panelDismissRunnable=null;
-        scanAllMode=false;
         hideCalCaptureView();
         hidePlnCalView();
-        hideOppCalView();
         hideGridAdjustView();
         hideProbeDots();
         hideImageScan();

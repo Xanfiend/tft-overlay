@@ -80,23 +80,6 @@ public class HexGridTest {
         assertEquals(423 + 0.75f * 228, g[2][0][1], 0.5f);
     }
 
-    @Test public void oppRowsSitAboveAndCompress() {
-        float[][][] opp = HexGrid.opp(557, 1251, 423, 581, 1349, 651, -1, -1);
-        // their front row is just above the player's back row, rows going up
-        assertTrue(opp[3][0][1] < 423);
-        for (int r = 1; r < 4; r++)
-            assertTrue("opp rows ordered top->down", opp[r - 1][0][1] < opp[r][0][1]);
-        // gaps shrink with distance: top gap smaller than bottom gap
-        float gTop = opp[1][0][1] - opp[0][0][1];
-        float gBot = opp[3][0][1] - opp[2][0][1];
-        assertTrue("perspective compresses far rows", gTop < gBot);
-        // pitch keeps shrinking above the board
-        float pOppBack  = opp[0][1][0] - opp[0][0][0];
-        float pOppFront = opp[3][1][0] - opp[3][0][0];
-        assertTrue(pOppBack < pOppFront);
-        assertTrue(pOppFront < (1251 - 557) / 6f + 1f);
-    }
-
     // Ground truth measured from the drawn hex mesh in a 2712x1220 planning-phase
     // screenshot (edge-detected outlines; 7 evenly spaced column centers per row):
     //   rows (back->front) y = 598, 701, 811, 932

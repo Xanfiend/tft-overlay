@@ -73,35 +73,6 @@ public class PositionAdvisorTest {
         assertEquals("Jinx", p.backline.get(0));
     }
 
-    @Test public void nullOppGivesSameResultAsBase() {
-        List<String> board = Arrays.asList("Aatrox", "Jinx");
-        PositionAdvisor.Plan base = PositionAdvisor.plan(board, "3-1");
-        PositionAdvisor.Plan withNull = PositionAdvisor.plan(board, "3-1", null);
-        assertEquals(base.tips.size(), withNull.tips.size());
-        assertEquals(base.carryCorner, withNull.carryCorner);
-    }
-
-    @Test public void oppWithNoDataDoesNotAddTips() {
-        // boards=0 → hasData() returns false → tips not appended
-        OppScout.Profile opp = new OppScout.Profile();
-        opp.tips.add("should be ignored");
-        List<String> board = Arrays.asList("Jinx");
-        PositionAdvisor.Plan base = PositionAdvisor.plan(board, "3-1");
-        PositionAdvisor.Plan enriched = PositionAdvisor.plan(board, "3-1", opp);
-        assertEquals(base.tips.size(), enriched.tips.size());
-    }
-
-    @Test public void oppWithDataAddsTipsToEnd() {
-        OppScout.Profile opp = new OppScout.Profile();
-        opp.boards = 1; // hasData() = true
-        opp.tips.add("Watch for hook threat");
-        List<String> board = Arrays.asList("Jinx");
-        PositionAdvisor.Plan base = PositionAdvisor.plan(board, "3-1");
-        PositionAdvisor.Plan enriched = PositionAdvisor.plan(board, "3-1", opp);
-        assertEquals(base.tips.size() + 1, enriched.tips.size());
-        assertEquals("Watch for hook threat", enriched.tips.get(enriched.tips.size() - 1));
-    }
-
     @Test public void flankerTipMentionsFlankers() {
         // When flankers are present, a tip should name them
         PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Talon", "Jinx"), "3-1");

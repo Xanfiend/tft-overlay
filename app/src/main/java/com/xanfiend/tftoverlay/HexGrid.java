@@ -56,7 +56,7 @@ public final class HexGrid {
 
     /* Standard anchors {backLeftX, backRightX, backY, frontLeftX, frontRightX,
      * frontY} in pixels for a w x h landscape screen — the same outer-hex-center
-     * semantics as calibration, ready to feed player()/opp(). */
+     * semantics as calibration, ready to feed player(). */
     public static float[] standardAnchors(int w, int h){
         float bC = 0.5f*w + STD_BACK_C*h,  pB = STD_BACK_P*h;
         float fC = 0.5f*w + STD_FRONT_C*h, pF = STD_FRONT_P*h;
@@ -68,10 +68,6 @@ public final class HexGrid {
      * Board row i from the player's front: phase = (i % 2 == 1) ? -0.5 : 0.
      * Player rows back->front are board rows 3,2,1,0. */
     static float playerPhase(int row) { return (row % 2 == 0) ? -0.5f : 0f; }
-
-    /* Opponent rows counted TOP(0=their back, board row 7) -> 3 (their front,
-     * board row 4). Board rows 7,6,5,4 -> phases -0.5, 0, -0.5, 0. */
-    static float oppPhase(int row) { return (row % 2 == 0) ? -0.5f : 0f; }
 
     /* Middle-row y fractions {f1, f2} of the back->front span, derived from the
      * anchor spans: row gaps grow proportionally to the local pitch. Solved by
@@ -116,60 +112,6 @@ public final class HexGrid {
             for (int col = 0; col < COLS; col++) {
                 out[r][col][0] = c + (col - 3) * p;
                 out[r][col][1] = y;
-            }
-        }
-        return out;
-    }
-
-    /* 28 opponent hex centers as [row][col][x,y], rows TOP(0=their back)->3
-     * (their front, adjacent to the player's back row). Positions continue the
-     * SAME projection above the player's back row: pitch and centerline are
-     * extrapolated linearly in y, and row gaps keep shrinking with the local
-     * pitch — no mirrored-zone guess. Same anchors as player(). */
-    public static float[][][] opp(float blx, float brx, float by,
-                                  float flx, float frx, float fy,
-                                  float f1, float f2) {
-        float pBack  = (brx - blx) / 6f;
-        float pFront = (frx - flx) / 6f;
-        float cBack  = (blx + brx) / 2f - playerPhase(0) * pBack;
-        float cFront = (flx + frx) / 2f - playerPhase(3) * pFront;
-        if (f1 < 0 || f2 <= f1) {
-            float[] f = autoRowFractions(pBack * 6f, pFront * 6f);
-            f1 = f[0]; f2 = f[1];
-        }
-        // gap constant k from the player half: back->front span split by pitch
-        float[] tt = {0f, f1, f2, 1f};
-        float sumPitchMid = 0f;
-        for (int i = 0; i < 3; i++)
-            sumPitchMid += pBack + (pFront - pBack) * (tt[i] + tt[i + 1]) / 2f;
-        float k = (fy - by) / sumPitchMid;   // gap = k * pitch(mid)
-
-        // walk upward from the player's back row, 4 more rows
-        float dPdY = (fy != by) ? (pFront - pBack) / (fy - by) : 0f;
-        float dCdY = (fy != by) ? (cFront - cBack) / (fy - by) : 0f;
-        float[] ys = new float[4];
-        float y = by;
-        for (int i = 0; i < 4; i++) {
-            float pHere = pBack + dPdY * (y - by);
-            // midpoint iteration: gap uses pitch halfway into the step
-            float gap = k * pHere;
-            for (int it = 0; it < 2; it++) {
-                float pMid = pBack + dPdY * (y - gap / 2f - by);
-                if (pMid < pHere * 0.3f) pMid = pHere * 0.3f;   // extrapolation guard
-                gap = k * pMid;
-            }
-            y -= gap;
-            ys[3 - i] = y;   // filling their-front(3) first ... their-back(0) last
-        }
-        float[][][] out = new float[ROWS][COLS][2];
-        for (int r = 0; r < ROWS; r++) {
-            float ry = ys[r];
-            float p = pBack + dPdY * (ry - by);
-            if (p < pBack * 0.3f) p = pBack * 0.3f;
-            float c = cBack + dCdY * (ry - by) + oppPhase(r) * p;
-            for (int col = 0; col < COLS; col++) {
-                out[r][col][0] = c + (col - 3) * p;
-                out[r][col][1] = ry;
             }
         }
         return out;

@@ -37,7 +37,7 @@ public final class OpenerData {
         "Slam tempo items — losing a streak costs more than a slightly-wrong item.",
         "Commit to ONE streak (win or loss); flip-flopping loses both bonuses.",
         "Don't roll on econ unless stabilizing low HP — interest compounds.",
-        "Scout the lobby every round — scry enemies and read COUNTER THE LOBBY / TECH vs LOBBY.",
+        "Scout the lobby every round — check who you are about to fight and position to beat their board.",
     };
 
     private OpenerData(){}

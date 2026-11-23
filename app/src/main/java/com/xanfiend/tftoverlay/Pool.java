@@ -101,9 +101,7 @@ public class Pool {
                 .remove("xp_cur").remove("xp_need")
                 .remove("stage_round").remove("my_augs").remove("hunt_list")
                 .remove("god_1").remove("god_2")
-                .remove("god_picks_1").remove("god_picks_2")
-                .remove("opp_slot_cursor");
-        for(int s=1;s<=7;s++) e.remove("oppboard"+s);
+                .remove("god_picks_1").remove("god_picks_2");
         e.apply();
         save();
     }
@@ -368,116 +366,6 @@ public class Pool {
         StringBuilder sb=new StringBuilder();
         for(String t:traits){ if(sb.length()>0) sb.append(","); sb.append(t); }
         p.edit().putString("traits_"+champ, sb.toString()).apply();
-    }
-
-    // ---- per-opponent boards (slots 1-7) ----
-    // format per slot: "name|stars;name|stars;..."
-    public Map<String,Integer> getOppBoard(int slot){
-        Map<String,Integer> m = new HashMap<>();
-        for(String part : p.getString("oppboard"+slot,"").split(";")){
-            if(part.isEmpty()) continue;
-            String[] kv = part.split("\\|");
-            if(kv.length>=1 && !kv[0].isEmpty()){
-                int st=1;
-                if(kv.length>=2){ try{ st=Integer.parseInt(kv[1]); }catch(Exception e){} }
-                m.put(kv[0], st);
-            }
-        }
-        return m;
-    }
-    public void setOppBoard(int slot, Map<String,Integer> board){
-        StringBuilder sb=new StringBuilder();
-        for(Map.Entry<String,Integer> e : board.entrySet()){
-            sb.append(e.getKey()).append("|").append(e.getValue()).append(";");
-        }
-        p.edit().putString("oppboard"+slot, sb.toString()).apply();
-    }
-    public void clearOppBoard(int slot){ p.edit().remove("oppboard"+slot).apply(); }
-
-    // ---- richer per-unit enemy data (Phase 2: champion + stars + items) ----
-    // The oppboard string extends to "name|stars|item1,item2,item3;..." — the
-    // third field is optional, so old "name|stars" entries still parse and the
-    // Map<String,Integer> accessors above keep working (they ignore items).
-    // Item names never contain | ; or , so the join is unambiguous.
-    public static final class OppUnit {
-        public final String name; public final int stars;
-        public final java.util.List<String> items;
-        public OppUnit(String name, int stars, java.util.List<String> items){
-            this.name = name; this.stars = Math.max(1, stars);
-            this.items = items == null ? new java.util.ArrayList<String>() : items;
-        }
-    }
-    public java.util.List<OppUnit> getOppUnits(int slot){
-        java.util.List<OppUnit> out = new java.util.ArrayList<>();
-        for(String part : p.getString("oppboard"+slot,"").split(";")){
-            if(part.isEmpty()) continue;
-            String[] kv = part.split("\\|");
-            if(kv.length < 1 || kv[0].isEmpty()) continue;
-            int st = 1; if(kv.length >= 2){ try{ st = Integer.parseInt(kv[1]); }catch(Exception e){} }
-            java.util.List<String> items = new java.util.ArrayList<>();
-            if(kv.length >= 3 && !kv[2].isEmpty())
-                for(String it : kv[2].split(",")) if(!it.isEmpty()) items.add(it);
-            out.add(new OppUnit(kv[0], st, items));
-        }
-        return out;
-    }
-    public void setOppUnits(int slot, java.util.List<OppUnit> units){
-        StringBuilder sb = new StringBuilder();
-        for(OppUnit u : units){
-            sb.append(u.name).append("|").append(u.stars);
-            if(!u.items.isEmpty()){
-                sb.append("|");
-                for(int i=0;i<u.items.size();i++){ if(i>0) sb.append(","); sb.append(u.items.get(i)); }
-            }
-            sb.append(";");
-        }
-        p.edit().putString("oppboard"+slot, sb.toString()).apply();
-    }
-
-    // every non-empty remembered enemy board as rich units (with items), for the
-    // item-aware OppScout read (Phase 2); empty items[] until the scan fills them
-    public java.util.List<java.util.List<OppUnit>> getAllOppUnits(){
-        java.util.List<java.util.List<OppUnit>> out = new java.util.ArrayList<>();
-        for(int s=1;s<=7;s++){ java.util.List<OppUnit> u = getOppUnits(s); if(!u.isEmpty()) out.add(u); }
-        return out;
-    }
-    // every non-empty remembered enemy board, for OppScout lobby analysis
-    public java.util.List<Map<String,Integer>> getAllOppBoards(){
-        java.util.List<Map<String,Integer>> out = new java.util.ArrayList<>();
-        for(int s=1;s<=7;s++){ Map<String,Integer> b=getOppBoard(s); if(!b.isEmpty()) out.add(b); }
-        return out;
-    }
-    // cycling slot assignment so repeated enemy scries file under OPP 1..7
-    public int nextOppSlot(){
-        int s = p.getInt("opp_slot_cursor", 0) % 7 + 1;
-        p.edit().putInt("opp_slot_cursor", s).apply();
-        return s;
-    }
-    // reset the cursor so the next one-pass lobby scan fills slots from OPP 1
-    public void resetOppCursor(){ p.edit().putInt("opp_slot_cursor", 0).apply(); }
-
-    // ---- enemy-portrait tap positions (one-pass opponent scan, REAPER) ----
-    // Raw screen px for the up-to-7 player portraits along the top HUD; the
-    // automation taps each to switch the viewed board, then runs the popup scan.
-    // Recorded once via calibration, like the cal_* board keys.
-    public void setOppPortrait(int i, int x, int y){
-        p.edit().putString("cal_opp" + i, x + "," + y).apply();
-    }
-    public int[] getOppPortrait(int i){
-        String s = p.getString("cal_opp" + i, "");
-        if(s.isEmpty()) return null;
-        String[] xy = s.split(",");
-        try { return new int[]{ Integer.parseInt(xy[0]), Integer.parseInt(xy[1]) }; }
-        catch(Exception e){ return null; }
-    }
-    public int oppPortraitCount(){
-        int n = 0; for(int i = 1; i <= 7; i++) if(getOppPortrait(i) != null) n++; return n;
-    }
-    public boolean hasOppPortraitCal(){ return getOppPortrait(1) != null; }
-    public void clearOppPortraits(){
-        android.content.SharedPreferences.Editor e = p.edit();
-        for(int i = 1; i <= 7; i++) e.remove("cal_opp" + i);
-        e.apply();
     }
 
     // ---- god/boon tracker (set 17 Realm mechanic) ----

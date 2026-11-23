@@ -22,7 +22,7 @@ import java.util.List;
  * only work left on a real device/emulator is (a) dropping the icon PNGs into
  * assets/itemicons and (b) tuning MIN_SIM / MIN_MARGIN and the popup item-slot
  * crop rects. With no icons bundled yet, match() returns null and the rest of
- * the app is unaffected (items[] stays empty, OppScout behaves as today).
+ * the app is unaffected (items[] stays empty).
  *
  * Matching mirrors SetIcons.match: high absolute similarity plus a clear margin
  * over the runner-up item, because a wrong item silently corrupts the threat read.
