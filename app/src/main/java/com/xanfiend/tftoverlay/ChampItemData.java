@@ -26,16 +26,16 @@ import java.util.Map;
  *  match ItemData's component matrix (this is a reference list,
  *  not the builder).
  *
- *  Data verified against the patch 17.6 meta snapshot
- *  (Riot 17.5 + 17.6 patch notes, June 2026).
+ *  Data sourced from MetaTFT, Blitz, OP.GG, PivotTFT and
+ *  SeeMeta for Set 18 patch 18.7 (November 2026).
  * ============================================================
  */
 public final class ChampItemData {
 
     // Live patch this build data reflects. Shown in the BUILDS tab.
-    public static final String PATCH = "17.6";
+    public static final String PATCH = "18.7";
     // Set this data was written for; the BUILDS tab warns when the live set differs.
-    public static final String SET_LABEL = "Set 17";
+    public static final String SET_LABEL = "Set 18";
 
     /** One champion's meta build. */
     public static final class Build {
@@ -56,115 +56,150 @@ public final class ChampItemData {
 
     static {
         // ---------- AD carries ----------
-        put("Corki", "AD Carry",
-            new String[]{"Deathblade","Blue Buff","Last Whisper"},
-            "Meeple Fateweavers",
-            "Slam swords early; level 8 on 4-2 and roll for Corki + Riven.");
-        put("Kaisa", "AD / On-hit Carry",
-            new String[]{"Infinity Edge","Striker's Flail","Spear of Shojin"},
-            "Shepherd / Rogues Kai'Sa",
-            "Red Buff and Blue Buff are strong flex slots if IE is slow.");
-        put("Jhin", "AD Carry",
-            new String[]{"Infinity Edge","Last Whisper","Giant Slayer"},
-            "Dark Star Sniper",
-            "Highest-cap 5-cost — slot him the moment you hit, Deathblade also great.");
-        put("Samira", "AD Reroll Carry",
-            new String[]{"Deathblade","Infinity Edge","Spear of Shojin"},
-            "Samira + Ornn Reroll",
-            "Two-tank reroll: pair with Ornn, slow-roll level 7 for 3-star.");
-        put("Xayah", "AD Carry",
-            new String[]{"Kraken Slayer","Guinsoo's Rageblade","Deathblade"},
-            "Stargazer Xayah",
-            "Red Buff over Deathblade if you need the burn/anti-heal.");
-        put("Riven", "AD Bruiser Carry",
-            new String[]{"Bloodthirster","Striker's Flail","Edge of Night"},
-            "Meeple Fateweavers",
-            "Secondary carry — takes leftover AD behind Corki.");
-        put("MissFortune", "AP/AD Reroll Carry",
-            new String[]{"Blue Buff","Jeweled Gauntlet","Rabadon's Deathcap"},
-            "Miss Fortune Reroll",
-            "B-tier — strong board but out-capped by the top comps.");
+        put("MasterYi", "AD Carry",
+            new String[]{"Deathblade","Rageblade","Giant Slayer"},
+            "Adaptor Yi Reroll",
+            "Top S-tier. Slow-roll level 7-8 for 3-star. Adaptor trait adapts to your board.");
+        put("Pebbles", "AD Bruiser Reroll",
+            new String[]{"Rageblade","Warmog's Armor","Deathblade"},
+            "Riftbeast Pebbles Reroll",
+            "1-cost reroll. Slow-roll level 7. Beast Within is the flagship augment here.");
+        put("Aphelios", "AD Carry",
+            new String[]{"Deathblade","Rageblade","Last Whisper"},
+            "Elderwood Aphelios Fast 8",
+            "S-tier 4-cost. Elderwood trait scaling. Fast 8, slam AD items early.");
+        put("Sivir", "AD Carry",
+            new String[]{"Deathblade","Rageblade","Infinity Edge"},
+            "Hunter Sivir",
+            "Hunter trait maximised with Sivir at 2-star. Fast 8.");
+        put("Tristana", "AD Reroll Carry",
+            new String[]{"Deathblade","Rageblade","Infinity Edge"},
+            "Tristana Reroll",
+            "3-cost reroll. Slow-roll level 7 for 3-star.");
+        put("Khazix", "AD Assassin Carry",
+            new String[]{"Deathblade","Infinity Edge","Giant Slayer"},
+            "Elderwood Kha'Zix",
+            "Elderwood assassin carry. Fast 8. Pivot to Ezreal if Khazix is contested.");
+        put("Ezreal", "AD Flex Carry",
+            new String[]{"Deathblade","Rageblade","Rabadon's Deathcap"},
+            "Elderwood Fast 9",
+            "Flex into Elderwood. Rabadon's if the board has AP synergy.");
+        put("Draven", "AD Carry",
+            new String[]{"Deathblade","Infinity Edge","Giant Slayer"},
+            "Draven Fast 9",
+            "5-cost AD carry. Highest AD cap. Slam swords early for the spill.");
+        put("Ashe", "AD Carry",
+            new String[]{"Deathblade","Rageblade","Last Whisper"},
+            "Ashe Fast 9",
+            "5-cost consistent AD carry. Last Whisper essential vs tank frontlines.");
+        put("Rengar", "AD Assassin",
+            new String[]{"Deathblade","Infinity Edge","Edge of Night"},
+            "Elderwood Rengar",
+            "Assassin dive. Edge of Night first so he doesn't get CC'd mid-leap.");
 
         // ---------- AP carries ----------
-        put("AurelionSol", "AP Carry",
-            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Striker's Flail"},
-            "Dark Star A.Sol",
-            "Non-Mech wants Searing Shortbow for mana; crit + amp is the core.");
-        put("Karma", "AP Carry",
-            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
-            "Dark Star / AP Shepherd",
-            "17.6: Split Damage 570/855 => 630/945 — now a real AP Shepherd flex carry.");
-        put("Vex", "AP Carry",
-            new String[]{"Guinsoo's Rageblade","Jeweled Gauntlet","Striker's Flail"},
-            "Shepherd Vex Fast 9",
-            "Void Staff over Striker's into heavy armor stacking.");
-        put("Bard", "AP Shepherd Carry",
-            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
-            "Shepherd Bard Fast 9",
-            "17.5: spell damage buffed 220/330 => 240/360 to function as primary carry.");
-        put("TwistedFate", "AP Psionic Carry",
-            new String[]{"Blue Buff","Jeweled Gauntlet","Rabadon's Deathcap"},
-            "Psionic TF",
-            "17.6: major buff (Min Dmg 190/285 => 205/305 AP); pair with Veigar and Viktor.");
-        put("Viktor", "AP Carry",
-            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Morellonomicon"},
-            "Dark Star Viktor",
-            "17.6: Ability Damage 190/290/500 => 200/300/530; viable in Dark Star flex lines.");
-        put("Leblanc", "AP Challenger Carry",
+        put("Veigar", "AP Reroll Carry",
             new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Blue Buff"},
-            "Stargazer LeBlanc Fast 9",
-            "17.6: Sigil 85/130 => 95/145 + Passive 62/93 => 66/99; AP Shepherd flex option.");
+            "Spellweaver Veigar Reroll",
+            "1-cost AP reroll. Slow-roll level 6-7. Spellweaver vertical amplifies AP.");
+        put("Teemo", "AP Poison Carry",
+            new String[]{"Blue Buff","Jeweled Gauntlet","Morellonomicon"},
+            "Sprykin Teemo Reroll",
+            "Sprykin poison damage. Morellonomicon syncs with the DoT.");
+        put("Nidalee", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Morellonomicon"},
+            "Lunar Nidalee",
+            "Lunar trait AP carry. 4-cost — fast 8, slot JG + Rabadon's.");
+        put("Alune", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
+            "Vanguard Alune Fast 9",
+            "5-cost AP carry. Vanguard + AP traits. Spear for mana cycling.");
+        put("Lux", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Spear of Shojin"},
+            "Lux Fast 9",
+            "5-cost high single-target AP. JG crit is core.");
+        put("Ahri", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Morellonomicon"},
+            "Invoker Ahri",
+            "Invoker trait gives mana on ally spell cast — stack AP and roll early.");
+        put("Karma", "AP Support Carry",
+            new String[]{"Jeweled Gauntlet","Spear of Shojin","Blue Buff"},
+            "AP Karma Fast 9",
+            "AP support with shielding. Pairs with Invoker or Spellweaver boards.");
+        put("Cassiopeia", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Morellonomicon"},
+            "AP Cassiopeia",
+            "AP damage + grievous wounds. Morellonomicon core for her DoT.");
+        put("Diana", "AP Carry",
+            new String[]{"Jeweled Gauntlet","Rabadon's Deathcap","Blue Buff"},
+            "Diana AP Flex",
+            "Burst AP caster. Blue Buff for fast mana cycling.");
 
         // ---------- Tanks / frontline item holders ----------
-        put("Rammus", "Tank",
-            new String[]{"Warmog's Armor","Bramble Vest","Gargoyle Stoneplate"},
-            "Meeple Fateweavers",
-            "Primary tank — slam defensives early. 17.5 nerf: Mana 20/90 => 20/80.");
-        put("TahmKench", "Tank",
-            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Dragon's Claw"},
-            "Dark Star frontline",
-            "Dragon's Claw vs heavy AP, Bramble vs crit/AD boards.");
-        put("Shen", "Frontline",
-            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Redemption"},
-            "Arbiter Shen",
-            "17.6: own AS buff no longer decays after cast — more consistent shredding.");
         put("Morgana", "AP Tank",
             new String[]{"Warmog's Armor","Dragon's Claw","Jeweled Gauntlet"},
-            "Dark Star frontline",
-            "17.6: Health Gain 525 => 600 AP, Ally Heal 100 => 125 AP; Threat-like tank.");
+            "Vanguard Morgana Fast 9",
+            "Vanguard tank that deals AP damage. Dragon's Claw vs heavy AP boards.");
+        put("Malphite", "AP Tank",
+            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Rabadon's Deathcap"},
+            "Malphite Fast 8",
+            "AP tank — Rabadon's amplifies his shockwave. Pairs with Nidalee or Alune.");
+        put("Alistar", "Tank",
+            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Bramble Vest"},
+            "Elderwood / Vanguard frontline",
+            "Primary tank in Aphelios and Morgana boards. Slam defensives early.");
+        put("Rammus", "Tank",
+            new String[]{"Warmog's Armor","Bramble Vest","Gargoyle Stoneplate"},
+            "Riftbeast / Adaptor frontline",
+            "Top defensive unit in Yi and Pebbles boards. Thorns counters crit.");
+        put("Warwick", "Bruiser",
+            new String[]{"Warmog's Armor","Bramble Vest","Gargoyle Stoneplate"},
+            "Elderwood bruiser",
+            "Elderwood heal synergy. Warm entry tank + healing vs AD boards.");
+        put("Shen", "Frontline",
+            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Redemption"},
+            "Vanguard frontline",
+            "Vanguard entry tank. Redemption heal peel for nearby carries.");
+        put("Hecarim", "Bruiser",
+            new String[]{"Warmog's Armor","Gargoyle Stoneplate","Bramble Vest"},
+            "Riftbeast bruiser",
+            "Fast-moving frontline. Good in Pebbles reroll boards for the Riftbeast count.");
     }
 
-    // ---- unit tier list (patch 17.6) ----
+    // ---- unit tier list (patch 18.7) ----
     // S = meta-defining (anchors an S-tier comp or tops the unit win-rate list),
     // A = strong / reliable secondary, B = playable / situational, C = weak.
     // Only units with real evidence are ranked; the rest stay unranked (no badge).
     private static final Map<String,String> TIER = new HashMap<>();
     private static void tier(String champ, String t){ TIER.put(champ, t); }
     static {
-        // S — carries of the current S-tier comps + top-stat 5-costs
-        tier("Corki","S");        // Meeple Fateweavers
-        tier("Samira","S");       // Space Groove Samira reroll (75% top4)
-        tier("Xayah","S");        // Stargazer Xayah
-        tier("Vex","S");          // Vanguard / Shepherd Vex
-        tier("AurelionSol","S");  // Dark Star A.Sol
-        tier("Jhin","S");         // highest-cap 5-cost
-        tier("Shen","S");         // top-stat 5-cost frontline (17.6 AS buff)
-        tier("Bard","S");         // Shepherd primary carry (17.5 buffed)
-        tier("Blitzcrank","S");   // top-stat 5-cost engage
-        // A — strong carries / key support+tank of S comps
-        tier("Kaisa","A");        // Shepherd / Rogues Kai'Sa
-        tier("Karma","A");        // Dark Star + AP Shepherd (17.6 buffed)
-        tier("Riven","A");        // Fateweavers secondary carry
-        tier("Rammus","A");       // Fateweavers primary tank
-        tier("Sona","A");         // key support 5-cost in multiple S comps
-        tier("TwistedFate","A");  // Psionic TF (17.6 major buff)
-        tier("Viktor","A");       // Dark Star AP (17.6 buffed)
-        tier("Leblanc","A");      // Stargazer AP Shepherd (17.6 buffed)
-        tier("Ornn","A");         // Samira reroll second tank
-        // B — playable but out-capped
-        tier("MissFortune","B");  // MF reroll, B-tier this patch
-        tier("TahmKench","B");    // Dark Star frontline filler
-        tier("Morgana","B");      // Dark Star AP tank (17.6 improved utility)
+        // S — anchors current S-tier comps
+        tier("MasterYi","S");     // Adaptor Yi reroll, top comp
+        tier("Pebbles","S");      // Riftbeast 1-cost reroll
+        tier("Aphelios","S");     // Elderwood AD flex carry
+        tier("Morgana","S");      // Vanguard Fast 9 AP tank carry
+        // A — strong carries / key support+tank
+        tier("Sivir","A");        // Hunter Sivir
+        tier("Nidalee","A");      // Lunar Nidalee AP carry
+        tier("Alune","A");        // 5-cost AP carry
+        tier("Tristana","A");     // Tristana reroll
+        tier("Veigar","A");       // Spellweaver AP reroll
+        tier("Teemo","A");        // Sprykin AP poison reroll
+        tier("Ezreal","A");       // Elderwood flex carry
+        tier("Khazix","A");       // Elderwood assassin carry
+        tier("Alistar","A");      // top frontline tank
+        tier("Rammus","A");       // key tank in Yi / Pebbles boards
+        // B — playable
+        tier("Malphite","B");     // AP tank / fast 8 line
+        tier("Ahri","B");         // Invoker Ahri
+        tier("Draven","B");       // 5-cost AD
+        tier("Ashe","B");         // 5-cost AD flex
+        tier("Warwick","B");      // Elderwood bruiser
+        tier("Rengar","B");       // Elderwood assassin
+        tier("Cassiopeia","B");   // AP DoT flex
+        tier("Diana","B");        // AP burst flex
+        tier("Lux","B");          // 5-cost AP niche
+        tier("Karma","B");        // AP support niche
     }
 
     /** Tier letter ("S"/"A"/"B"/"C") for a champion, or "" if unranked this patch. */

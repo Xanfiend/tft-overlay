@@ -11,6 +11,7 @@
 [![Download APK](https://img.shields.io/badge/⬇_DOWNLOAD_APK-C1121F?style=for-the-badge&logoColor=white)](https://github.com/Xanfiend/tft-overlay/releases/latest/download/tft-scryer.apk)
 
 [![Latest release](https://img.shields.io/github/v/release/Xanfiend/tft-overlay?style=flat-square&label=version&color=8B1A1A)](https://github.com/Xanfiend/tft-overlay/releases)
+[![Set 18](https://img.shields.io/badge/Set_18-Enchanted_Wilds-4E9E5A?style=flat-square)](#-what-it-does)
 [![Android](https://img.shields.io/badge/Android-7%2B-1A1A1A?style=flat-square&logo=android&logoColor=A4C639)](#-install)
 [![Offline](https://img.shields.io/badge/100%25-offline-2E7D32?style=flat-square)](#-is-it-safe)
 
@@ -57,7 +58,7 @@ Comp to commit to, best items, and your next econ or roll move.
 <td width="33%" valign="top" align="center">
 
 ### ◇ Guides
-Augment tiers, item chart, traits and positioning tips.
+Augment tiers, meta builds and item chart for the current set.
 
 </td>
 </tr>
