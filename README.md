@@ -38,7 +38,7 @@ Your real chance to hit your carry on each roll at your level.
 <td width="33%" valign="top" align="center">
 
 ### ◇ Scan
-Reads your board, bench, gold and level straight off the screen.
+Reads your board, bench, shop, gold and level straight off the screen.
 
 </td>
 </tr>
