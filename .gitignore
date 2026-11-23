@@ -14,3 +14,4 @@ local.properties
 # Keystore (never commit secrets)
 *.jks
 *.keystore
+captures/
