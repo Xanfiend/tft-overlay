@@ -34,7 +34,7 @@ public class Pool {
         Map<String,Integer> m = costLookup;
         if(m == null){
             m = new HashMap<>();
-            for(int c=1;c<=5;c++) for(String n : SetData.CHAMPS[c]) m.put(n, c);
+            for(int c=1;c<SetData.CHAMPS.length;c++) for(String n : SetData.CHAMPS[c]) m.put(n, c);
             costLookup = m;
         }
         Integer c = m.get(name);
@@ -79,7 +79,8 @@ public class Pool {
     public int seenCount(String c){ return seen.containsKey(c) ? seen.get(c) : 0; }
     public int remaining(String c){
         int co=costOf(c); if(co==0) return 0;
-        return Math.max(0, SetData.SIZE[co]-seenCount(c));
+        int cap = co < SetData.SIZE.length ? SetData.SIZE[co] : 0;
+        return Math.max(0, cap-seenCount(c));
     }
 
     // ---- opponents contesting ----

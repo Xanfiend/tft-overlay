@@ -81,7 +81,7 @@ public class OverlayService extends Service {
         {0xFF8B4A0A, 0xFFE0851F},  // 3 Ember   (amber)
     };
     static final String[] THEME_NAMES = {"blood","void","abyss","ember"};
-    private static final int[] COSTC={0,0xFF9AA4B0,0xFF4E9E5A,0xFF3B82C4,0xFFB565D8,0xFFE0A93A};
+    private static final int[] COSTC={0,0xFF9AA4B0,0xFF4E9E5A,0xFF3B82C4,0xFFB565D8,0xFFE0A93A,0xFF808080,0xFFD4AF37};
 
     // chip references so we can update the count badge in place without rebuilding
     private TextView[] chipViews;
@@ -1203,6 +1203,7 @@ public class OverlayService extends Service {
 
     private double rerollChance(String name){
         int cost=Pool.costOf(name); if(cost==0) return 0;
+        if(cost-1 >= ODDS[level].length) return 0;
         int slot=ODDS[level][cost-1]; if(slot==0) return 0;
         int rem=pool.remaining(name); if(rem<=0) return 0;
         int total=0; for(String n:SetData.CHAMPS[cost]) total+=pool.remaining(n);
@@ -1217,7 +1218,7 @@ public class OverlayService extends Service {
 
     // ---- FAST SCOUT GRID: tap = instant +1, long-press chip = -1, live badge ----
     private void buildGrid(LinearLayout root){
-        int totalChamps=0; for(int c=1;c<=5;c++) totalChamps+=SetData.CHAMPS[c].length;
+        int totalChamps=0; for(int c=1;c<SetData.CHAMPS.length;c++) totalChamps+=SetData.CHAMPS[c].length;
         chipViews=new TextView[totalChamps];
         chipNames=new String[totalChamps];
         int idx=0;
@@ -1396,7 +1397,7 @@ public class OverlayService extends Service {
         // pinned carry roll-check: hit % at current gold (same math as COACH roll check)
         if(!pinnedName.isEmpty()){
             int pco=Pool.costOf(pinnedName);
-            if(pco>=1 && pco<=5){
+            if(pco>=1 && pco<SetData.CHAMPS.length && SetData.CHAMPS[pco].length>0){
                 int prem=pool.remaining(pinnedName);
                 int ptier=0; for(String nt:SetData.CHAMPS[pco]) ptier+=pool.remaining(nt);
                 ptier=Math.max(0, ptier-pool.getJunk(pco));
@@ -1799,7 +1800,7 @@ public class OverlayService extends Service {
         // champions has been scried.
         java.util.Map<String,java.util.List<String>> champTraits=new java.util.HashMap<>();
         java.util.HashSet<String> knownTraits=new java.util.HashSet<>();
-        for(int c=1;c<=5;c++) for(String n:SetData.CHAMPS[c]){
+        for(int c=1;c<SetData.CHAMPS.length;c++) for(String n:SetData.CHAMPS[c]){
             java.util.List<String> tl=pool.traitsOf(n);
             champTraits.put(n,tl);
             knownTraits.addAll(tl);
@@ -1851,7 +1852,8 @@ public class OverlayService extends Service {
             root.addView(gmTv);
         }
 
-        for(int cost=1;cost<=5;cost++){
+        for(int cost=1;cost<SetData.CHAMPS.length;cost++){
+        if(SetData.CHAMPS[cost].length==0) continue;
         if(poolFilter!=0 && poolFilter!=cost) continue;
         java.util.List<String> tierList=new java.util.ArrayList<>();
         for(String n:SetData.CHAMPS[cost]){
@@ -1995,7 +1997,8 @@ public class OverlayService extends Service {
         }
 
         // champion picker, grouped by cost
-        for(int cost=1;cost<=5;cost++){
+        for(int cost=1;cost<SetData.CHAMPS.length;cost++){
+            if(SetData.CHAMPS[cost].length==0) continue;
             int metaCt=0; for(String n:SetData.CHAMPS[cost]) if(ChampItemData.has(n)) metaCt++;
             addSecHdr(root, cost+"-COST"+(metaCt>0?"  ("+metaCt+" meta)":""), COSTC[cost]);
             LinearLayout row=null; String[] arr=SetData.CHAMPS[cost];
@@ -2438,7 +2441,8 @@ public class OverlayService extends Service {
         // bench-thinning: junk units held shrink the pool and nudge odds up
         addSecHdr(root, "JUNK ON BENCH (thins the pool)", GOLD);
         LinearLayout thinRow=new LinearLayout(this); thinRow.setOrientation(LinearLayout.HORIZONTAL);
-        for(int co=1;co<=5;co++){
+        for(int co=1;co<SetData.CHAMPS.length;co++){
+            if(SetData.CHAMPS[co].length==0) continue;
             final int fcost=co; int jv=pool.getJunk(co);
             LinearLayout jb=new LinearLayout(this); jb.setOrientation(LinearLayout.VERTICAL); jb.setGravity(Gravity.CENTER);
             jb.setBackground(box(CARD,5,jv>0?GOLD:EDGE,jv>0?2:1)); jb.setPadding(0,8,0,8);
@@ -2505,8 +2509,9 @@ public class OverlayService extends Service {
         }
 
         // tier totals (pool remaining per cost, minus junk) for the rolldown sim
-        int[] tierTotal=new int[6];
-        for(int co=1;co<=5;co++){
+        int[] tierTotal=new int[SetData.CHAMPS.length];
+        for(int co=1;co<SetData.CHAMPS.length;co++){
+            if(SetData.CHAMPS[co].length==0) continue;
             int t=0; for(String n:SetData.CHAMPS[co]) t+=pool.remaining(n);
             t-=pool.getJunk(co); tierTotal[co]=Math.max(0,t);
         }
@@ -2515,7 +2520,7 @@ public class OverlayService extends Service {
         for(final String name:names){
             int co=Pool.costOf(name); int s=pool.seenCount(name); int rem=pool.remaining(name);
             int players=pool.oppCount(name);
-            int poolSize=SetData.SIZE[co];
+            int poolSize=co>0&&co<SetData.SIZE.length?SetData.SIZE[co]:0;
             double takenFrac = poolSize>0 ? (double)s/poolSize : 0;
             final boolean pinned = pool.isPinned(name);
 
@@ -3650,7 +3655,7 @@ public class OverlayService extends Service {
         // the coach answers "should I roll?" with a number instead of a platitude.
         if(!rec.carry.isEmpty()){
             int co=Pool.costOf(rec.carry);
-            if(co>=1 && co<=5){
+            if(co>=1 && co<SetData.CHAMPS.length && co-1<ODDS[level].length){
                 int rem=pool.remaining(rec.carry);
                 int tier=0; for(String n:SetData.CHAMPS[co]) tier+=pool.remaining(n);
                 tier=Math.max(0, tier-pool.getJunk(co));
@@ -5752,9 +5757,9 @@ public class OverlayService extends Service {
         // the ODDS-tab steppers stay available to correct it
         if(!r.benchChampions.isEmpty()){
             addScanLog("bench champs: "+r.benchChampions.toString());
-            int[] perCost=new int[6];
-            for(String b : r.benchChampions){ int c=Pool.costOf(b); if(c>=1&&c<=5) perCost[c]++; }
-            for(int c=1;c<=5;c++) if(perCost[c]>0) pool.setJunk(c, perCost[c]);
+            int[] perCost=new int[SetData.CHAMPS.length];
+            for(String b : r.benchChampions){ int c=Pool.costOf(b); if(c>=1&&c<perCost.length) perCost[c]++; }
+            for(int c=1;c<perCost.length;c++) if(perCost[c]>0) pool.setJunk(c, perCost[c]);
         }
         // new-game heuristic: a scan showing level 2-4 while the pool still has
         // lots of tracked copies almost certainly means the last game ended

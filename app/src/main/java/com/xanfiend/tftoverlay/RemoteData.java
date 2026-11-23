@@ -86,8 +86,8 @@ public final class RemoteData {
         if(!o.has("setName")) return false;
         JSONArray champs = o.optJSONArray("champs");
         JSONArray size = o.optJSONArray("size");
-        if(champs == null || champs.length() != 6) return false;
-        if(size == null || size.length() != 6) return false;
+        if(champs == null || champs.length() < 6 || champs.length() > 8) return false;
+        if(size == null || size.length() != champs.length()) return false;
         for(int c=1;c<=5;c++){
             JSONArray tier = champs.optJSONArray(c);
             if(tier == null || tier.length() == 0) return false;
@@ -133,9 +133,9 @@ public final class RemoteData {
         if(ev != null && validRosterShape(ev)){
             SetData.EVENT_NAME = ev.optString("name", "Event");
             JSONArray esize = ev.optJSONArray("size");
-            if(esize != null && esize.length() == 6){
-                int[] es = new int[6];
-                for(int i=0;i<6;i++) es[i] = esize.getInt(i);
+            if(esize != null && esize.length() >= 6 && esize.length() <= 8){
+                int[] es = new int[esize.length()];
+                for(int i=0;i<es.length;i++) es[i] = esize.getInt(i);
                 SetData.EVENT_SIZE = es;
             } else SetData.EVENT_SIZE = null;
             JSONArray ech = ev.getJSONArray("champs");
@@ -164,10 +164,10 @@ public final class RemoteData {
         return true;
     }
 
-    // Same 6-row / non-empty-tier shape check the primary payload gets.
+    // Same shape check the primary payload gets (costs 1–5 must be non-empty; 6+ optional).
     static boolean validRosterShape(JSONObject o){
         JSONArray champs = o.optJSONArray("champs");
-        if(champs == null || champs.length() != 6) return false;
+        if(champs == null || champs.length() < 6 || champs.length() > 8) return false;
         for(int c=1;c<=5;c++){
             JSONArray tier = champs.optJSONArray(c);
             if(tier == null || tier.length() == 0) return false;

@@ -37,8 +37,9 @@ public final class SetData {
     // Patch the bundled/synced data corresponds to (for the staleness banner).
     public static String PATCH = "";
 
-    // Pool sizes by cost: [unused, 1-cost, 2-cost, 3-cost, 4-cost, 5-cost]
+    // Pool sizes by cost: [unused, 1-cost, 2-cost, 3-cost, 4-cost, 5-cost, (6-cost), (7-cost)]
     // Set 18 bag sizes (copies of EACH champion): 30 / 25 / 18 / 10 / 9.
+    // If a set adds a 7-cost tier (e.g. Set 19), extend to 8 elements: {..., 0, N}.
     public static int[] SIZE = {0, 30, 25, 18, 10, 9};
 
     // Shop odds per level: row = player level (0-10), columns = 1c..5c, percent.
