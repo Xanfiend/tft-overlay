@@ -14,13 +14,17 @@ package com.xanfiend.tftoverlay;
  *    3. MECHANICS rarely changes (armory timing, free rerolls).
  *
  *  Current data: Set 18 "Enchanted Wilds", patch 18.7 (Nov 2026).
- *  Sources: OP.GG, Blitz.gg, PivotTFT, SeeMeta, MetaTFT.
+ *  Tier placements follow public tier-list summaries (OP.GG, Blitz,
+ *  PivotTFT, SeeMeta). Augment-to-comp pairings are inferred, not
+ *  copied from a source, so treat them as a guide.
  *  Augment rerolls are FREE (no gold cost).
  * ============================================================
  */
 public final class AugmentData {
 
     public static final String SET_LABEL = "Set 18 · patch 18.7";
+    // Patch this data reflects; compared against the synced live patch for the OUTDATED flag.
+    public static final String PATCH = "18.7";
 
     // ---- Per-augment tier list ----
     // Each entry: display name, tier (S/A/B/C), comma-separated comp tags ("" = universal).

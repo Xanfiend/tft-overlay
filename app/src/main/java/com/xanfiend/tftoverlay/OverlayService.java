@@ -1913,8 +1913,10 @@ public class OverlayService extends Service {
 
     // ---- BUILDS TAB: tap a champion -> the items that are meta on them ----
     // meta data is per-set: flag it when the bundled snapshot is for a different set than the live roster
-    private static boolean metaStale(String label){
-        return !SetData.SET_NAME.startsWith(label.split(" \u00b7 ")[0]);
+    // also stale when the synced setdata.json names a newer live patch than the snapshot
+    private static boolean metaStale(String label, String patch){
+        if(!SetData.SET_NAME.startsWith(label.split(" \u00b7 ")[0])) return true;
+        return !SetData.PATCH.isEmpty() && !patch.isEmpty() && !SetData.PATCH.equals(patch);
     }
 
     private void buildBuilds(LinearLayout root){
@@ -1926,9 +1928,9 @@ public class OverlayService extends Service {
         root.addView(intro);
 
         TextView patch=new TextView(this);
-        boolean stale=metaStale(ChampItemData.SET_LABEL);
+        boolean stale=metaStale(ChampItemData.SET_LABEL, ChampItemData.PATCH);
         patch.setText(stale
-                ? "OUTDATED \u2014 snapshot is "+ChampItemData.SET_LABEL+" patch "+ChampItemData.PATCH+", not "+SetData.SET_NAME.split(" - ")[0]+". Tiers and items are a rough guide only."
+                ? "OUTDATED \u2014 snapshot is "+ChampItemData.SET_LABEL+" patch "+ChampItemData.PATCH+", live is "+SetData.SET_NAME.split(" - ")[0]+(SetData.PATCH.isEmpty()?"":" patch "+SetData.PATCH)+". Tiers and items are a rough guide only."
                 : "meta snapshot · patch "+ChampItemData.PATCH+" · verify vs your live tier list");
         patch.setTextColor(stale?GOLD:DIM); patch.setTextSize(9); patch.setPadding(2,0,2,8);
         root.addView(patch);
@@ -2276,8 +2278,8 @@ public class OverlayService extends Service {
         }
         // set label
         TextView lbl=new TextView(this);
-        boolean augStale=metaStale(AugmentData.SET_LABEL);
-        lbl.setText(AugmentData.SET_LABEL+(augStale?" \u2014 OUTDATED: not updated for "+SetData.SET_NAME.split(" - ")[0]+", treat as rough guide":""));
+        boolean augStale=metaStale(AugmentData.SET_LABEL, AugmentData.PATCH);
+        lbl.setText(AugmentData.SET_LABEL+(augStale?" \u2014 OUTDATED: live is "+SetData.SET_NAME.split(" - ")[0]+(SetData.PATCH.isEmpty()?"":" patch "+SetData.PATCH)+", treat as rough guide":""));
         lbl.setTextColor(augStale?GOLD:DIM); lbl.setTextSize(9); lbl.setPadding(2,0,0,8); root.addView(lbl);
 
         // ✦ YOUR AUGMENTS — remembered from scans that spotted them on screen

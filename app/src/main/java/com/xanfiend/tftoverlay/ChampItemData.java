@@ -26,8 +26,10 @@ import java.util.Map;
  *  match ItemData's component matrix (this is a reference list,
  *  not the builder).
  *
- *  Data sourced from MetaTFT, Blitz, OP.GG, PivotTFT and
- *  SeeMeta for Set 18 patch 18.7 (November 2026).
+ *  Comp names and unit tiers follow public tier-list summaries for
+ *  Set 18 patch 18.7 (November 2026). The best-in-slot items per
+ *  carry are inferred from each unit's role, NOT copied from a
+ *  source -- verify against a live tier list before trusting them.
  * ============================================================
  */
 public final class ChampItemData {
