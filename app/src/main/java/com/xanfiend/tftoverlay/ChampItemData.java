@@ -213,5 +213,8 @@ public final class ChampItemData {
     /** True if the champion is a marked meta carry/itemizer this patch. */
     public static boolean has(String champ){ return M.containsKey(champ); }
 
+    /** Every champion with a build; for roster-consistency tests. */
+    static java.util.Set<String> names(){ return M.keySet(); }
+
     private ChampItemData() {}
 }

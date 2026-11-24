@@ -10,8 +10,8 @@ import static org.junit.Assert.*;
 public class ThreatDataTest {
 
     @Test public void knownRoles(){
-        assertEquals(ThreatData.FRONT, ThreatData.roleOf("Aatrox"));
-        assertEquals(ThreatData.FLANK, ThreatData.roleOf("Talon"));
+        assertEquals(ThreatData.FRONT, ThreatData.roleOf("Leona"));
+        assertEquals(ThreatData.FLANK, ThreatData.roleOf("Khazix"));
     }
 
     @Test public void roleIsAlwaysOneOfThree(){
@@ -26,13 +26,12 @@ public class ThreatDataTest {
     }
 
     @Test public void archetypeTags(){
-        assertTrue(ThreatData.isHook("Blitzcrank"));
-        assertFalse(ThreatData.isHook("Aatrox"));
-        assertTrue(ThreatData.isAoe("AurelionSol"));
+        assertFalse(ThreatData.isHook("Leona"));
+        assertTrue(ThreatData.isAoe("Morgana"));
     }
 
     @Test public void damageTypeIsApAdOrEmpty(){
-        for(String champ : new String[]{"Aatrox","Talon","AurelionSol","__x__"}){
+        for(String champ : new String[]{"Leona","Khazix","Morgana","__x__"}){
             String dt = ThreatData.damageType(champ);
             assertTrue(dt.equals("AP") || dt.equals("AD") || dt.equals(""));
         }

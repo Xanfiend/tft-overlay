@@ -29,55 +29,55 @@ public class PositionAdvisorTest {
     }
 
     @Test public void knownRolesSortIntoCorrectLists() {
-        // Aatrox=FRONT, Jinx=BACK, Talon=FLANK per ThreatData
-        List<String> board = Arrays.asList("Aatrox", "Jinx", "Talon");
+        // Leona=FRONT, Caitlyn=BACK, Khazix=FLANK per ThreatData
+        List<String> board = Arrays.asList("Leona", "Caitlyn", "Khazix");
         PositionAdvisor.Plan p = PositionAdvisor.plan(board, "3-1");
         assertTrue(p.hasBoard);
-        assertTrue(p.frontline.contains("Aatrox"));
-        assertTrue(p.backline.contains("Jinx"));
-        assertTrue(p.flankers.contains("Talon"));
+        assertTrue(p.frontline.contains("Leona"));
+        assertTrue(p.backline.contains("Caitlyn"));
+        assertTrue(p.flankers.contains("Khazix"));
     }
 
     @Test public void evenRoundCarryGoesBackLeft() {
         // "2-2" → round 2 (even) → BACK-LEFT
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx"), "2-2");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn"), "2-2");
         assertEquals("BACK-LEFT corner", p.carryCorner);
     }
 
     @Test public void oddRoundCarryGoesBackRight() {
         // "2-3" → round 3 (odd) → BACK-RIGHT
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx"), "2-3");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn"), "2-3");
         assertEquals("BACK-RIGHT corner", p.carryCorner);
     }
 
     @Test public void emptyStageRoundDefaultsToLeft() {
         // round = 0 (even) → BACK-LEFT
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx"), "");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn"), "");
         assertEquals("BACK-LEFT corner", p.carryCorner);
     }
 
     @Test public void nullStageRoundDefaultsToLeft() {
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx"), null);
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn"), null);
         assertEquals("BACK-LEFT corner", p.carryCorner);
     }
 
     @Test public void tipsNonEmptyForAnyBoard() {
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx", "Aatrox"), "3-1");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn", "Leona"), "3-1");
         assertFalse("at least the carry-corner tip should be present", p.tips.isEmpty());
     }
 
     @Test public void duplicateChampsDeduped() {
         // LinkedHashSet dedup in plan() means the same champ listed twice → once in its list
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Jinx", "Jinx"), "3-1");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Caitlyn", "Caitlyn"), "3-1");
         assertEquals(1, p.backline.size());
-        assertEquals("Jinx", p.backline.get(0));
+        assertEquals("Caitlyn", p.backline.get(0));
     }
 
     @Test public void flankerTipMentionsFlankers() {
         // When flankers are present, a tip should name them
-        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Talon", "Jinx"), "3-1");
+        PositionAdvisor.Plan p = PositionAdvisor.plan(Arrays.asList("Khazix", "Caitlyn"), "3-1");
         boolean found = false;
-        for (String tip : p.tips) if (tip.contains("Talon")) { found = true; break; }
-        assertTrue("flanker tip should name Talon", found);
+        for (String tip : p.tips) if (tip.contains("Khazix")) { found = true; break; }
+        assertTrue("flanker tip should name Khazix", found);
     }
 }
