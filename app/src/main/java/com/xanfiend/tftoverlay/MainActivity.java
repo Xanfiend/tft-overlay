@@ -502,7 +502,7 @@ public class MainActivity extends Activity {
         try{
             Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i);
-        }catch(Exception e){}
+        }catch(Exception e){ android.util.Log.w("TFTScryer","openAccessibility failed: "+e.getMessage()); }
     }
 
     private boolean isAccessibilityEnabled(){

@@ -5010,7 +5010,7 @@ public class OverlayService extends Service {
         java.util.List<int[]> grid=buildProbeGrid(w,h);
         int boardCount=autoTapBoardProbeCount;
         java.util.List<int[]> det=null;
-        try{ det=detectHealthBarUnits(bmp); }catch(Exception e){}
+        try{ det=detectHealthBarUnits(bmp); }catch(Exception e){ addScanLog("health-bar detect failed: "+e); }
 
         // grid dots
         pt.setTextSize(Math.max(18f, h*0.018f));
@@ -5273,7 +5273,7 @@ public class OverlayService extends Service {
         final ScreenScanner.ScanResult[] ocr={null};
         Runnable finish=()->{
             java.util.List<int[]> detected=null;
-            try{ detected=detectHealthBarUnits(img); }catch(Exception e){}
+            try{ detected=detectHealthBarUnits(img); }catch(Exception e){ addScanLog("health-bar detect failed: "+e); }
             java.util.List<int[]> grid=buildProbeGrid(bw,bh);
             java.util.List<int[]> probes; int boardCount;
             if(detected!=null && !detected.isEmpty()){
@@ -7108,7 +7108,7 @@ public class OverlayService extends Service {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
             closePanel();
-        } catch(Exception e){}
+        } catch(Exception e){ android.util.Log.w("TFTScryer","openLatest failed: "+e.getMessage()); }
     }
 
     @Override public void onConfigurationChanged(android.content.res.Configuration newConfig){
