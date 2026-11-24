@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# one release build at a time, so a slower older run can't overwrite a newer APK
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest

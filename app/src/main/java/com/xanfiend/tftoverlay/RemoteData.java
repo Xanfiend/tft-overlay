@@ -47,8 +47,10 @@ public final class RemoteData {
             JSONObject o = new JSONObject(readFile(f));
             if(apply(o)) Log.d(TAG, "remote set data loaded from cache: "
                     + SetData.SET_NAME + (SetData.PATCH.isEmpty()?"":(" patch "+SetData.PATCH)));
+            else f.delete();
         }catch(Exception e){
             Log.w(TAG, "remote cache load failed, using bundled: " + e.getMessage());
+            new File(ctx.getFilesDir(), CACHE).delete();   // don't repeat the failure every launch
         }
     }
 
@@ -91,76 +93,70 @@ public final class RemoteData {
         for(int c=1;c<=5;c++){
             JSONArray tier = champs.optJSONArray(c);
             if(tier == null || tier.length() == 0) return false;
+            if(size.optInt(c, 0) <= 0) return false;   // pool math divides by this
         }
         return true;
     }
 
-    /** Overlay validated JSON onto SetData. Returns true if applied. */
+    /** Overlay validated JSON onto SetData. Returns true if applied. Everything is
+     *  parsed first and SetData is assigned last, so a bad value throws before any
+     *  field changes and can never leave the set half-updated. */
     private static boolean apply(JSONObject o) throws Exception {
         if(!validate(o)) return false;
-        // the SetData statics outlive the service: restore the standard roster
-        // first so a restart while in EVENT mode can't leave the two out of sync
-        SetData.applyEventRoster(false);
-        SetData.SET_NAME = o.getString("setName");
-        SetData.PATCH    = o.optString("patch", SetData.PATCH);
-
-        JSONArray size = o.getJSONArray("size");
-        int[] sz = new int[size.length()];
-        for(int i=0;i<sz.length;i++) sz[i] = size.getInt(i);
-        SetData.SIZE = sz;
-
-        JSONArray champs = o.getJSONArray("champs");
-        String[][] cc = new String[champs.length()][];
-        for(int c=0;c<champs.length();c++){
-            JSONArray tier = champs.getJSONArray(c);
-            String[] arr = new String[tier.length()];
-            for(int i=0;i<arr.length;i++) arr[i] = tier.getString(i);
-            cc[c] = arr;
-        }
-        SetData.CHAMPS = cc;
-
+        String setName = o.getString("setName");
+        String patch = o.optString("patch", SetData.PATCH);
+        int[] sz = ints(o.getJSONArray("size"));
+        String[][] cc = tiers(o.getJSONArray("champs"));
         JSONArray gods = o.optJSONArray("gods");
-        if(gods != null){
-            String[] g = new String[gods.length()];
-            for(int i=0;i<g.length;i++) g[i] = gods.getString(i);
-            SetData.GODS = g;
-        }
+        String[] g = gods != null ? strings(gods) : null;
 
         // Optional EVENT roster — a live event queue with a different champion
         // pool. Malformed/absent event data clears the fields; it can never
         // corrupt the primary set (validated separately).
         JSONObject ev = o.optJSONObject("event");
-        if(ev != null && validRosterShape(ev)){
-            SetData.EVENT_NAME = ev.optString("name", "Event");
+        boolean hasEvent = ev != null && validRosterShape(ev);
+        String evName = null; int[] evSize = null; String[][] evChamps = null; String[] evGods = null;
+        if(hasEvent){
+            evName = ev.optString("name", "Event");
             JSONArray esize = ev.optJSONArray("size");
-            if(esize != null && esize.length() >= 6 && esize.length() <= 8){
-                int[] es = new int[esize.length()];
-                for(int i=0;i<es.length;i++) es[i] = esize.getInt(i);
-                SetData.EVENT_SIZE = es;
-            } else SetData.EVENT_SIZE = null;
-            JSONArray ech = ev.getJSONArray("champs");
-            String[][] ecc = new String[ech.length()][];
-            for(int c=0;c<ech.length();c++){
-                JSONArray tier = ech.getJSONArray(c);
-                String[] arr = new String[tier.length()];
-                for(int i=0;i<arr.length;i++) arr[i] = tier.getString(i);
-                ecc[c] = arr;
-            }
-            SetData.EVENT_CHAMPS = ecc;
+            if(esize != null && esize.length() >= 6 && esize.length() <= 8) evSize = ints(esize);
+            evChamps = tiers(ev.getJSONArray("champs"));
             JSONArray eg = ev.optJSONArray("gods");
-            if(eg != null){
-                String[] g2 = new String[eg.length()];
-                for(int i=0;i<g2.length;i++) g2[i] = eg.getString(i);
-                SetData.EVENT_GODS = g2;
-            } else SetData.EVENT_GODS = null;
-        } else {
-            SetData.EVENT_NAME=null; SetData.EVENT_SIZE=null;
-            SetData.EVENT_CHAMPS=null; SetData.EVENT_GODS=null;
+            if(eg != null) evGods = strings(eg);
         }
+
+        // the SetData statics outlive the service: restore the standard roster
+        // first so a restart while in EVENT mode can't leave the two out of sync
+        SetData.applyEventRoster(false);
+        SetData.SET_NAME = setName;
+        SetData.PATCH    = patch;
+        SetData.SIZE     = sz;
+        SetData.CHAMPS   = cc;
+        if(g != null) SetData.GODS = g;
+        SetData.EVENT_NAME = evName; SetData.EVENT_SIZE = evSize;
+        SetData.EVENT_CHAMPS = evChamps; SetData.EVENT_GODS = evGods;
 
         Pool.invalidateData();   // rebuild every roster-derived cache against the new list
         ScreenScanner.invalidateRosterCaches();
         return true;
+    }
+
+    private static int[] ints(JSONArray a) throws Exception {
+        int[] r = new int[a.length()];
+        for(int i=0;i<r.length;i++) r[i] = a.getInt(i);
+        return r;
+    }
+
+    private static String[] strings(JSONArray a) throws Exception {
+        String[] r = new String[a.length()];
+        for(int i=0;i<r.length;i++) r[i] = a.getString(i);
+        return r;
+    }
+
+    private static String[][] tiers(JSONArray a) throws Exception {
+        String[][] r = new String[a.length()][];
+        for(int i=0;i<r.length;i++) r[i] = strings(a.getJSONArray(i));
+        return r;
     }
 
     // Same shape check the primary payload gets (costs 1–5 must be non-empty; 6+ optional).

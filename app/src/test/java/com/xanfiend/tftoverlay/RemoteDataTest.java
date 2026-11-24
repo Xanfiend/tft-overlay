@@ -124,6 +124,12 @@ public class RemoteDataTest {
         assertTrue(RemoteData.validRosterShape(withSevenCost()));
     }
 
+    @Test public void zeroPoolSizeFails() throws Exception {
+        JSONObject o = valid();
+        o.getJSONArray("size").put(3, 0);
+        assertFalse(RemoteData.validate(o));
+    }
+
     // ---- empty tier 1-5 ----
 
     @Test public void emptyTierOneFails() throws Exception {
