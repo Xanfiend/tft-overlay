@@ -130,6 +130,12 @@ public class RemoteDataTest {
         assertFalse(RemoteData.validate(o));
     }
 
+    @Test public void positiveRequiresEveryTierOneToFive(){
+        assertTrue(RemoteData.positive(new int[]{0, 30, 25, 18, 10, 9}));
+        assertFalse(RemoteData.positive(new int[]{0, 30, 0, 18, 10, 9}));
+        assertFalse(RemoteData.positive(new int[]{0, 30, 25}));
+    }
+
     // ---- empty tier 1-5 ----
 
     @Test public void emptyTierOneFails() throws Exception {

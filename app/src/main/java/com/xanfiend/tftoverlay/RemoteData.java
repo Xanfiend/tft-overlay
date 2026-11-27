@@ -119,7 +119,10 @@ public final class RemoteData {
         if(hasEvent){
             evName = ev.optString("name", "Event");
             JSONArray esize = ev.optJSONArray("size");
-            if(esize != null && esize.length() >= 6 && esize.length() <= 8) evSize = ints(esize);
+            if(esize != null && esize.length() >= 6 && esize.length() <= 8){
+                int[] es = ints(esize);
+                if(positive(es)) evSize = es;   // else keep the standard pool sizes in event mode
+            }
             evChamps = tiers(ev.getJSONArray("champs"));
             JSONArray eg = ev.optJSONArray("gods");
             if(eg != null) evGods = strings(eg);
@@ -138,6 +141,12 @@ public final class RemoteData {
 
         Pool.invalidateData();   // rebuild every roster-derived cache against the new list
         ScreenScanner.invalidateRosterCaches();
+        return true;
+    }
+
+    /** Pool sizes for tiers 1-5 must all be > 0 (pool math divides by them). */
+    static boolean positive(int[] size){
+        for(int c=1;c<=5;c++) if(c>=size.length || size[c] <= 0) return false;
         return true;
     }
 

@@ -68,6 +68,8 @@ def validate(doc: dict) -> list[str]:
     size = doc.get("size")
     if not isinstance(size, list) or len(size) != 6:
         errs.append("size must be a 6-long array [unused,1c,2c,3c,4c,5c]")
+    elif not all(isinstance(n, int) and n > 0 for n in size[1:6]):
+        errs.append("size[1..5] must be positive integers (the app rejects the file otherwise)")
     return errs
 
 
